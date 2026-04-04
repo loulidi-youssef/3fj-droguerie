@@ -24,12 +24,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nextPath, setNextPath] = useState("/compte/commandes");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNextPath(resolveNextPath(params.get("next")));
+
+    if (params.get("reset") === "success") {
+      setInfoMessage("Mot de passe mis a jour avec succes. Vous pouvez maintenant vous connecter.");
+    }
   }, []);
 
   useEffect(() => {
@@ -147,11 +152,26 @@ export default function LoginPage() {
             </div>
           </label>
 
+          <div className="text-right">
+            <Link
+              href="/mot-de-passe-oublie"
+              className="text-xs font-semibold text-brand-orange hover:underline"
+            >
+              Mot de passe oublie ?
+            </Link>
+          </div>
+
           {errorMessage ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
               <p className="font-semibold">Connexion impossible</p>
               <p className="mt-1">{errorMessage}</p>
             </div>
+          ) : null}
+
+          {infoMessage ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
+              {infoMessage}
+            </p>
           ) : null}
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">

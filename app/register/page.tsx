@@ -126,6 +126,14 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nextPath, setNextPath] = useState("/compte/commandes");
 
+  const redirectAfterAutoLogin = (destination: string): void => {
+    setSuccessMessage("Compte cree et connexion reussie. Redirection...");
+    window.setTimeout(() => {
+      router.push(destination);
+      router.refresh();
+    }, 400);
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNextPath(resolveNextPath(params.get("next")));
@@ -193,8 +201,7 @@ export default function RegisterPage() {
 
       if (data.session) {
         logRegisterDebug("redirect:after-signup-session", { nextPath });
-        router.push(nextPath);
-        router.refresh();
+        redirectAfterAutoLogin(nextPath);
         return;
       }
 
@@ -210,8 +217,7 @@ export default function RegisterPage() {
 
       if (loginData.session && !loginError) {
         logRegisterDebug("redirect:after-autologin", { nextPath });
-        router.push(nextPath);
-        router.refresh();
+        redirectAfterAutoLogin(nextPath);
         return;
       }
 
