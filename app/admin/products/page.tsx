@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
+import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
 import { categories, getCategoryNameBySlug } from "@/data/categories";
 import { uploadAdminProductImages } from "@/lib/admin-product-images";
 import { formatDh } from "@/lib/currency";
@@ -144,15 +145,14 @@ const parseProductVariantsJson = (rawVariants: string): ParsedVariantsJson => {
   } catch {
     return {
       ok: false,
-      error:
-        "Variantes invalides: utilisez un JSON valide (tableau d'objets).",
+      error: "Variantes invalides: format incorrect.",
     };
   }
 
   if (!Array.isArray(parsed)) {
     return {
       ok: false,
-      error: "Variantes invalides: utilisez un tableau JSON.",
+      error: "Variantes invalides: format de liste attendu.",
     };
   }
 
@@ -223,40 +223,6 @@ const parseProductVariantsJson = (rawVariants: string): ParsedVariantsJson => {
   }
 
   return { ok: true, variants };
-};
-
-const formatVariantsJsonForTextarea = (
-  variants: Array<{
-    id: string;
-    color: string | null;
-    size: string | null;
-    price: number;
-    previous_price: number | null;
-    stock: number;
-    sku: string | null;
-    image: string | null;
-    is_active: boolean;
-  }>,
-): string => {
-  if (variants.length === 0) {
-    return "";
-  }
-
-  return JSON.stringify(
-    variants.map((variant) => ({
-      id: variant.id,
-      color: variant.color,
-      size: variant.size,
-      price: variant.price,
-      previousPrice: variant.previous_price,
-      stock: variant.stock,
-      sku: variant.sku,
-      image: variant.image,
-      isActive: variant.is_active,
-    })),
-    null,
-    2,
-  );
 };
 
 const parseProductForm = (formData: FormData): ParsedProductForm => {
@@ -774,20 +740,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
-            <label className="block md:col-span-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Variantes (JSON, optionnel)
-              </span>
-              <textarea
-                name="variantsJson"
-                rows={7}
-                placeholder='[{"color":"Blanc","size":"1L","price":120,"previousPrice":140,"stock":10,"sku":"PNT-BLANC-1L","isActive":true}]'
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
-              />
-              <span className="mt-1 block text-xs text-slate-500">
-                Une ligne JSON par variante. Champs utiles: color, size, price, previousPrice, stock, sku, image, isActive.
-              </span>
-            </label>
+            <AdminProductVariantsInput inputName="variantsJson" />
             <label className="inline-flex items-center gap-2 md:col-span-2">
               <input type="checkbox" name="isActive" defaultChecked />
               <span className="text-sm text-slate-700">Produit actif</span>
@@ -987,20 +940,20 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />
                     </label>
-                    <label className="block md:col-span-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Variantes (JSON, optionnel)
-                      </span>
-                      <textarea
-                        name="variantsJson"
-                        rows={7}
-                        defaultValue={formatVariantsJsonForTextarea(product.variants)}
-                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
-                      />
-                      <span className="mt-1 block text-xs text-slate-500">
-                        Gardez ce JSON simple: color, size, price, previousPrice, stock, sku, image, isActive.
-                      </span>
-                    </label>
+                    <AdminProductVariantsInput
+                      inputName="variantsJson"
+                      initialVariants={product.variants.map((variant) => ({
+                        id: variant.id,
+                        color: variant.color,
+                        size: variant.size,
+                        price: variant.price,
+                        previousPrice: variant.previous_price,
+                        stock: variant.stock,
+                        sku: variant.sku,
+                        image: variant.image,
+                        isActive: variant.is_active,
+                      }))}
+                    />
                     <label className="inline-flex items-center gap-2 md:col-span-2">
                       <input
                         type="checkbox"
