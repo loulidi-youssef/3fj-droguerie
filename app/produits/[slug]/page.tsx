@@ -53,8 +53,8 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
     .slice(0, 4);
 
   return (
-    <section className="py-12">
-      <div className="mx-auto max-w-7xl px-4">
+    <section className="section-padding">
+      <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <div className="grid gap-8 lg:grid-cols-2">
           <div>
             <Image
@@ -82,20 +82,24 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
             <p className="text-sm font-semibold uppercase tracking-wide text-brand-orange">
               {getCategoryNameBySlug(product.categorySlug)}
             </p>
-            <h1 className="mt-2 text-3xl font-extrabold text-brand-blue">{product.name}</h1>
-            <p className="mt-4 text-sm leading-7 text-slate-700">{product.description}</p>
-            <p className="mt-5 text-3xl font-extrabold text-brand-blue">{formatDh(product.price)}</p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-blue sm:text-[2.15rem]">
+              {product.name}
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-slate-700 sm:text-[0.95rem]">{product.description}</p>
+            <p className="mt-5 text-3xl font-extrabold tracking-tight text-brand-blue">
+              {formatDh(product.price)}
+            </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
               <AddToCartButton
                 productId={product.id}
-                className="rounded-xl bg-brand-orange px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-orangeDark"
+                className="btn-primary px-5 py-3"
               />
               <a
                 href={buildProductWhatsAppLink(product.name)}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-xl border border-brand-blue px-5 py-3 text-sm font-semibold text-brand-blue transition hover:bg-brand-blue hover:text-white"
+                className="btn-outline-brand px-5 py-3"
               >
                 WhatsApp
               </a>
@@ -109,7 +113,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
 
         {relatedProducts.length > 0 ? (
           <div className="mt-12">
-            <h2 className="text-2xl font-extrabold text-brand-blue">Produits similaires</h2>
+            <h2 className="section-title">Produits similaires</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {relatedProducts.map((related) => (
                 <ProductCard key={related.id} product={related} />

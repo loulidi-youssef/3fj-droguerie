@@ -32,7 +32,7 @@ export const Footer = () => {
             href={`https://wa.me/${businessInfo.whatsappPhone}`}
             target="_blank"
             rel="noreferrer"
-            className="mt-4 inline-flex rounded-full bg-brand-orange px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-900/30"
+            className="btn-primary-pill mt-4 px-4 py-2"
           >
             {homepageContent.footer.whatsappCta}
           </a>
@@ -52,7 +52,7 @@ export const Footer = () => {
             href={businessInfo.googleMapsUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-flex rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white hover:bg-white hover:text-brand-blue"
+            className="mt-3 inline-flex rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white hover:text-brand-blue"
           >
             {homepageContent.footer.mapsCta}
           </a>

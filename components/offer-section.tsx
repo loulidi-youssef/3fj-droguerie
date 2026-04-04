@@ -13,10 +13,10 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
 
   if (activeOffers.length === 0) {
     return (
-      <section className="py-14">
+      <section className="section-padding">
         <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
-            <h2 className="text-2xl font-extrabold text-brand-blue sm:text-3xl">Offres</h2>
+            <h2 className="section-title">Offres</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               Aucune offre disponible pour le moment.
             </p>
@@ -48,7 +48,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
   const { offer, product, originalPrice, discountedPrice, savingsAmount, savingsPercent } = featuredOffer;
 
   return (
-    <section className="py-14">
+    <section className="section-padding">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <div className="relative overflow-hidden rounded-3xl bg-brand-blue p-6 shadow-card sm:p-8">
           {offer.imagePath ? (
@@ -71,7 +71,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
           </p>
           <Link
             href={`/produits/${product.slug}`}
-            className="relative mt-4 inline-flex rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            className="relative mt-4 inline-flex rounded-xl border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-px hover:bg-white/20"
           >
             Voir le produit
           </Link>
@@ -95,7 +95,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
         </div>
 
         {visibleOtherOffers.length > 0 ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
             {visibleOtherOffers.map((offerWithProduct) => {
               const {
                 offer: secondaryOffer,
@@ -109,7 +109,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
               return (
                 <article
                   key={secondaryOffer.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.12)]"
                 >
                   <p className="inline-flex rounded-full bg-brand-orange/10 px-2.5 py-1 text-xs font-bold text-brand-orange">
                     {secondaryOffer.discountLabel}
@@ -142,7 +142,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
                   ) : null}
                   <Link
                     href={`/produits/${secondaryProduct.slug}`}
-                    className="mt-4 inline-flex rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+                    className="mt-4 inline-flex rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:border-brand-orange hover:text-brand-orange"
                   >
                     Voir le produit
                   </Link>
@@ -156,7 +156,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
           <div className="mt-4">
             <Link
               href="/offres"
-              className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:border-brand-orange hover:text-brand-orange"
             >
               Voir toutes les offres ({activeOffers.length})
             </Link>

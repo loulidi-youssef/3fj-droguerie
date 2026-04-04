@@ -8,18 +8,17 @@ export const CategoriesProductsSection = async () => {
   const products = await getAllProducts();
 
   return (
-    <section className="bg-brand-light py-14">
+    <section className="section-padding bg-brand-light">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-7">
           <div>
-            <h2 className="text-2xl font-extrabold text-brand-blue sm:text-3xl">
-              {homepageContent.categoriesProducts.title}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-              {homepageContent.categoriesProducts.subtitle}
-            </p>
+            <h2 className="section-title">{homepageContent.categoriesProducts.title}</h2>
+            <p className="section-subtitle">{homepageContent.categoriesProducts.subtitle}</p>
           </div>
-          <Link href="/produits" className="text-sm font-semibold text-brand-orange hover:underline underline-offset-4">
+          <Link
+            href="/produits"
+            className="text-sm font-semibold text-brand-orange transition-colors duration-200 hover:text-brand-orangeDark hover:underline underline-offset-4"
+          >
             {homepageContent.categoriesProducts.allProductsCta}
           </Link>
         </div>
@@ -45,7 +44,7 @@ export const CategoriesProductsSection = async () => {
             </div>
           </aside>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-8">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:col-span-8">
             {products.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

@@ -28,39 +28,41 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   };
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-card transition duration-200 hover:-translate-y-1 hover:shadow-xl">
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-card transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.14)]">
       <Link href={`/produits/${product.slug}`}>
         <Image
           src={product.images[0]}
           alt={product.name}
           width={600}
           height={380}
-          className="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+          className="h-40 w-full object-cover transition duration-300 group-hover:scale-[1.02] sm:h-44"
         />
       </Link>
 
-      <div className="flex flex-1 flex-col p-5">
+      <div className="flex flex-1 flex-col p-4 sm:p-[18px]">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange">
           {getCategoryNameBySlug(product.categorySlug)}
         </p>
         <Link
           href={`/produits/${product.slug}`}
-          className="mt-1 min-h-[56px] text-lg font-bold leading-tight text-brand-blue hover:text-brand-orange"
+          className="mt-1 min-h-[48px] text-[1.02rem] font-bold leading-snug text-brand-blue transition-colors duration-200 hover:text-brand-orange"
         >
           {product.name}
         </Link>
-        <p className="mt-2 min-h-[66px] text-sm leading-relaxed text-slate-600">{product.shortDescription}</p>
+        <p className="mt-1.5 min-h-[56px] text-sm leading-normal text-slate-600">
+          {product.shortDescription}
+        </p>
 
-        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-          <p className="text-2xl font-extrabold text-brand-blue">{formatDh(product.price)}</p>
+        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+          <p className="text-2xl font-extrabold tracking-tight text-brand-blue">{formatDh(product.price)}</p>
           <StarRating value={product.rating} />
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleAddToCart}
-            className={`rounded-xl bg-brand-orange px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-orangeDark ${
+            className={`btn-primary h-10 w-full px-2 text-center text-[13px] sm:text-sm ${
               isAdding ? "scale-[0.98]" : ""
             }`}
           >
@@ -70,7 +72,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
             href={buildProductWhatsAppLink(product.name)}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl border border-brand-blue px-3 py-2.5 text-center text-sm font-semibold text-brand-blue transition hover:bg-brand-blue hover:text-white"
+            className="btn-outline-brand h-10 w-full px-2 text-center text-[13px] sm:text-sm"
           >
             WhatsApp
           </a>

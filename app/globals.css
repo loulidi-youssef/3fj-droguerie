@@ -17,10 +17,36 @@ body {
   background: radial-gradient(circle at 0% 0%, #fff7ed 0%, #ffffff 45%, #f7f8fb 100%);
   color: #0f172a;
   font-family: "Poppins", "Tajawal", "Segoe UI", sans-serif;
-  line-height: 1.55;
+  line-height: 1.6;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .section-padding {
+    @apply py-12 sm:py-14;
+  }
+
+  .section-title {
+    @apply text-2xl font-extrabold tracking-tight text-brand-blue sm:text-[2rem];
+  }
+
+  .section-subtitle {
+    @apply mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[0.95rem];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)] transition-all duration-200 hover:-translate-y-px hover:bg-brand-orangeDark hover:shadow-[0_11px_24px_rgba(234,88,12,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200;
+  }
+
+  .btn-primary-pill {
+    @apply inline-flex items-center justify-center rounded-full bg-brand-orange px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)] transition-all duration-200 hover:-translate-y-px hover:bg-brand-orangeDark hover:shadow-[0_11px_24px_rgba(234,88,12,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200;
+  }
+
+  .btn-outline-brand {
+    @apply inline-flex items-center justify-center rounded-xl border border-brand-blue/70 bg-white px-4 py-2.5 text-sm font-semibold text-brand-blue transition-colors duration-200 hover:bg-brand-blue hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/20;
+  }
 }
 
 @keyframes fadeInUp {

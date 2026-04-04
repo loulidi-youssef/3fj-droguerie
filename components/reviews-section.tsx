@@ -6,21 +6,17 @@ export const ReviewsSection = async () => {
   const reviews = await getActiveReviews();
 
   return (
-    <section className="bg-brand-light py-14">
+    <section className="section-padding bg-brand-light">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <h2 className="text-2xl font-extrabold text-brand-blue sm:text-3xl">
-          {homepageContent.reviews.title}
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          {homepageContent.reviews.subtitle}
-        </p>
+        <h2 className="section-title">{homepageContent.reviews.title}</h2>
+        <p className="section-subtitle">{homepageContent.reviews.subtitle}</p>
 
         {reviews.length === 0 ? (
           <p className="mt-7 rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-card">
             Aucun avis disponible pour le moment.
           </p>
         ) : (
-          <div className="mt-7 grid gap-5 md:grid-cols-3">
+          <div className="mt-7 grid gap-4 sm:gap-5 md:grid-cols-3">
             {reviews.map((review) => (
               <article
                 key={review.id}

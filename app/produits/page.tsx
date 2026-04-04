@@ -97,10 +97,12 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
   };
 
   return (
-    <section className="bg-brand-light py-12">
+    <section className="section-padding bg-brand-light">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <h1 className="text-3xl font-extrabold text-brand-blue">Produits de Droguerie a Fes</h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <h1 className="text-3xl font-extrabold tracking-tight text-brand-blue sm:text-4xl">
+          Produits de Droguerie a Fes
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[0.95rem]">
           Vente en gros et detail de materiaux de construction, peinture et outillage.
         </p>
 
@@ -157,13 +159,13 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="submit"
-              className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
+              className="inline-flex items-center justify-center rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-slate-900"
             >
               Appliquer
             </button>
             <a
               href="/produits"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:border-slate-400 hover:bg-slate-50"
             >
               Reinitialiser
             </a>
@@ -213,7 +215,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           {sortedProducts.length} produit(s) trouve(s).
         </p>
 
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
           {sortedProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

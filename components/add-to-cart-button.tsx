@@ -30,7 +30,7 @@ export const AddToCartButton = ({
     <button
       type="button"
       onClick={handleAddToCart}
-      className={`${className ?? "rounded-xl bg-brand-orange px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-orangeDark"} ${
+      className={`${className ?? "btn-primary"} ${
         isActive ? "scale-[0.98]" : ""
       }`}
     >

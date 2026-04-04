@@ -8,10 +8,14 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <section className="bg-brand-light py-12">
-      <div className="mx-auto max-w-5xl px-4">
-        <h1 className="text-3xl font-extrabold text-brand-blue">Contact - 3FJ Droguerie</h1>
-        <p className="mt-2 text-sm text-slate-600">Nous sommes a votre ecoute pour vos commandes a Fes.</p>
+    <section className="section-padding bg-brand-light">
+      <div className="mx-auto max-w-5xl px-4 sm:px-5 lg:px-6">
+        <h1 className="text-3xl font-extrabold tracking-tight text-brand-blue sm:text-4xl">
+          Contact - 3FJ Droguerie
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[0.95rem]">
+          Nous sommes a votre ecoute pour vos commandes a Fes.
+        </p>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow-card">
@@ -24,7 +28,7 @@ export default function ContactPage() {
               href={`https://wa.me/${businessInfo.whatsappPhone}`}
               target="_blank"
               rel="noreferrer"
-              className="mt-5 inline-flex rounded-full bg-brand-orange px-4 py-2 text-sm font-semibold text-white"
+              className="btn-primary-pill mt-5 px-4 py-2"
             >
               Commander sur WhatsApp
             </a>
@@ -42,7 +46,7 @@ export default function ContactPage() {
                 href={businessInfo.googleMapsUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex rounded-full border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
+                className="btn-outline-brand rounded-full"
               >
                 Ouvrir dans Google Maps
               </a>

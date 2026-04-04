@@ -22,31 +22,34 @@ export const HeroSection = () => {
             alt="Magasin de materiaux de construction a Fes"
             width={1200}
             height={700}
-            className="h-full min-h-[390px] w-full object-cover sm:min-h-[460px]"
+            className="h-full min-h-[390px] w-full object-cover object-[center_35%] brightness-[0.82] contrast-[1.08] sm:min-h-[460px]"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-brand-blue/90 via-brand-blue/72 to-brand-blue/40" />
-          <div className="absolute inset-0 bg-gradient-to-t from-brand-blue/35 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-brand-blue/95 via-brand-blue/82 to-brand-blue/48" />
+          <div className="absolute inset-0 bg-gradient-to-t from-brand-blue/58 via-brand-blue/12 to-transparent" />
+          <div className="absolute inset-0 ring-1 ring-inset ring-white/20" />
           <div className="absolute inset-0 flex flex-col justify-center px-6 py-8 sm:px-10 lg:px-12">
-            <p className="mb-3 inline-flex w-fit rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100 backdrop-blur-sm">
+            <p className="mb-3 inline-flex w-fit rounded-full bg-white/18 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100 backdrop-blur-sm">
               {homepageContent.hero.badge}
             </p>
-            <h1 className="max-w-2xl text-3xl font-extrabold leading-tight text-white sm:text-5xl">
+            <h1 className="max-w-2xl text-3xl font-extrabold leading-tight text-white drop-shadow-[0_2px_8px_rgba(15,42,77,0.45)] sm:text-5xl">
               {homepageContent.hero.title}
             </h1>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-100 sm:text-base">{homepageContent.hero.subtitle}</p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-100/95 sm:text-base">
+              {homepageContent.hero.subtitle}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-2.5 sm:gap-3">
               <a
                 href={`https://wa.me/${businessInfo.whatsappPhone}`}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full bg-brand-orange px-5 py-3 text-sm font-bold text-white shadow-md shadow-orange-900/25 transition hover:bg-brand-orangeDark"
+                className="btn-primary-pill px-5 py-3 text-sm font-bold"
               >
                 {homepageContent.hero.whatsappCta}
               </a>
               <Link
                 href="/produits"
-                className="rounded-full border border-white/80 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white hover:text-brand-blue"
+                className="inline-flex items-center justify-center rounded-full border border-white/80 bg-white/8 px-5 py-3 text-sm font-bold text-white shadow-[0_6px_14px_rgba(15,42,77,0.2)] transition-all duration-200 hover:-translate-y-px hover:bg-white hover:text-brand-blue"
               >
                 {homepageContent.hero.productsCta}
               </Link>

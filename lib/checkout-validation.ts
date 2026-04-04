@@ -71,8 +71,8 @@ export const validateCheckoutCustomer = (
 
   if (!normalizedAddress) {
     errors.address = "L'adresse est obligatoire.";
-  } else if (normalizedAddress.length < 8) {
-    errors.address = "L'adresse doit contenir au moins 8 caracteres.";
+  } else if (normalizedAddress.length < 4) {
+    errors.address = "L'adresse doit contenir au moins 4 caracteres.";
   } else if (normalizedAddress.length > MAX_ADDRESS_LENGTH) {
     errors.address = `L'adresse ne doit pas depasser ${MAX_ADDRESS_LENGTH} caracteres.`;
   }
