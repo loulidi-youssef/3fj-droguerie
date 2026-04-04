@@ -6,7 +6,6 @@ export const homepageContent = {
   header: {
     navItems: [
       { href: "/", label: "Accueil" },
-      { href: "/produits", label: "Produits" },
       { href: "/offres", label: "Offres" },
       { href: "/blog", label: "Blog" },
       { href: "/contact", label: "Contact" },

@@ -22,6 +22,7 @@ export default function LoginPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nextPath, setNextPath] = useState("/compte/commandes");
@@ -113,21 +114,44 @@ export default function LoginPage() {
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Mot de passe
             </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
-              placeholder="Votre mot de passe"
-              autoComplete="current-password"
-            />
+            <div className="relative mt-1">
+              <input
+                type={isPasswordVisible ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 pr-10 text-sm text-slate-700 outline-none focus:border-brand-orange"
+                placeholder="Votre mot de passe"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setIsPasswordVisible((current) => !current)}
+                className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center text-slate-500 transition hover:text-brand-blue"
+                aria-label={isPasswordVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              >
+                {isPasswordVisible ? (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 4.5l18 15" />
+                    <path d="M10.7 10.2A2.8 2.8 0 0012 15a2.8 2.8 0 002.7-1.9" />
+                    <path d="M9.9 5.2A10.7 10.7 0 0121 12a10.9 10.9 0 01-3.9 4.7" />
+                    <path d="M6.5 7.3A10.8 10.8 0 003 12a10.8 10.8 0 005.5 6.3" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+                    <circle cx="12" cy="12" r="2.8" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </label>
 
           {errorMessage ? (
-            <p className="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700">
-              {errorMessage}
-            </p>
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+              <p className="font-semibold">Connexion impossible</p>
+              <p className="mt-1">{errorMessage}</p>
+            </div>
           ) : null}
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">

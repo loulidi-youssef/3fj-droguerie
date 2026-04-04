@@ -47,6 +47,8 @@ const initialTouchedFields: Record<CheckoutField, boolean> = {
 };
 
 const requiredFields: CheckoutField[] = ["name", "phone", "address"];
+const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
+const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 
 export default function PanierPage() {
   const { items, updateQuantity, removeItem, clearCart } = useCart();
@@ -64,6 +66,30 @@ export default function PanierPage() {
   const [savedOrder, setSavedOrder] = useState<SavedOrderState | null>(null);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
+  const [authRequiredPrompt, setAuthRequiredPrompt] = useState(false);
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(CHECKOUT_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        return;
+      }
+
+      const parsedDraft = JSON.parse(rawDraft) as Partial<CheckoutFormValues>;
+      setCheckoutForm((current) => ({
+        name: typeof parsedDraft.name === "string" ? parsedDraft.name : current.name,
+        phone: typeof parsedDraft.phone === "string" ? parsedDraft.phone : current.phone,
+        address:
+          typeof parsedDraft.address === "string" ? parsedDraft.address : current.address,
+        location:
+          typeof parsedDraft.location === "string"
+            ? parsedDraft.location
+            : current.location,
+      }));
+    } catch {
+      window.localStorage.removeItem(CHECKOUT_DRAFT_STORAGE_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     const uniqueProductIds = [...new Set(items.map((item) => item.productId))];
@@ -151,6 +177,27 @@ export default function PanierPage() {
     };
   }, []);
 
+  useEffect(() => {
+    window.localStorage.setItem(CHECKOUT_DRAFT_STORAGE_KEY, JSON.stringify(checkoutForm));
+  }, [checkoutForm]);
+
+  useEffect(() => {
+    if (!isCustomerAuthenticated) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "1") {
+      return;
+    }
+
+    setSubmitInfo("Connexion reussie. Vous pouvez maintenant confirmer votre commande.");
+    params.delete("checkout");
+    const nextQueryString = params.toString();
+    const nextUrl = nextQueryString ? `/panier?${nextQueryString}` : "/panier";
+    window.history.replaceState({}, "", nextUrl);
+  }, [isCustomerAuthenticated]);
+
   const detailedItems = useMemo(
     () =>
       items
@@ -204,6 +251,9 @@ export default function PanierPage() {
     if (submitInfo) {
       setSubmitInfo(null);
     }
+    if (authRequiredPrompt) {
+      setAuthRequiredPrompt(false);
+    }
   };
 
   const handleFieldBlur = (field: CheckoutField) => {
@@ -244,6 +294,7 @@ export default function PanierPage() {
   const handleConfirmOrder = async () => {
     setSubmitError(null);
     setSubmitInfo(null);
+    setAuthRequiredPrompt(false);
 
     if (isProductsLoading) {
       setSubmitError("Chargement des produits en cours. Merci de patienter.");
@@ -252,6 +303,13 @@ export default function PanierPage() {
 
     if (detailedItems.length === 0) {
       setSubmitError("Votre panier est vide.");
+      return;
+    }
+
+    if (!isCustomerAuthenticated || !customerAccessToken) {
+      setAuthRequiredPrompt(true);
+      setSubmitError("Connexion requise pour confirmer votre commande.");
+      setSubmitInfo("Connectez-vous ou creez un compte, puis revenez terminer votre commande.");
       return;
     }
 
@@ -345,18 +403,12 @@ export default function PanierPage() {
         );
       }
 
-      if (!isCustomerAuthenticated) {
-        setSubmitInfo((current) =>
-          current
-            ? `${current} Creez un compte ou connectez-vous pour suivre votre commande.`
-            : "Creez un compte ou connectez-vous pour suivre votre commande.",
-        );
-      }
-
       clearCart();
+      window.localStorage.removeItem(CHECKOUT_DRAFT_STORAGE_KEY);
       setCheckoutForm(initialCheckoutForm);
       setFieldErrors({});
       setTouchedFields(initialTouchedFields);
+      setAuthRequiredPrompt(false);
       showToast("Commande enregistree avec succes.");
     } catch (error) {
       const message =
@@ -379,33 +431,12 @@ export default function PanierPage() {
                 <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
                   Commande enregistree avec succes. Reference: {savedOrder.orderId}
                 </p>
-                {!isCustomerAuthenticated ? (
-                  <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
-                    Creez un compte ou connectez-vous pour suivre votre commande.
-                    <span className="ml-1">
-                      <Link
-                        href={`/login?next=${encodeURIComponent("/compte/commandes")}`}
-                        className="font-semibold underline"
-                      >
-                        Connexion
-                      </Link>
-                      {" / "}
-                      <Link
-                        href={`/register?next=${encodeURIComponent("/compte/commandes")}`}
-                        className="font-semibold underline"
-                      >
-                        Inscription
-                      </Link>
-                    </span>
-                  </p>
-                ) : (
-                  <Link
-                    href="/compte/commandes"
-                    className="mt-3 inline-flex rounded-xl border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
-                  >
-                    Suivre mes commandes
-                  </Link>
-                )}
+                <Link
+                  href="/compte/commandes"
+                  className="mt-3 inline-flex rounded-xl border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
+                >
+                  Suivre mes commandes
+                </Link>
                 <a
                   href={savedOrder.whatsappLink}
                   target="_blank"
@@ -560,6 +591,42 @@ export default function PanierPage() {
                 </label>
               </div>
 
+              {!isCustomerAuthenticated ? (
+                <div
+                  className={`mt-4 rounded-xl border p-3 ${
+                    authRequiredPrompt
+                      ? "border-rose-300 bg-rose-50"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-brand-blue">
+                    Connexion requise pour confirmer
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    Pour finaliser la commande, connectez-vous ou creez un compte.
+                    Apres authentification, vous revenez directement ici pour continuer.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={`/login?next=${encodeURIComponent(CHECKOUT_RETURN_PATH)}`}
+                      className="btn-primary px-3 py-2 text-xs sm:text-sm"
+                    >
+                      Se connecter
+                    </Link>
+                    <Link
+                      href={`/register?next=${encodeURIComponent(CHECKOUT_RETURN_PATH)}`}
+                      className="btn-outline-brand px-3 py-2 text-xs sm:text-sm"
+                    >
+                      Creer un compte
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
+                  Connecte. Vous pouvez confirmer votre commande.
+                </p>
+              )}
+
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-sm font-semibold text-brand-blue">Recapitulatif de commande</p>
                 <div className="mt-2 space-y-2 text-sm text-slate-700">
@@ -603,6 +670,32 @@ export default function PanierPage() {
                 </p>
               ) : null}
 
+              <div className="mt-3 space-y-2">
+                <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-blue">
+                    Protection des donnees
+                  </h3>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                    La protection de vos donnees est importante pour nous ! Soyez assure que
+                    vos informations seront conservees en toute securite et sans compromis. Nous
+                    ne vendons pas vos informations personnelles pour de l&apos;argent et nous
+                    n&apos;utiliserons vos informations que conformement a notre politique en
+                    matiere de confidentialite et de cookies afin de vous fournir nos services et
+                    de les ameliorer.
+                  </p>
+                </article>
+
+                <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-blue">
+                    Protection des achats sur 3FJ
+                  </h3>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                    Faites vos achats sur 3FJ en toute confiance en sachant que si un probleme se
+                    produit avec une commande, nous sommes la pour vous aider.
+                  </p>
+                </article>
+              </div>
+
               {submitInfo ? (
                 <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
                   {submitInfo}
@@ -621,7 +714,11 @@ export default function PanierPage() {
                 disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
                 className="mt-4 block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSubmitting ? "Enregistrement de votre commande..." : "Confirmer la commande"}
+                {isSubmitting
+                  ? "Enregistrement de votre commande..."
+                  : isCustomerAuthenticated
+                    ? "Confirmer la commande"
+                    : "Se connecter pour confirmer"}
               </button>
 
               <p className="mt-2 text-center text-[11px] text-slate-500">
