@@ -56,6 +56,37 @@ const maskEmailForDebug = (email: string): string => {
   return `${email.slice(0, 2)}***${email.slice(atIndex)}`;
 };
 
+const maskPhoneForDebug = (phone: string): string => {
+  if (phone.length <= 4) {
+    return "***";
+  }
+
+  return `${phone.slice(0, 2)}***${phone.slice(-2)}`;
+};
+
+const isValidEmail = (value: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+};
+
+const normalizePhone = (value: string): string | null => {
+  const compact = value.replace(/[^\d+]/g, "");
+  const withPlus = compact.startsWith("00") ? `+${compact.slice(2)}` : compact;
+
+  if (/^0\d{9}$/.test(withPlus)) {
+    return `+212${withPlus.slice(1)}`;
+  }
+
+  if (/^212\d{9}$/.test(withPlus)) {
+    return `+${withPlus}`;
+  }
+
+  if (!/^\+?\d{8,15}$/.test(withPlus)) {
+    return null;
+  }
+
+  return withPlus.startsWith("+") ? withPlus : `+${withPlus}`;
+};
+
 const mapSignUpErrorMessage = (error: SupabaseAuthErrorLike): string => {
   const message = error.message?.toLowerCase() ?? "";
 
@@ -63,8 +94,8 @@ const mapSignUpErrorMessage = (error: SupabaseAuthErrorLike): string => {
     return "Cet email est deja utilise. Connectez-vous ou utilisez un autre email.";
   }
 
-  if (message.includes("invalid email")) {
-    return "Adresse email invalide. Verifiez le format puis reessayez.";
+  if (message.includes("invalid email") || message.includes("invalid phone")) {
+    return "Email ou telephone invalide. Verifiez le format puis reessayez.";
   }
 
   if (
@@ -118,7 +149,7 @@ const mapAutoLoginErrorMessage = (error: SupabaseAuthErrorLike | null): string =
 export default function RegisterPage() {
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -168,10 +199,22 @@ export default function RegisterPage() {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
-    const normalizedEmail = email.trim();
+    const normalizedIdentifier = identifier.trim();
 
     if (!supabase) {
       setErrorMessage("Supabase Auth n'est pas configure.");
+      return;
+    }
+
+    const emailForAuth = isValidEmail(normalizedIdentifier)
+      ? normalizedIdentifier.toLowerCase()
+      : null;
+    const phoneForAuth = emailForAuth ? null : normalizePhone(normalizedIdentifier);
+
+    if (!emailForAuth && !phoneForAuth) {
+      setErrorMessage(
+        "Format invalide. Utilisez un email valide ou un numero de telephone (ex: +212661517301).",
+      );
       return;
     }
 
@@ -179,14 +222,15 @@ export default function RegisterPage() {
 
     try {
       logRegisterDebug("signup:start", {
-        email: maskEmailForDebug(normalizedEmail),
+        identifier: emailForAuth ? maskEmailForDebug(emailForAuth) : maskPhoneForDebug(phoneForAuth ?? ""),
         nextPath,
       });
 
-      const { data, error } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-      });
+      const signUpPayload = emailForAuth
+        ? { email: emailForAuth, password }
+        : { phone: phoneForAuth ?? "", password };
+
+      const { data, error } = await supabase.auth.signUp(signUpPayload);
 
       logRegisterDebug("signup:result", {
         hasUser: Boolean(data.user),
@@ -205,10 +249,17 @@ export default function RegisterPage() {
         return;
       }
 
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword(
+        emailForAuth
+          ? {
+              email: emailForAuth,
+              password,
+            }
+          : {
+              phone: phoneForAuth ?? "",
+              password,
+            },
+      );
 
       logRegisterDebug("autologin:result", {
         hasSession: Boolean(loginData.session),
@@ -248,13 +299,15 @@ export default function RegisterPage() {
               Email
             </span>
             <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               required
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
               placeholder="vous@email.com"
-              autoComplete="email"
+              autoComplete="username"
+              inputMode="text"
+              spellCheck={false}
             />
           </label>
 
