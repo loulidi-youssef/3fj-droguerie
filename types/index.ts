@@ -15,6 +15,9 @@ export type Product = {
   rating: number;
   images: string[];
   createdAt?: string;
+  badgeLabel?: string;
+  isPromo?: boolean;
+  isNew?: boolean;
 };
 
 export type BlogPost = {

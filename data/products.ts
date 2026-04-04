@@ -16,6 +16,8 @@ export const products: Product[] = [
     description:
       "Peinture Atlas de haute qualite avec excellente couvrance et bonne durabilite.",
     rating: 4.8,
+    isPromo: true,
+    badgeLabel: "Promo",
     images: [
       "/images/products/peinture-atlas.svg",
       "/images/products/peinture-atlas-detail-1.svg",
@@ -54,6 +56,8 @@ export const products: Product[] = [
     shortDescription: "Perceuse puissante pour tous travaux.",
     description: "Perceuse performante ideale pour percage dans differents materiaux.",
     rating: 4.6,
+    isNew: true,
+    badgeLabel: "Nouveau",
     images: [
       "/images/products/perceuse-bosch.jpg",
       "/images/products/perceuse-electrique.svg",

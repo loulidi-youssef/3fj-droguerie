@@ -19,6 +19,16 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   const { addItem } = useCart();
   const { showToast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
+  const badgeLabel = product.badgeLabel?.trim()
+    ? product.badgeLabel.trim()
+    : product.isPromo
+      ? "Promo"
+      : product.isNew
+        ? "Nouveau"
+        : "";
+  const hasBadge = badgeLabel.length > 0;
+  const isPromoBadge =
+    product.isPromo || badgeLabel.toLowerCase().includes("promo");
 
   const handleAddToCart = () => {
     addItem(product.id, 1);
@@ -28,15 +38,28 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   };
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-card transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.14)]">
-      <Link href={`/produits/${product.slug}`}>
-        <Image
-          src={product.images[0]}
-          alt={product.name}
-          width={600}
-          height={380}
-          className="h-40 w-full object-cover transition duration-300 group-hover:scale-[1.02] sm:h-44"
-        />
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_22px_rgba(15,42,77,0.09)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,42,77,0.14)]">
+      <Link href={`/produits/${product.slug}`} className="block p-3 pb-0">
+        <div className="relative flex h-44 w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50 sm:h-48">
+          {hasBadge ? (
+            <span
+              className={`pointer-events-none absolute left-2 top-2 z-10 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                isPromoBadge
+                  ? "bg-brand-orange text-white"
+                  : "bg-brand-blue/90 text-white"
+              }`}
+            >
+              {badgeLabel}
+            </span>
+          ) : null}
+          <Image
+            src={product.images[0]}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            className="object-contain p-3 transition-transform duration-500 ease-out group-hover:scale-[1.035]"
+          />
+        </div>
       </Link>
 
       <div className="flex flex-1 flex-col p-4 sm:p-[18px]">
