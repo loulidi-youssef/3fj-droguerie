@@ -11,6 +11,7 @@ import {
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
 import {
+  type UpsertAdminProductVariantInput,
   createAdminProduct,
   deleteAdminProduct,
   getAdminProducts,
@@ -37,6 +38,7 @@ type ProductFormValue = {
   rating: number;
   images: string[];
   isActive: boolean;
+  variants: UpsertAdminProductVariantInput[];
 };
 
 type ParsedProductForm =
@@ -93,6 +95,170 @@ const formatCategoryLabel = (categorySlug: string): string => {
     .join(" ");
 };
 
+type ParsedVariantsJson =
+  | {
+      ok: true;
+      variants: UpsertAdminProductVariantInput[];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+const toNullableString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toBoolean = (value: unknown, defaultValue: boolean): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["false", "0", "non", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    if (["true", "1", "oui", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+  }
+
+  return defaultValue;
+};
+
+const parseProductVariantsJson = (rawVariants: string): ParsedVariantsJson => {
+  const trimmed = rawVariants.trim();
+  if (!trimmed) {
+    return { ok: true, variants: [] };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Variantes invalides: utilisez un JSON valide (tableau d'objets).",
+    };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return {
+      ok: false,
+      error: "Variantes invalides: utilisez un tableau JSON.",
+    };
+  }
+
+  const variants: UpsertAdminProductVariantInput[] = [];
+
+  for (const [index, entry] of parsed.entries()) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return {
+        ok: false,
+        error: `Variante #${index + 1} invalide: objet attendu.`,
+      };
+    }
+
+    const record = entry as Record<string, unknown>;
+    const color = toNullableString(record.color);
+    const size = toNullableString(record.size);
+
+    if (!color && !size) {
+      return {
+        ok: false,
+        error: `Variante #${index + 1}: ajoutez au moins une couleur ou une taille.`,
+      };
+    }
+
+    const price = Number(record.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      return {
+        ok: false,
+        error: `Variante #${index + 1}: prix invalide.`,
+      };
+    }
+
+    const stock = Number(record.stock);
+    if (!Number.isFinite(stock) || stock < 0) {
+      return {
+        ok: false,
+        error: `Variante #${index + 1}: stock invalide.`,
+      };
+    }
+
+    const previousPriceRaw = record.previousPrice ?? record.previous_price;
+    const previousPrice =
+      previousPriceRaw === null || previousPriceRaw === undefined || previousPriceRaw === ""
+        ? null
+        : Number(previousPriceRaw);
+
+    if (
+      typeof previousPrice === "number" &&
+      (!Number.isFinite(previousPrice) || previousPrice <= price)
+    ) {
+      return {
+        ok: false,
+        error: `Variante #${index + 1}: previousPrice doit etre superieur au prix.`,
+      };
+    }
+
+    variants.push({
+      id: toNullableString(record.id) ?? undefined,
+      color,
+      size,
+      price: Math.round(price),
+      previousPrice: typeof previousPrice === "number" ? Math.round(previousPrice) : null,
+      stock: Math.round(stock),
+      sku: toNullableString(record.sku),
+      image: toNullableString(record.image),
+      isActive: toBoolean(record.isActive ?? record.is_active, true),
+    });
+  }
+
+  return { ok: true, variants };
+};
+
+const formatVariantsJsonForTextarea = (
+  variants: Array<{
+    id: string;
+    color: string | null;
+    size: string | null;
+    price: number;
+    previous_price: number | null;
+    stock: number;
+    sku: string | null;
+    image: string | null;
+    is_active: boolean;
+  }>,
+): string => {
+  if (variants.length === 0) {
+    return "";
+  }
+
+  return JSON.stringify(
+    variants.map((variant) => ({
+      id: variant.id,
+      color: variant.color,
+      size: variant.size,
+      price: variant.price,
+      previousPrice: variant.previous_price,
+      stock: variant.stock,
+      sku: variant.sku,
+      image: variant.image,
+      isActive: variant.is_active,
+    })),
+    null,
+    2,
+  );
+};
+
 const parseProductForm = (formData: FormData): ParsedProductForm => {
   const rawSlug = formData.get("slug");
   const rawName = formData.get("name");
@@ -100,6 +266,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const rawDescription = formData.get("description");
   const rawCategorySlug = formData.get("categorySlug");
   const rawExistingImages = formData.get("existingImages");
+  const rawVariantsJson = formData.get("variantsJson");
 
   const slug = typeof rawSlug === "string" ? normalizeSlug(rawSlug) : "";
   const name = typeof rawName === "string" ? rawName.trim() : "";
@@ -110,11 +277,20 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const categorySlug =
     typeof rawCategorySlug === "string" ? rawCategorySlug.trim() : "";
   const images = typeof rawExistingImages === "string" ? parseImages(rawExistingImages) : [];
+  const variantsJson = typeof rawVariantsJson === "string" ? rawVariantsJson : "";
 
   const price = toNumber(formData.get("price"));
   const stock = toNumber(formData.get("stock"));
   const rating = toNumber(formData.get("rating"));
   const isActive = formData.get("isActive") === "on";
+
+  const parsedVariants = parseProductVariantsJson(variantsJson);
+  if (!parsedVariants.ok) {
+    return {
+      ok: false,
+      error: parsedVariants.error,
+    };
+  }
 
   if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
     return {
@@ -155,6 +331,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
       rating,
       images,
       isActive,
+      variants: parsedVariants.variants,
     },
   };
 };
@@ -597,6 +774,20 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
+            <label className="block md:col-span-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Variantes (JSON, optionnel)
+              </span>
+              <textarea
+                name="variantsJson"
+                rows={7}
+                placeholder='[{"color":"Blanc","size":"1L","price":120,"previousPrice":140,"stock":10,"sku":"PNT-BLANC-1L","isActive":true}]'
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                Une ligne JSON par variante. Champs utiles: color, size, price, previousPrice, stock, sku, image, isActive.
+              </span>
+            </label>
             <label className="inline-flex items-center gap-2 md:col-span-2">
               <input type="checkbox" name="isActive" defaultChecked />
               <span className="text-sm text-slate-700">Produit actif</span>
@@ -657,6 +848,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                       <p className="text-sm text-slate-700">{formatCategoryLabel(product.category_slug)}</p>
                       <p className="text-xs text-slate-500">Slug: {product.category_slug}</p>
                       <p className="text-xs text-slate-600">Note: {product.rating}</p>
+                      <p className="text-xs text-slate-600">Variantes: {product.variants.length}</p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Statut</p>
@@ -794,6 +986,20 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                         defaultValue={product.images.join("\n")}
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />
+                    </label>
+                    <label className="block md:col-span-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Variantes (JSON, optionnel)
+                      </span>
+                      <textarea
+                        name="variantsJson"
+                        rows={7}
+                        defaultValue={formatVariantsJsonForTextarea(product.variants)}
+                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
+                      />
+                      <span className="mt-1 block text-xs text-slate-500">
+                        Gardez ce JSON simple: color, size, price, previousPrice, stock, sku, image, isActive.
+                      </span>
                     </label>
                     <label className="inline-flex items-center gap-2 md:col-span-2">
                       <input

@@ -205,10 +205,22 @@ export default function PanierPage() {
           const product = productsById[item.productId];
           if (!product) return null;
 
+          const unitPrice =
+            typeof item.selectedPrice === "number" && item.selectedPrice > 0
+              ? item.selectedPrice
+              : product.price;
+          const variantLabelParts = [
+            item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
+            item.selectedSize ? `Taille: ${item.selectedSize}` : null,
+          ].filter((value): value is string => Boolean(value));
+
           return {
             ...item,
             product,
-            lineTotal: product.price * item.quantity,
+            unitPrice,
+            lineTotal: unitPrice * item.quantity,
+            variantLabel: variantLabelParts.join(" | "),
+            lineKey: `${item.productId}::${item.variantId ?? "base"}`,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),
@@ -223,9 +235,9 @@ export default function PanierPage() {
 
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
-      name: item.product.name,
+      name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,
       quantity: item.quantity,
-      unitPrice: item.product.price,
+      unitPrice: item.unitPrice,
     })),
     subtotal,
     deliveryCost,
@@ -348,6 +360,9 @@ export default function PanierPage() {
           items: detailedItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
+            variantId: item.variantId,
+            selectedColor: item.selectedColor,
+            selectedSize: item.selectedSize,
           })),
         }),
       });
@@ -374,9 +389,9 @@ export default function PanierPage() {
 
       const whatsappLink = buildCartWhatsAppLink(
         detailedItems.map((item) => ({
-          name: item.product.name,
+          name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,
           quantity: item.quantity,
-          unitPrice: item.product.price,
+          unitPrice: item.unitPrice,
         })),
         confirmedSubtotal,
         confirmedDeliveryFee,
@@ -458,18 +473,21 @@ export default function PanierPage() {
             <div className="space-y-4 lg:col-span-2">
               {detailedItems.length > 0 ? (
                 detailedItems.map((item) => (
-                  <article key={item.productId} className="rounded-2xl bg-white p-4 shadow-card">
+                  <article key={item.lineKey} className="rounded-2xl bg-white p-4 shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h2 className="text-lg font-bold text-brand-blue">{item.product.name}</h2>
-                        <p className="text-sm text-slate-600">{formatDh(item.product.price)} / unite</p>
+                        {item.variantLabel ? (
+                          <p className="text-xs font-medium text-slate-500">{item.variantLabel}</p>
+                        ) : null}
+                        <p className="text-sm text-slate-600">{formatDh(item.unitPrice)} / unite</p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           className="h-8 w-8 rounded-full border border-slate-300 text-lg"
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
                         >
                           -
                         </button>
@@ -477,7 +495,7 @@ export default function PanierPage() {
                         <button
                           type="button"
                           className="h-8 w-8 rounded-full border border-slate-300 text-lg"
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
                         >
                           +
                         </button>
@@ -488,7 +506,7 @@ export default function PanierPage() {
                       <p className="text-sm font-semibold text-brand-blue">Total ligne: {formatDh(item.lineTotal)}</p>
                       <button
                         type="button"
-                        onClick={() => removeItem(item.productId)}
+                        onClick={() => removeItem(item.productId, item.variantId)}
                         className="text-xs font-semibold text-rose-600 hover:underline"
                       >
                         Supprimer

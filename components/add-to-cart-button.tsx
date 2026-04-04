@@ -6,6 +6,12 @@ import { useToast } from "@/components/toast-provider";
 
 type AddToCartButtonProps = {
   productId: string;
+  variantId?: string;
+  selectedColor?: string;
+  selectedSize?: string;
+  selectedPrice?: number;
+  selectedPreviousPrice?: number;
+  selectedImage?: string;
   quantity?: number;
   className?: string;
   controlsClassName?: string;
@@ -16,6 +22,12 @@ type AddToCartButtonProps = {
 
 export const AddToCartButton = ({
   productId,
+  variantId,
+  selectedColor,
+  selectedSize,
+  selectedPrice,
+  selectedPreviousPrice,
+  selectedImage,
   quantity = 1,
   className,
   controlsClassName,
@@ -26,7 +38,11 @@ export const AddToCartButton = ({
   const { items, addItem, updateQuantity } = useCart();
   const { showToast } = useToast();
   const [isActive, setIsActive] = useState(false);
-  const currentQuantity = items.find((item) => item.productId === productId)?.quantity ?? 0;
+  const currentQuantity =
+    items.find(
+      (item) =>
+        item.productId === productId && (item.variantId ?? "") === (variantId ?? ""),
+    )?.quantity ?? 0;
   const canIncrement = !disabled;
 
   const handleAddToCart = () => {
@@ -34,7 +50,14 @@ export const AddToCartButton = ({
       return;
     }
 
-    addItem(productId, quantity);
+    addItem(productId, quantity, {
+      variantId,
+      selectedColor,
+      selectedSize,
+      selectedPrice,
+      selectedPreviousPrice,
+      selectedImage,
+    });
     showToast("Produit ajout\u00E9 au panier", {
       primaryAction: {
         label: "Voir panier",
@@ -50,14 +73,14 @@ export const AddToCartButton = ({
   };
 
   const handleDecrease = () => {
-    updateQuantity(productId, currentQuantity - 1);
+    updateQuantity(productId, currentQuantity - 1, variantId);
   };
 
   const handleIncrease = () => {
     if (!canIncrement) {
       return;
     }
-    updateQuantity(productId, currentQuantity + 1);
+    updateQuantity(productId, currentQuantity + 1, variantId);
   };
 
   if (currentQuantity > 0) {

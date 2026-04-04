@@ -1,5 +1,22 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
+type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
+
+export type AdminProductVariant = {
+  id: string;
+  product_id: string;
+  color: string | null;
+  size: string | null;
+  price: number;
+  previous_price: number | null;
+  stock: number;
+  sku: string | null;
+  image: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AdminProduct = {
   id: string;
   slug: string;
@@ -14,6 +31,19 @@ export type AdminProduct = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  variants: AdminProductVariant[];
+};
+
+export type UpsertAdminProductVariantInput = {
+  id?: string;
+  color?: string | null;
+  size?: string | null;
+  price: number;
+  previousPrice?: number | null;
+  stock: number;
+  sku?: string | null;
+  image?: string | null;
+  isActive: boolean;
 };
 
 export type UpsertAdminProductInput = {
@@ -28,11 +58,21 @@ export type UpsertAdminProductInput = {
   rating: number;
   images: string[];
   isActive: boolean;
+  variants?: UpsertAdminProductVariantInput[];
 };
 
 type AdminActionResult = {
   ok: boolean;
   error?: string;
+};
+
+const toNullableTrimmed = (value: string | null | undefined): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 const normalizeDatabaseError = (
@@ -43,12 +83,20 @@ const normalizeDatabaseError = (
     return fallbackMessage;
   }
 
-  if (message.includes("products_stock_check")) {
+  if (message.includes("products_stock_check") || message.includes("product_variants_stock_check")) {
     return "Le stock doit etre superieur ou egal a 0.";
   }
 
-  if (message.includes("products_price_check")) {
+  if (message.includes("products_price_check") || message.includes("product_variants_price_check")) {
     return "Le prix doit etre superieur a 0.";
+  }
+
+  if (message.includes("product_variants_previous_price_check")) {
+    return "Le prix precedent d'une variante doit etre superieur a son prix.";
+  }
+
+  if (message.includes("product_variants_color_or_size_check")) {
+    return "Chaque variante doit avoir au moins une couleur ou une taille.";
   }
 
   if (message.includes("duplicate key value")) {
@@ -59,7 +107,71 @@ const normalizeDatabaseError = (
     return "La colonne stock est manquante. Lancez supabase/migrations/2026-04-04-add-stock-to-products.sql.";
   }
 
+  if (message.includes("product_variants") && message.includes("does not exist")) {
+    return "La table product_variants est manquante. Lancez la migration de variantes.";
+  }
+
   return fallbackMessage;
+};
+
+const replaceAdminProductVariants = async (
+  supabaseAdmin: SupabaseAdminClient,
+  productId: string,
+  variants: UpsertAdminProductVariantInput[],
+): Promise<AdminActionResult> => {
+  const { error: deleteError } = await supabaseAdmin
+    .from("product_variants")
+    .delete()
+    .eq("product_id", productId);
+
+  if (deleteError) {
+    return {
+      ok: false,
+      error: normalizeDatabaseError(
+        deleteError.message,
+        "Impossible de mettre a jour les variantes.",
+      ),
+    };
+  }
+
+  if (variants.length === 0) {
+    return { ok: true };
+  }
+
+  const payload = variants.map((variant) => {
+    const normalizedPrice = Math.round(variant.price);
+    const normalizedPreviousPrice =
+      typeof variant.previousPrice === "number" && variant.previousPrice > normalizedPrice
+        ? Math.round(variant.previousPrice)
+        : null;
+
+    return {
+      id: toNullableTrimmed(variant.id) ?? crypto.randomUUID(),
+      product_id: productId,
+      color: toNullableTrimmed(variant.color ?? null),
+      size: toNullableTrimmed(variant.size ?? null),
+      price: normalizedPrice,
+      previous_price: normalizedPreviousPrice,
+      stock: Math.max(0, Math.round(variant.stock)),
+      sku: toNullableTrimmed(variant.sku ?? null),
+      image: toNullableTrimmed(variant.image ?? null),
+      is_active: variant.isActive,
+    };
+  });
+
+  const { error: insertError } = await supabaseAdmin.from("product_variants").insert(payload);
+
+  if (insertError) {
+    return {
+      ok: false,
+      error: normalizeDatabaseError(
+        insertError.message,
+        "Impossible d'enregistrer les variantes du produit.",
+      ),
+    };
+  }
+
+  return { ok: true };
 };
 
 export const getAdminProducts = async (): Promise<AdminProduct[]> => {
@@ -78,13 +190,36 @@ export const getAdminProducts = async (): Promise<AdminProduct[]> => {
     return [];
   }
 
-  return data.map((product) => ({
-    ...product,
-    stock:
-      typeof (product as { stock?: unknown }).stock === "number"
-        ? ((product as { stock: number }).stock ?? 0)
-        : 0,
-  })) as AdminProduct[];
+  const productIds = data.map((product) => String((product as { id: string }).id));
+  const variantsByProductId = new Map<string, AdminProductVariant[]>();
+
+  if (productIds.length > 0) {
+    const { data: variantsData, error: variantsError } = await supabaseAdmin
+      .from("product_variants")
+      .select("*")
+      .in("product_id", productIds)
+      .order("created_at", { ascending: true });
+
+    if (!variantsError && variantsData) {
+      for (const variant of variantsData as AdminProductVariant[]) {
+        const existing = variantsByProductId.get(variant.product_id) ?? [];
+        variantsByProductId.set(variant.product_id, [...existing, variant]);
+      }
+    }
+  }
+
+  return data.map((product) => {
+    const normalizedProduct = product as AdminProduct;
+
+    return {
+      ...normalizedProduct,
+      stock:
+        typeof (product as { stock?: unknown }).stock === "number"
+          ? ((product as { stock: number }).stock ?? 0)
+          : 0,
+      variants: variantsByProductId.get(normalizedProduct.id) ?? [],
+    };
+  });
 };
 
 export const createAdminProduct = async (
@@ -117,6 +252,17 @@ export const createAdminProduct = async (
       ok: false,
       error: normalizeDatabaseError(error.message, "Impossible d'ajouter le produit."),
     };
+  }
+
+  const variantsResult = await replaceAdminProductVariants(
+    supabaseAdmin,
+    id,
+    input.variants ?? [],
+  );
+
+  if (!variantsResult.ok) {
+    await supabaseAdmin.from("products").delete().eq("id", id);
+    return variantsResult;
   }
 
   return { ok: true };
@@ -153,6 +299,16 @@ export const updateAdminProduct = async (
       ok: false,
       error: normalizeDatabaseError(error.message, "Impossible de modifier le produit."),
     };
+  }
+
+  const variantsResult = await replaceAdminProductVariants(
+    supabaseAdmin,
+    id,
+    input.variants ?? [],
+  );
+
+  if (!variantsResult.ok) {
+    return variantsResult;
   }
 
   return { ok: true };

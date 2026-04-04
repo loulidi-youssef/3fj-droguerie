@@ -1,6 +1,6 @@
 import { products as fallbackProducts } from "@/data/products";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { Product } from "@/types";
+import type { Product, ProductVariant } from "@/types";
 
 type ProductRow = {
   id: string;
@@ -15,6 +15,21 @@ type ProductRow = {
   rating: number;
   images: string[];
   created_at?: string | null;
+};
+
+type ProductVariantRow = {
+  id: string;
+  product_id: string;
+  color?: string | null;
+  size?: string | null;
+  price: number;
+  previous_price?: number | null;
+  stock?: number | null;
+  sku?: string | null;
+  image?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 const PRODUCT_SELECT = "*";
@@ -36,6 +51,62 @@ const mapProductRow = (row: ProductRow): Product => ({
   images: row.images,
   createdAt: row.created_at ?? undefined,
 });
+
+const mapProductVariantRow = (row: ProductVariantRow): ProductVariant => ({
+  id: row.id,
+  productId: row.product_id,
+  color: row.color ?? null,
+  size: row.size ?? null,
+  price: row.price,
+  previousPrice:
+    typeof row.previous_price === "number" && row.previous_price > row.price
+      ? row.previous_price
+      : undefined,
+  stock: typeof row.stock === "number" ? row.stock : undefined,
+  sku: row.sku ?? null,
+  image: row.image ?? null,
+  isActive: row.is_active,
+  createdAt: row.created_at ?? undefined,
+  updatedAt: row.updated_at ?? undefined,
+});
+
+const withVariants = async (
+  products: Product[],
+): Promise<Product[]> => {
+  if (products.length === 0) {
+    return products;
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return products;
+  }
+
+  const productIds = products.map((product) => product.id);
+  const { data, error } = await supabase
+    .from("product_variants")
+    .select("*")
+    .in("product_id", productIds)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !data) {
+    return products;
+  }
+
+  const variantsByProductId = new Map<string, ProductVariant[]>();
+
+  for (const row of data as ProductVariantRow[]) {
+    const mapped = mapProductVariantRow(row);
+    const existing = variantsByProductId.get(mapped.productId) ?? [];
+    variantsByProductId.set(mapped.productId, [...existing, mapped]);
+  }
+
+  return products.map((product) => ({
+    ...product,
+    variants: variantsByProductId.get(product.id) ?? [],
+  }));
+};
 
 const getFallbackProducts = (): Product[] => {
   return [...fallbackProducts].sort((first, second) =>
@@ -60,7 +131,8 @@ export const getAllProducts = async (): Promise<Product[]> => {
     return getFallbackProducts();
   }
 
-  return data.map((row) => mapProductRow(row as ProductRow));
+  const mapped = data.map((row) => mapProductRow(row as ProductRow));
+  return withVariants(mapped);
 };
 
 export const getProductBySlug = async (slug: string): Promise<Product | undefined> => {
@@ -80,7 +152,8 @@ export const getProductBySlug = async (slug: string): Promise<Product | undefine
       .maybeSingle();
 
     if (!error && data) {
-      return mapProductRow(data as ProductRow);
+      const [productWithVariants] = await withVariants([mapProductRow(data as ProductRow)]);
+      return productWithVariants;
     }
   }
 
@@ -104,8 +177,10 @@ export const getProductsByIds = async (ids: string[]): Promise<Product[]> => {
       .eq("is_active", true);
 
     if (!error && data) {
-      const mapped = data.map((row) => mapProductRow(row as ProductRow));
-      const byId = new Map(mapped.map((product) => [product.id, product]));
+      const mappedWithVariants = await withVariants(
+        data.map((row) => mapProductRow(row as ProductRow)),
+      );
+      const byId = new Map(mappedWithVariants.map((product) => [product.id, product]));
       return uniqueIds
         .map((id) => byId.get(id))
         .filter((product): product is Product => Boolean(product));

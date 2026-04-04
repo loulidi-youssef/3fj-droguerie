@@ -8,6 +8,9 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 type IncomingOrderItem = {
   productId?: string;
   quantity?: number;
+  variantId?: string;
+  selectedColor?: string;
+  selectedSize?: string;
 };
 
 type IncomingOrderBody = {
@@ -33,6 +36,9 @@ type OrderErrorResponse = {
 type NormalizedOrderItem = {
   productId: string;
   quantity: number;
+  variantId: string | null;
+  selectedColor: string | null;
+  selectedSize: string | null;
 };
 
 type ParseOrderItemsResult =
@@ -61,7 +67,16 @@ const RATE_LIMIT_SWEEP_SIZE = 2_000;
 const orderRateLimitStore = new Map<string, { count: number; expiresAt: number }>();
 
 const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
-  const quantityByProductId = new Map<string, number>();
+  const quantityByCompositeKey = new Map<string, NormalizedOrderItem>();
+
+  const toNullableString = (value: unknown): string | null => {
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
 
   for (const item of items) {
     const productId = item.productId?.trim() ?? "";
@@ -69,13 +84,24 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
       continue;
     }
 
+    const variantId = toNullableString(item.variantId);
+    const selectedColor = toNullableString(item.selectedColor);
+    const selectedSize = toNullableString(item.selectedSize);
+
     const quantity = Number(item.quantity ?? 0);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       return { ok: false, error: "Quantite invalide. Merci de corriger votre panier." };
     }
 
-    const currentQuantity = quantityByProductId.get(productId) ?? 0;
-    const nextQuantity = currentQuantity + quantity;
+    const compositeKey = [
+      productId,
+      variantId ?? "base",
+      selectedColor ?? "",
+      selectedSize ?? "",
+    ].join("::");
+
+    const existing = quantityByCompositeKey.get(compositeKey);
+    const nextQuantity = (existing?.quantity ?? 0) + quantity;
 
     if (nextQuantity > MAX_QUANTITY_PER_PRODUCT) {
       return {
@@ -84,9 +110,15 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
       };
     }
 
-    quantityByProductId.set(productId, nextQuantity);
+    quantityByCompositeKey.set(compositeKey, {
+      productId,
+      variantId,
+      selectedColor,
+      selectedSize,
+      quantity: nextQuantity,
+    });
 
-    if (quantityByProductId.size > MAX_DISTINCT_ITEMS_PER_ORDER) {
+    if (quantityByCompositeKey.size > MAX_DISTINCT_ITEMS_PER_ORDER) {
       return {
         ok: false,
         error: `Maximum ${MAX_DISTINCT_ITEMS_PER_ORDER} produits differents par commande.`,
@@ -94,17 +126,11 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
     }
   }
 
-  if (quantityByProductId.size === 0) {
+  if (quantityByCompositeKey.size === 0) {
     return { ok: false, error: "Votre panier est vide. Ajoutez au moins un produit." };
   }
 
-  const normalizedItems = Array.from(
-    quantityByProductId,
-    ([productId, quantity]): NormalizedOrderItem => ({
-      productId,
-      quantity,
-    }),
-  );
+  const normalizedItems = Array.from(quantityByCompositeKey.values());
 
   const totalUnits = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
   if (totalUnits > MAX_TOTAL_UNITS_PER_ORDER) {
@@ -261,18 +287,57 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const lineItems = normalizedItems.map((item) => {
-    const product = productById.get(item.productId)!;
-    const lineTotal = product.price * item.quantity;
+  const lineItems: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }> = [];
 
-    return {
+  for (const item of normalizedItems) {
+    const product = productById.get(item.productId)!;
+    const selectedVariant =
+      item.variantId && Array.isArray(product.variants)
+        ? product.variants.find((variant) => variant.id === item.variantId)
+        : null;
+
+    if (item.variantId && !selectedVariant) {
+      return NextResponse.json<OrderErrorResponse>(
+        { error: "Une variante selectionnee n'est plus disponible. Merci d'actualiser votre panier." },
+        { status: 400 },
+      );
+    }
+
+    const unitPrice = selectedVariant ? selectedVariant.price : product.price;
+    const stock = selectedVariant?.stock ?? product.stock;
+
+    if (typeof stock === "number" && item.quantity > stock) {
+      return NextResponse.json<OrderErrorResponse>(
+        { error: `Stock insuffisant pour ${product.name}. Quantite disponible: ${stock}.` },
+        { status: 400 },
+      );
+    }
+
+    const color = selectedVariant?.color ?? item.selectedColor;
+    const size = selectedVariant?.size ?? item.selectedSize;
+    const variantLabelParts = [
+      color ? `Couleur: ${color}` : null,
+      size ? `Taille: ${size}` : null,
+    ].filter((value): value is string => Boolean(value));
+    const productName =
+      variantLabelParts.length > 0
+        ? `${product.name} (${variantLabelParts.join(", ")})`
+        : product.name;
+
+    lineItems.push({
       productId: product.id,
-      productName: product.name,
+      productName,
       quantity: item.quantity,
-      unitPrice: product.price,
-      lineTotal,
-    };
-  });
+      unitPrice,
+      lineTotal: unitPrice * item.quantity,
+    });
+  }
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const deliveryFee = getDeliveryCost(subtotal);

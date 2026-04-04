@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AddToCartButton } from "@/components/add-to-cart-button";
-import { FavoriteButton } from "@/components/favorite-button";
+import { ProductDetailPurchasePanel } from "@/components/product-detail-purchase-panel";
 import { ProductCard } from "@/components/product-card";
-import { getCategoryNameBySlug } from "@/data/categories";
-import { formatDh } from "@/lib/currency";
-import {
-  getProductAvailabilityMeta,
-  getProductAvailabilityStatus,
-} from "@/lib/product-availability";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
 
 type ProductDetailProps = {
@@ -55,12 +47,6 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         item.id !== product.id && item.categorySlug === product.categorySlug,
     )
     .slice(0, 4);
-  const availabilityStatus = getProductAvailabilityStatus(product);
-  const availability = getProductAvailabilityMeta(product);
-  const previousPrice =
-    typeof product.previousPrice === "number" && product.previousPrice > product.price
-      ? product.previousPrice
-      : null;
 
   return (
     <section className="section-padding">
@@ -88,47 +74,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-brand-orange">
-              {getCategoryNameBySlug(product.categorySlug)}
-            </p>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-blue sm:text-[2.15rem]">
-              {product.name}
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-slate-700 sm:text-[0.95rem]">{product.description}</p>
-            <div className="mt-5">
-              <p className="text-3xl font-extrabold tracking-tight text-brand-blue">
-                {formatDh(product.price)}
-              </p>
-              {previousPrice !== null ? (
-                <p className="mt-1 text-sm font-semibold text-slate-400 line-through">
-                  {formatDh(previousPrice)}
-                </p>
-              ) : null}
-            </div>
-            <p
-              className={`mt-2 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${availability.className}`}
-            >
-              {availability.label}
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <AddToCartButton
-                productId={product.id}
-                disabled={availabilityStatus === "out-of-stock"}
-                className="btn-primary h-11 px-5"
-                controlsClassName="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-2"
-              />
-              <FavoriteButton
-                productId={product.id}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
-              />
-            </div>
-
-            <Link href="/panier" className="mt-4 inline-flex text-sm font-semibold text-brand-orange hover:underline">
-              Aller au panier
-            </Link>
-          </div>
+          <ProductDetailPurchasePanel product={product} />
         </div>
 
         {relatedProducts.length > 0 ? (

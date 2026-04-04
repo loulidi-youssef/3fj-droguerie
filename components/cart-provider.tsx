@@ -11,11 +11,21 @@ import {
 } from "react";
 import type { CartItem } from "@/types";
 
+type CartItemSelection = Omit<CartItem, "productId" | "quantity">;
+
+const matchesCartLine = (
+  item: Pick<CartItem, "productId" | "variantId">,
+  productId: string,
+  variantId?: string,
+): boolean => {
+  return item.productId === productId && (item.variantId ?? "") === (variantId ?? "");
+};
+
 type CartContextValue = {
   items: CartItem[];
-  addItem: (productId: string, quantity?: number) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeItem: (productId: string) => void;
+  addItem: (productId: string, quantity?: number, selection?: CartItemSelection) => void;
+  updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  removeItem: (productId: string, variantId?: string) => void;
   clearCart: () => void;
   itemCount: number;
 };
@@ -63,35 +73,52 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  const addItem = useCallback((productId: string, quantity = 1) => {
+  const addItem = useCallback(
+    (productId: string, quantity = 1, selection?: CartItemSelection) => {
     setItems((current) => {
-      const existing = current.find((item) => item.productId === productId);
+      const existing = current.find((item) =>
+        matchesCartLine(item, productId, selection?.variantId),
+      );
+
       if (existing) {
         return current.map((item) =>
-          item.productId === productId
+          matchesCartLine(item, productId, selection?.variantId)
             ? { ...item, quantity: item.quantity + quantity }
             : item,
         );
       }
-      return [...current, { productId, quantity }];
+
+      return [
+        ...current,
+        {
+          productId,
+          quantity,
+          variantId: selection?.variantId,
+          selectedColor: selection?.selectedColor,
+          selectedSize: selection?.selectedSize,
+          selectedPrice: selection?.selectedPrice,
+          selectedPreviousPrice: selection?.selectedPreviousPrice,
+          selectedImage: selection?.selectedImage,
+        },
+      ];
     });
   }, []);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number, variantId?: string) => {
     if (quantity <= 0) {
-      setItems((current) => current.filter((item) => item.productId !== productId));
+      setItems((current) => current.filter((item) => !matchesCartLine(item, productId, variantId)));
       return;
     }
 
     setItems((current) =>
       current.map((item) =>
-        item.productId === productId ? { ...item, quantity } : item,
+        matchesCartLine(item, productId, variantId) ? { ...item, quantity } : item,
       ),
     );
   }, []);
 
-  const removeItem = useCallback((productId: string) => {
-    setItems((current) => current.filter((item) => item.productId !== productId));
+  const removeItem = useCallback((productId: string, variantId?: string) => {
+    setItems((current) => current.filter((item) => !matchesCartLine(item, productId, variantId)));
   }, []);
 
   const clearCart = useCallback(() => {

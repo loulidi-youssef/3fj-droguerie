@@ -118,10 +118,23 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
             return null;
           }
 
+          const unitPrice =
+            typeof item.selectedPrice === "number" && item.selectedPrice > 0
+              ? item.selectedPrice
+              : product.price;
+
+          const variantLabelParts = [
+            item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
+            item.selectedSize ? `Taille: ${item.selectedSize}` : null,
+          ].filter((value): value is string => Boolean(value));
+
           return {
             ...item,
             product,
-            lineTotal: product.price * item.quantity,
+            unitPrice,
+            lineTotal: unitPrice * item.quantity,
+            variantLabel: variantLabelParts.join(" | "),
+            lineKey: `${item.productId}::${item.variantId ?? "base"}`,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),
@@ -214,13 +227,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
               {detailedItems.map((item) => (
                 <article
-                  key={item.productId}
+                  key={item.lineKey}
                   className="rounded-2xl border border-slate-300/80 bg-[#f8f8f8] p-3 shadow-[0_3px_10px_rgba(15,23,42,0.04)]"
                 >
                   <div className="flex items-start gap-3">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-white">
                       <Image
-                        src={item.product.images[0]}
+                        src={item.selectedImage ?? item.product.images[0]}
                         alt={item.product.name}
                         fill
                         sizes="80px"
@@ -232,13 +245,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       <h3 className="truncate text-[1.55rem] font-semibold leading-snug text-slate-800">
                         {item.product.name}
                       </h3>
+                      {item.variantLabel ? (
+                        <p className="mt-0.5 text-xs font-medium text-slate-500">{item.variantLabel}</p>
+                      ) : null}
                       <p className="mt-0.5 text-[1.7rem] font-extrabold leading-none text-[#ef4444]">
-                        {formatDh(item.product.price)}
+                        {formatDh(item.unitPrice)}
                       </p>
                       <div className="mt-3 flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-base font-bold text-slate-700 transition hover:border-slate-400"
                           aria-label={`Diminuer la quantite de ${item.product.name}`}
                         >
@@ -249,7 +265,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-base font-bold text-slate-700 transition hover:border-slate-400"
                           aria-label={`Augmenter la quantite de ${item.product.name}`}
                         >
@@ -260,7 +276,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
                     <button
                       type="button"
-                      onClick={() => removeItem(item.productId)}
+                      onClick={() => removeItem(item.productId, item.variantId)}
                       className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#ef4444] transition hover:bg-red-50"
                       aria-label={`Retirer ${item.product.name} du panier`}
                     >

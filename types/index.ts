@@ -20,6 +20,22 @@ export type Product = {
   badgeLabel?: string;
   isPromo?: boolean;
   isNew?: boolean;
+  variants?: ProductVariant[];
+};
+
+export type ProductVariant = {
+  id: string;
+  productId: string;
+  color?: string | null;
+  size?: string | null;
+  price: number;
+  previousPrice?: number;
+  stock?: number;
+  sku?: string | null;
+  image?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type BlogPost = {
@@ -67,4 +83,10 @@ export type Offer = {
 export type CartItem = {
   productId: string;
   quantity: number;
+  variantId?: string;
+  selectedColor?: string;
+  selectedSize?: string;
+  selectedPrice?: number;
+  selectedPreviousPrice?: number;
+  selectedImage?: string;
 };
