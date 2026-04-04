@@ -12,6 +12,7 @@ import {
 } from "@/lib/checkout-validation";
 import { formatDh } from "@/lib/currency";
 import { getAmountForFreeDelivery, getDeliveryCost } from "@/lib/delivery";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 import type { Product } from "@/types";
 
@@ -61,6 +62,8 @@ export default function PanierPage() {
   const [submitInfo, setSubmitInfo] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedOrder, setSavedOrder] = useState<SavedOrderState | null>(null);
+  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
+  const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     const uniqueProductIds = [...new Set(items.map((item) => item.productId))];
@@ -112,6 +115,41 @@ export default function PanierPage() {
 
     return () => controller.abort();
   }, [items]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setIsCustomerAuthenticated(false);
+      setCustomerAccessToken(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const syncSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!isMounted) {
+        return;
+      }
+
+      setIsCustomerAuthenticated(Boolean(data.session));
+      setCustomerAccessToken(data.session?.access_token ?? null);
+    };
+
+    void syncSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsCustomerAuthenticated(Boolean(session));
+      setCustomerAccessToken(session?.access_token ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const detailedItems = useMemo(
     () =>
@@ -243,6 +281,9 @@ export default function PanierPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(customerAccessToken
+            ? { Authorization: `Bearer ${customerAccessToken}` }
+            : {}),
         },
         body: JSON.stringify({
           customer,
@@ -304,6 +345,14 @@ export default function PanierPage() {
         );
       }
 
+      if (!isCustomerAuthenticated) {
+        setSubmitInfo((current) =>
+          current
+            ? `${current} Creez un compte ou connectez-vous pour suivre votre commande.`
+            : "Creez un compte ou connectez-vous pour suivre votre commande.",
+        );
+      }
+
       clearCart();
       setCheckoutForm(initialCheckoutForm);
       setFieldErrors({});
@@ -330,6 +379,33 @@ export default function PanierPage() {
                 <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
                   Commande enregistree avec succes. Reference: {savedOrder.orderId}
                 </p>
+                {!isCustomerAuthenticated ? (
+                  <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
+                    Creez un compte ou connectez-vous pour suivre votre commande.
+                    <span className="ml-1">
+                      <Link
+                        href={`/login?next=${encodeURIComponent("/compte/commandes")}`}
+                        className="font-semibold underline"
+                      >
+                        Connexion
+                      </Link>
+                      {" / "}
+                      <Link
+                        href={`/register?next=${encodeURIComponent("/compte/commandes")}`}
+                        className="font-semibold underline"
+                      >
+                        Inscription
+                      </Link>
+                    </span>
+                  </p>
+                ) : (
+                  <Link
+                    href="/compte/commandes"
+                    className="mt-3 inline-flex rounded-xl border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
+                  >
+                    Suivre mes commandes
+                  </Link>
+                )}
                 <a
                   href={savedOrder.whatsappLink}
                   target="_blank"

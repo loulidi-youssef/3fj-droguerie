@@ -19,6 +19,7 @@ This guide connects the current Next.js frontend to Supabase without rebuilding 
    - `supabase/migrations/2026-04-04-create-offers-table.sql`
    - `supabase/migrations/2026-04-04-link-offers-to-products.sql`
    - `supabase/migrations/2026-04-04-create-blog-and-reviews-tables.sql`
+   - `supabase/migrations/2026-04-04-add-orders-user-id-auth.sql`
 
 ## 3. Get API keys
 1. Open `Project Settings` -> `API`.
@@ -50,6 +51,12 @@ ADMIN_ACCESS_PASSWORD=...
 4. Check Supabase:
    - new row in `orders`
    - related rows in `order_items`
+
+## 7. Customer account setup (optional)
+1. In Supabase, open `Authentication` -> `Providers` and keep `Email` enabled.
+2. Open `Authentication` -> `URL Configuration` and add your site URL.
+3. Test `/register`, `/login`, and `/compte/commandes` from your app.
+4. Logged-in checkout should create orders with `user_id`; guest checkout keeps `user_id` as null.
 
 ## Notes
 - Delivery rules are still in code:

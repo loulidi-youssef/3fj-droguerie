@@ -7,6 +7,7 @@ import { businessInfo } from "@/data/business";
 import { categories, getCategoryBySlug } from "@/data/categories";
 import { homepageContent } from "@/data/homepage";
 import { useCart } from "@/components/cart-provider";
+import { CustomerAuthNav } from "@/components/customer-auth-nav";
 
 export const Header = () => {
   const router = useRouter();
@@ -185,6 +186,8 @@ export const Header = () => {
               </span>
             ) : null}
           </Link>
+
+          <CustomerAuthNav />
 
           <a
             href={`https://wa.me/${businessInfo.whatsappPhone}`}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getProductsByIds } from "@/lib/products";
+import { getAuthenticatedCustomerFromRequest } from "@/lib/supabase/auth-user";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type IncomingOrderItem = {
@@ -288,19 +289,48 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: insertedOrder, error: orderError } = await supabaseAdmin
+  const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+
+  const baseOrderPayload = {
+    customer_name: name,
+    customer_phone: phone,
+    customer_address: address,
+    customer_location: location,
+    subtotal,
+    delivery_fee: deliveryFee,
+    total,
+  };
+
+  const payloadWithUser = authenticatedCustomer
+    ? { ...baseOrderPayload, user_id: authenticatedCustomer.id }
+    : baseOrderPayload;
+
+  let insertedOrder: { id: string } | null = null;
+  let orderError: { message?: string } | null = null;
+
+  const firstInsertAttempt = await supabaseAdmin
     .from("orders")
-    .insert({
-      customer_name: name,
-      customer_phone: phone,
-      customer_address: address,
-      customer_location: location,
-      subtotal,
-      delivery_fee: deliveryFee,
-      total,
-    })
+    .insert(payloadWithUser)
     .select("id")
     .single();
+
+  insertedOrder = firstInsertAttempt.data as { id: string } | null;
+  orderError = firstInsertAttempt.error;
+
+  const shouldRetryWithoutUser =
+    Boolean(authenticatedCustomer) &&
+    Boolean(orderError?.message?.includes("column \"user_id\" of relation \"orders\" does not exist"));
+
+  if (shouldRetryWithoutUser) {
+    const fallbackInsert = await supabaseAdmin
+      .from("orders")
+      .insert(baseOrderPayload)
+      .select("id")
+      .single();
+
+    insertedOrder = fallbackInsert.data as { id: string } | null;
+    orderError = fallbackInsert.error;
+  }
 
   if (orderError || !insertedOrder) {
     return NextResponse.json<OrderErrorResponse>(
