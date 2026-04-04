@@ -7,6 +7,7 @@ import { businessInfo } from "@/data/business";
 import { categories, getCategoryBySlug } from "@/data/categories";
 import { homepageContent } from "@/data/homepage";
 import { useCart } from "@/components/cart-provider";
+import { CartDrawer } from "@/components/cart-drawer";
 import { CustomerAuthNav } from "@/components/customer-auth-nav";
 
 export const Header = () => {
@@ -26,6 +27,7 @@ export const Header = () => {
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const categoriesDropdownRef = useRef<HTMLDivElement | null>(null);
   const searchDropdownRef = useRef<HTMLFormElement | null>(null);
 
@@ -156,6 +158,7 @@ export const Header = () => {
   useEffect(() => {
     setIsCategoriesOpen(false);
     setIsSuggestionsOpen(false);
+    setIsCartDrawerOpen(false);
   }, [pathname]);
 
   const activeCategoryName = selectedCategory
@@ -187,8 +190,9 @@ export const Header = () => {
   };
 
   return (
-    <header className="relative z-40 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-6 lg:px-6">
+    <>
+      <header className="relative z-40 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-6 lg:px-6">
         <Link href="/" className="leading-none">
           <span className="block text-[2.35rem] font-black tracking-tight text-brand-orange">3FJ</span>
           <span className="-mt-1 block text-[1.75rem] font-black uppercase tracking-tight text-brand-blue">
@@ -363,8 +367,9 @@ export const Header = () => {
           <div className="flex items-center gap-2">
             <CustomerAuthNav iconOnly />
 
-            <Link
-              href="/panier"
+            <button
+              type="button"
+              onClick={() => setIsCartDrawerOpen(true)}
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
               aria-label={homepageContent.header.cartAriaLabel}
             >
@@ -378,7 +383,7 @@ export const Header = () => {
                   {itemCount}
                 </span>
               ) : null}
-            </Link>
+            </button>
 
             <a
               href={`https://wa.me/${businessInfo.whatsappPhone}`}
@@ -393,7 +398,9 @@ export const Header = () => {
             </a>
           </div>
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+      <CartDrawer isOpen={isCartDrawerOpen} onClose={() => setIsCartDrawerOpen(false)} />
+    </>
   );
 };
