@@ -1,7 +1,7 @@
 export const homepageContent = {
   topBar: {
-    phoneLabel: "Tel / WhatsApp",
-    deliveryMessage: "Livraison rapide a Fes",
+    phoneLabel: "Tel",
+    deliveryMessage: "Livraison a Fes",
   },
   header: {
     navItems: [
@@ -19,14 +19,14 @@ export const homepageContent = {
     badge: "Materiaux & outillage a Fes",
     title: "Votre droguerie de confiance a Fes",
     subtitle:
-      "Vente en gros et detail de materiaux de construction, outillage et produits de bricolage. Commandez facilement via WhatsApp et profitez d'un service rapide.",
+      "Vente en gros et detail de materiaux de construction • Livraison rapide a Fes",
     whatsappCta: "Commander sur WhatsApp",
     productsCta: "Voir les produits",
   },
   deliveryCard: {
     title: "Informations livraison",
-    freeDeliveryLabel: "Livraison gratuite des {freeFrom} DH",
-    paidDeliveryLabel: "Livraison {fee} DH si total inferieur a {freeFrom} DH",
+    freeDeliveryLabel: "Des {freeFrom} DH d'achat",
+    paidDeliveryLabel: "Pour toute commande inferieure a {freeFrom} DH",
     note: "Service disponible sur Fes et zones proches.",
   },
   featuresStrip: {

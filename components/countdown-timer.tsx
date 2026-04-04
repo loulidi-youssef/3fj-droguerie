@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type CountdownTimerProps = {
   expiresAt: string;
   compact?: boolean;
+  variant?: "default" | "homepage-offer";
 };
 
 type Countdown = {
@@ -28,7 +29,11 @@ const getCountdown = (expiresAt: string): Countdown => {
   };
 };
 
-export const CountdownTimer = ({ expiresAt, compact = false }: CountdownTimerProps) => {
+export const CountdownTimer = ({
+  expiresAt,
+  compact = false,
+  variant = "default",
+}: CountdownTimerProps) => {
   const [countdown, setCountdown] = useState<Countdown>(() => getCountdown(expiresAt));
 
   useEffect(() => {
@@ -50,30 +55,36 @@ export const CountdownTimer = ({ expiresAt, compact = false }: CountdownTimerPro
   );
 
   return (
-    <div
-      className={`grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 ${
-        compact ? "mt-0" : "mt-5"
-      }`}
-    >
+    <div className={`grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 ${compact ? "mt-0" : "mt-5"}`}>
       {items.map((item) => (
         <div
           key={item.label}
-          className={`rounded-2xl border text-center backdrop-blur-sm ${
-            compact
-              ? "border-slate-200 bg-slate-50 p-2 text-slate-700"
-              : "border-white/15 bg-white/15 p-3 text-white"
+          className={`border text-center backdrop-blur-sm ${
+            variant === "homepage-offer"
+              ? "rounded-lg border-white/5 bg-brand-blue px-3 py-2 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+              : compact
+                ? "rounded-2xl border-slate-200 bg-slate-50 p-2 text-slate-700"
+                : "rounded-2xl border-white/15 bg-white/15 p-3 text-white"
           }`}
         >
           <p
             className={`font-extrabold ${
-              compact ? "text-lg sm:text-xl" : "text-2xl sm:text-[1.8rem]"
+              variant === "homepage-offer"
+                ? "text-3xl leading-none"
+                : compact
+                  ? "text-lg sm:text-xl"
+                  : "text-2xl sm:text-[1.8rem]"
             }`}
           >
             {String(item.value).padStart(2, "0")}
           </p>
           <p
             className={`text-xs uppercase tracking-wide ${
-              compact ? "text-slate-500" : "text-slate-100"
+              variant === "homepage-offer"
+                ? "mt-1 text-[10px] text-slate-200"
+                : compact
+                  ? "text-slate-500"
+                  : "text-slate-100"
             }`}
           >
             {item.label}

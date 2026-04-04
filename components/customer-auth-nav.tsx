@@ -9,7 +9,11 @@ type CustomerAuthNavState = {
   isAuthenticated: boolean;
 };
 
-export const CustomerAuthNav = () => {
+type CustomerAuthNavProps = {
+  iconOnly?: boolean;
+};
+
+export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
   const [state, setState] = useState<CustomerAuthNavState>({
     isReady: false,
     isAuthenticated: false,
@@ -103,7 +107,11 @@ export const CustomerAuthNav = () => {
   };
 
   if (!state.isReady) {
-    return <div className="h-10 w-28 rounded-full border border-slate-200 bg-slate-100" />;
+    return iconOnly ? (
+      <div className="h-10 w-10 rounded-full border border-slate-200 bg-slate-100" />
+    ) : (
+      <div className="h-10 w-28 rounded-full border border-slate-200 bg-slate-100" />
+    );
   }
 
   return (
@@ -113,11 +121,15 @@ export const CustomerAuthNav = () => {
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+        className={
+          iconOnly
+            ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+            : "inline-flex h-11 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+        }
       >
         <svg
           viewBox="0 0 24 24"
-          className="h-4 w-4"
+          className={iconOnly ? "h-5 w-5" : "h-4 w-4"}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
@@ -126,7 +138,7 @@ export const CustomerAuthNav = () => {
           <circle cx="12" cy="8" r="3.2" />
           <path d="M5.5 19.5c1.8-3.1 4.1-4.6 6.5-4.6s4.7 1.5 6.5 4.6" />
         </svg>
-        {state.isAuthenticated ? "Mon compte" : "Se connecter"}
+        {iconOnly ? null : state.isAuthenticated ? "Mon compte" : "Se connecter"}
       </button>
 
       <div

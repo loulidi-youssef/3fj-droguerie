@@ -4,8 +4,8 @@ import { HeroSection } from "@/components/hero-section";
 import { FeaturesStrip } from "@/components/features-strip";
 import { CategoriesProductsSection } from "@/components/categories-products-section";
 import { OfferSection } from "@/components/offer-section";
-import { ReviewsSection } from "@/components/reviews-section";
-import { BlogSection } from "@/components/blog-section";
+import { HomepageSocialSection } from "@/components/homepage-social-section";
+import { FloatingWhatsAppButton } from "@/components/floating-whatsapp-button";
 import { localBusinessJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -26,8 +26,8 @@ export default async function Home() {
       <FeaturesStrip />
       <CategoriesProductsSection />
       <OfferSection variant="homepage" maxOffers={4} />
-      <ReviewsSection />
-      <BlogSection />
+      <HomepageSocialSection />
+      <FloatingWhatsAppButton />
     </>
   );
 }
