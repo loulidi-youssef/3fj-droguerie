@@ -11,6 +11,7 @@ export const products: Product[] = [
     slug: "peinture-atlas-20kg",
     name: "Peinture Atlas 20kg",
     price: 200,
+    previousPrice: 240,
     categorySlug: "peinture",
     shortDescription: "Peinture de finition resistante pour interieur et exterieur.",
     description:

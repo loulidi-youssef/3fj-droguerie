@@ -7,6 +7,7 @@ type ProductRow = {
   slug: string;
   name: string;
   price: number;
+  previous_price?: number | null;
   stock?: number | null;
   short_description: string;
   description: string;
@@ -16,14 +17,17 @@ type ProductRow = {
   created_at?: string | null;
 };
 
-const PRODUCT_SELECT =
-  "id, slug, name, price, stock, short_description, description, category_slug, rating, images, created_at";
+const PRODUCT_SELECT = "*";
 
 const mapProductRow = (row: ProductRow): Product => ({
   id: row.id,
   slug: row.slug,
   name: row.name,
   price: row.price,
+  previousPrice:
+    typeof row.previous_price === "number" && row.previous_price > row.price
+      ? row.previous_price
+      : undefined,
   stock: typeof row.stock === "number" ? row.stock : undefined,
   shortDescription: row.short_description,
   description: row.description,

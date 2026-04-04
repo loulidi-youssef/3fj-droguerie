@@ -8,20 +8,26 @@ type AddToCartButtonProps = {
   productId: string;
   quantity?: number;
   className?: string;
+  controlsClassName?: string;
   disabled?: boolean;
   disabledLabel?: string;
+  compact?: boolean;
 };
 
 export const AddToCartButton = ({
   productId,
   quantity = 1,
   className,
+  controlsClassName,
   disabled = false,
   disabledLabel = "Rupture de stock",
+  compact = false,
 }: AddToCartButtonProps) => {
-  const { addItem } = useCart();
+  const { items, addItem, updateQuantity } = useCart();
   const { showToast } = useToast();
   const [isActive, setIsActive] = useState(false);
+  const currentQuantity = items.find((item) => item.productId === productId)?.quantity ?? 0;
+  const canIncrement = !disabled;
 
   const handleAddToCart = () => {
     if (disabled) {
@@ -42,6 +48,53 @@ export const AddToCartButton = ({
     setIsActive(true);
     window.setTimeout(() => setIsActive(false), 240);
   };
+
+  const handleDecrease = () => {
+    updateQuantity(productId, currentQuantity - 1);
+  };
+
+  const handleIncrease = () => {
+    if (!canIncrement) {
+      return;
+    }
+    updateQuantity(productId, currentQuantity + 1);
+  };
+
+  if (currentQuantity > 0) {
+    return (
+      <div
+        className={
+          controlsClassName ??
+          "inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-2"
+        }
+      >
+        <button
+          type="button"
+          onClick={handleDecrease}
+          className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange ${
+            compact ? "h-8 w-8 text-base" : "h-9 w-9 text-lg"
+          }`}
+          aria-label="Diminuer la quantite"
+        >
+          -
+        </button>
+        <span className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-sm" : "text-base"}`}>
+          {currentQuantity}
+        </span>
+        <button
+          type="button"
+          onClick={handleIncrease}
+          disabled={!canIncrement}
+          className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
+            compact ? "h-8 w-8 text-base" : "h-9 w-9 text-lg"
+          }`}
+          aria-label="Augmenter la quantite"
+        >
+          +
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button

@@ -20,12 +20,13 @@ const resolveNextPath = (value: string | null): string => {
 export default function LoginPage() {
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [nextPath, setNextPath] = useState("/compte/commandes");
 
   useEffect(() => {
@@ -62,12 +63,60 @@ export default function LoginPage() {
     };
   }, [nextPath, router, supabase]);
 
+  const isValidEmail = (value: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  const normalizePhone = (value: string): string | null => {
+    const compact = value.replace(/[\s().-]/g, "");
+    const withPlus = compact.startsWith("00") ? `+${compact.slice(2)}` : compact;
+
+    if (!/^\+?\d{8,15}$/.test(withPlus)) {
+      return null;
+    }
+
+    return withPlus.startsWith("+") ? withPlus : `+${withPlus}`;
+  };
+
+  const mapLoginErrorMessage = (rawMessage: string): string => {
+    const message = rawMessage.toLowerCase();
+
+    if (message.includes("invalid login credentials")) {
+      return "Connexion impossible. Verifiez vos identifiants.";
+    }
+
+    if (message.includes("phone logins are disabled") || message.includes("unsupported phone provider")) {
+      return "Connexion par telephone non activee. Activez Phone Auth dans Supabase pour l'utiliser.";
+    }
+
+    if (message.includes("email logins are disabled")) {
+      return "Connexion email non activee dans Supabase.";
+    }
+
+    return "Connexion impossible pour le moment. Merci de reessayer.";
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage(null);
+    setInfoMessage(null);
 
     if (!supabase) {
       setErrorMessage("Supabase Auth n'est pas configure.");
+      return;
+    }
+
+    const rawIdentifier = identifier.trim();
+    if (!rawIdentifier) {
+      setErrorMessage("Entrez votre email ou votre numero de telephone.");
+      return;
+    }
+
+    const emailLogin = isValidEmail(rawIdentifier) ? rawIdentifier.toLowerCase() : null;
+    const phoneLogin = emailLogin ? null : normalizePhone(rawIdentifier);
+
+    if (!emailLogin && !phoneLogin) {
+      setErrorMessage("Format invalide. Utilisez un email valide ou un numero (ex: +212661517301).");
       return;
     }
 
@@ -75,12 +124,12 @@ export default function LoginPage() {
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        ...(emailLogin ? { email: emailLogin } : { phone: phoneLogin! }),
         password,
       });
 
       if (error) {
-        setErrorMessage("Connexion impossible. Verifiez vos identifiants.");
+        setErrorMessage(mapLoginErrorMessage(error.message ?? ""));
         return;
       }
 
@@ -89,6 +138,35 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    if (!supabase) {
+      setErrorMessage("Supabase Auth n'est pas configure.");
+      return;
+    }
+
+    setIsGoogleSubmitting(true);
+
+    const redirectTo = `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+
+    if (error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("provider is not enabled") || message.includes("unsupported provider")) {
+        setErrorMessage("Google Sign-In n'est pas active dans Supabase. Activez le provider Google dans Auth > Providers.");
+      } else {
+        setErrorMessage("Impossible de lancer Google Sign-In pour le moment.");
+      }
+    }
+
+    setIsGoogleSubmitting(false);
   };
 
   return (
@@ -102,17 +180,20 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="mt-5 space-y-3">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Email
+              Email ou telephone
             </span>
             <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               required
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
-              placeholder="vous@email.com"
-              autoComplete="email"
+              placeholder="vous@email.com ou +212661517301"
+              autoComplete="username"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Telephone: disponible si Phone Auth est active dans Supabase.
+            </p>
           </label>
 
           <label className="block">
@@ -176,6 +257,21 @@ export default function LoginPage() {
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
             {isSubmitting ? "Connexion..." : "Se connecter"}
+          </button>
+
+          <div className="flex items-center gap-2 pt-1">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">ou</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isGoogleSubmitting}
+            className="btn-outline-brand w-full"
+          >
+            {isGoogleSubmitting ? "Ouverture Google..." : "Continuer avec Google"}
           </button>
         </form>
 

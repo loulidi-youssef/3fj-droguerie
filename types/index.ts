@@ -9,6 +9,7 @@ export type Product = {
   slug: string;
   name: string;
   price: number;
+  previousPrice?: number;
   stock?: number;
   shortDescription: string;
   description: string;
