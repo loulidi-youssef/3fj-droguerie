@@ -21,7 +21,16 @@ export const AddToCartButton = ({
 
   const handleAddToCart = () => {
     addItem(productId, quantity);
-    showToast("Produit ajout\u00E9 au panier");
+    showToast("Produit ajout\u00E9 au panier", {
+      primaryAction: {
+        label: "Voir panier",
+        href: "/panier",
+      },
+      secondaryAction: {
+        label: "Continuer les achats",
+      },
+      durationMs: 5200,
+    });
     setIsActive(true);
     window.setTimeout(() => setIsActive(false), 240);
   };
