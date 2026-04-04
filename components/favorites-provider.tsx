@@ -8,6 +8,7 @@ type FavoriteActionResult = {
   requiresAuth?: boolean;
   isFavorited?: boolean;
   error?: string;
+  loginPath?: string;
 };
 
 type FavoritesContextValue = {
@@ -29,7 +30,6 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [isReady, setIsReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
 
@@ -53,14 +53,26 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
     return payload.favoriteProductIds ?? [];
   };
 
+  const getCurrentAccessToken = async (): Promise<string | null> => {
+    if (!supabase) {
+      return null;
+    }
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token ?? null;
+    setIsAuthenticated(Boolean(data.session));
+    return token;
+  };
+
   const refreshFavorites = async (): Promise<void> => {
-    if (!isAuthenticated || !accessToken) {
+    const token = await getCurrentAccessToken();
+    if (!token) {
       setFavoriteIds([]);
       return;
     }
 
     try {
-      const ids = await fetchFavoriteIds(accessToken);
+      const ids = await fetchFavoriteIds(token);
       setFavoriteIds(ids);
     } catch {
       setFavoriteIds([]);
@@ -71,7 +83,6 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
     if (!supabase) {
       setIsReady(true);
       setIsAuthenticated(false);
-      setAccessToken(null);
       setFavoriteIds([]);
       return;
     }
@@ -86,7 +97,6 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
 
       const session = data.session;
       setIsAuthenticated(Boolean(session));
-      setAccessToken(session?.access_token ?? null);
 
       if (session?.access_token) {
         try {
@@ -114,7 +124,6 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setIsAuthenticated(Boolean(session));
-      setAccessToken(session?.access_token ?? null);
       setPendingIds([]);
 
       if (session?.access_token) {
@@ -141,10 +150,15 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
     productId: string,
     redirectPath = "/produits",
   ): Promise<FavoriteActionResult> => {
-    if (!isAuthenticated || !accessToken) {
+    const token = await getCurrentAccessToken();
+    if (!token) {
       const loginPath = `/login?next=${encodeURIComponent(redirectPath)}`;
-      window.location.href = loginPath;
-      return { ok: false, requiresAuth: true };
+      return {
+        ok: false,
+        requiresAuth: true,
+        error: "Veuillez vous connecter pour ajouter aux favoris",
+        loginPath,
+      };
     }
 
     const trimmedProductId = productId.trim();
@@ -167,7 +181,7 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
       const response = await fetch(`/api/account/favorites/${trimmedProductId}`, {
         method: currentlyFavorited ? "DELETE" : "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 

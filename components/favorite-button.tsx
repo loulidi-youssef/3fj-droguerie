@@ -25,6 +25,12 @@ export const FavoriteButton = ({ productId, className }: FavoriteButtonProps) =>
     const result = await toggleFavorite(productId, currentPath);
 
     if (result.requiresAuth) {
+      showToast(result.error ?? "Veuillez vous connecter pour ajouter aux favoris");
+      if (result.loginPath) {
+        window.setTimeout(() => {
+          window.location.href = result.loginPath!;
+        }, 700);
+      }
       return;
     }
 

@@ -68,8 +68,18 @@ export default function LoginPage() {
   };
 
   const normalizePhone = (value: string): string | null => {
-    const compact = value.replace(/[\s().-]/g, "");
+    const compact = value.replace(/[^\d+]/g, "");
     const withPlus = compact.startsWith("00") ? `+${compact.slice(2)}` : compact;
+
+    // Local Moroccan number like 06XXXXXXXX -> +2126XXXXXXXX
+    if (/^0\d{9}$/.test(withPlus)) {
+      return `+212${withPlus.slice(1)}`;
+    }
+
+    // National format without +, e.g. 2126XXXXXXXX
+    if (/^212\d{9}$/.test(withPlus)) {
+      return `+${withPlus}`;
+    }
 
     if (!/^\+?\d{8,15}$/.test(withPlus)) {
       return null;
@@ -78,10 +88,13 @@ export default function LoginPage() {
     return withPlus.startsWith("+") ? withPlus : `+${withPlus}`;
   };
 
-  const mapLoginErrorMessage = (rawMessage: string): string => {
+  const mapLoginErrorMessage = (rawMessage: string, isPhoneAttempt: boolean): string => {
     const message = rawMessage.toLowerCase();
 
     if (message.includes("invalid login credentials")) {
+      if (isPhoneAttempt) {
+        return "Connexion telephone impossible. Verifiez le numero, le mot de passe et l'activation de Phone Auth dans Supabase.";
+      }
       return "Connexion impossible. Verifiez vos identifiants.";
     }
 
@@ -114,9 +127,10 @@ export default function LoginPage() {
 
     const emailLogin = isValidEmail(rawIdentifier) ? rawIdentifier.toLowerCase() : null;
     const phoneLogin = emailLogin ? null : normalizePhone(rawIdentifier);
+    const isPhoneAttempt = !emailLogin;
 
     if (!emailLogin && !phoneLogin) {
-      setErrorMessage("Format invalide. Utilisez un email valide ou un numero (ex: +212661517301).");
+      setErrorMessage("Format invalide. Utilisez un email valide ou un numero de telephone (ex: +212661517301).");
       return;
     }
 
@@ -129,7 +143,7 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setErrorMessage(mapLoginErrorMessage(error.message ?? ""));
+        setErrorMessage(mapLoginErrorMessage(error.message ?? "", isPhoneAttempt));
         return;
       }
 
@@ -180,7 +194,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="mt-5 space-y-3">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Email ou telephone
+              Email ou téléphone
             </span>
             <input
               type="text"
@@ -188,11 +202,13 @@ export default function LoginPage() {
               onChange={(event) => setIdentifier(event.target.value)}
               required
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
-              placeholder="vous@email.com ou +212661517301"
+              placeholder="Email ou téléphone"
               autoComplete="username"
+              inputMode="text"
+              spellCheck={false}
             />
             <p className="mt-1 text-xs text-slate-500">
-              Telephone: disponible si Phone Auth est active dans Supabase.
+              Téléphone: disponible si Phone Auth est activée dans Supabase.
             </p>
           </label>
 

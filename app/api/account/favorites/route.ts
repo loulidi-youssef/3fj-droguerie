@@ -6,8 +6,23 @@ type FavoriteRow = {
   product_id: string;
 };
 
+type DbErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
 const FAVORITES_TABLE_MISSING_MESSAGE =
   "La table favorites est manquante. Lancez supabase/migrations/2026-04-04-create-favorites-table.sql.";
+
+const mapFavoritesQueryError = (error: DbErrorLike): string => {
+  if (error.code === "42P01" || error.message?.includes('relation "favorites" does not exist')) {
+    return FAVORITES_TABLE_MISSING_MESSAGE;
+  }
+
+  return "Impossible de recuperer vos favoris.";
+};
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +48,16 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    if (error.message.includes('relation "favorites" does not exist')) {
-      return NextResponse.json({ error: FAVORITES_TABLE_MISSING_MESSAGE }, { status: 500 });
-    }
+    console.error("[favorites:list]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      userId: authenticatedCustomer.id,
+    });
 
     return NextResponse.json(
-      { error: "Impossible de recuperer vos favoris." },
+      { error: mapFavoritesQueryError(error) },
       { status: 500 },
     );
   }

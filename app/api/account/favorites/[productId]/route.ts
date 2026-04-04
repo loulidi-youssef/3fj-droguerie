@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProductsByIds } from "@/lib/products";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedCustomerFromRequest } from "@/lib/supabase/auth-user";
 
@@ -16,13 +15,30 @@ const resolveProductId = (value: string | undefined): string => {
   return value?.trim() ?? "";
 };
 
-const validateFavoriteRequest = async (productId: string): Promise<boolean> => {
-  if (!productId) {
-    return false;
+type DbErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+const mapFavoriteDatabaseError = (
+  action: "add" | "remove",
+  error: DbErrorLike,
+): string => {
+  if (error.code === "42P01" || error.message?.includes('relation "favorites" does not exist')) {
+    return FAVORITES_TABLE_MISSING_MESSAGE;
   }
 
-  const products = await getProductsByIds([productId]);
-  return products.length === 1;
+  if (error.code === "23503") {
+    return "Produit introuvable dans la base de donnees.";
+  }
+
+  if (action === "add") {
+    return "Impossible d'ajouter aux favoris.";
+  }
+
+  return "Impossible de retirer des favoris.";
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
@@ -30,12 +46,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   if (!authenticatedCustomer) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
-  }
-
-  const productId = resolveProductId(params.productId);
-  const isValidProduct = await validateFavoriteRequest(productId);
-  if (!isValidProduct) {
-    return NextResponse.json({ error: "Produit introuvable." }, { status: 404 });
   }
 
   const supabaseAdmin = getSupabaseAdminClient();
@@ -46,22 +56,54 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     );
   }
 
+  const productId = resolveProductId(params.productId);
+  if (!productId) {
+    return NextResponse.json({ error: "Produit introuvable." }, { status: 400 });
+  }
+
+  const { data: productRow, error: productError } = await supabaseAdmin
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    console.error("[favorites:add:product-check]", {
+      code: productError.code,
+      message: productError.message,
+      details: productError.details,
+      hint: productError.hint,
+      productId,
+    });
+
+    return NextResponse.json({ error: "Verification produit impossible." }, { status: 500 });
+  }
+
+  if (!productRow) {
+    return NextResponse.json({ error: "Produit introuvable." }, { status: 404 });
+  }
+
   const { error } = await supabaseAdmin.from("favorites").insert({
     user_id: authenticatedCustomer.id,
     product_id: productId,
   });
 
   if (error) {
-    if (error.message.includes('relation "favorites" does not exist')) {
-      return NextResponse.json({ error: FAVORITES_TABLE_MISSING_MESSAGE }, { status: 500 });
-    }
-
     if (error.message.includes("duplicate key value")) {
       return NextResponse.json({ ok: true });
     }
 
+    console.error("[favorites:add]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      productId,
+      userId: authenticatedCustomer.id,
+    });
+
     return NextResponse.json(
-      { error: "Impossible d'ajouter aux favoris." },
+      { error: mapFavoriteDatabaseError("add", error) },
       { status: 500 },
     );
   }
@@ -96,12 +138,17 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     .eq("product_id", productId);
 
   if (error) {
-    if (error.message.includes('relation "favorites" does not exist')) {
-      return NextResponse.json({ error: FAVORITES_TABLE_MISSING_MESSAGE }, { status: 500 });
-    }
+    console.error("[favorites:remove]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      productId,
+      userId: authenticatedCustomer.id,
+    });
 
     return NextResponse.json(
-      { error: "Impossible de retirer des favoris." },
+      { error: mapFavoriteDatabaseError("remove", error) },
       { status: 500 },
     );
   }
