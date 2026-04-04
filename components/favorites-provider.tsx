@@ -177,21 +177,7 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
       );
     }
 
-    try {
-      const response = await fetch(`/api/account/favorites/${trimmedProductId}`, {
-        method: currentlyFavorited ? "DELETE" : "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const payload = (await response.json()) as { ok?: boolean; error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Impossible de mettre a jour les favoris.");
-      }
-
-      return { ok: true, isFavorited: !currentlyFavorited };
-    } catch (error) {
+    const revertOptimisticState = () => {
       setFavoriteIds((current) => {
         if (currentlyFavorited) {
           return current.includes(trimmedProductId)
@@ -201,6 +187,36 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
 
         return current.filter((id) => id !== trimmedProductId);
       });
+    };
+
+    try {
+      const response = await fetch(`/api/account/favorites/${trimmedProductId}`, {
+        method: currentlyFavorited ? "DELETE" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+
+      if (response.status === 401) {
+        revertOptimisticState();
+        const loginPath = `/login?next=${encodeURIComponent(redirectPath)}`;
+        return {
+          ok: false,
+          requiresAuth: true,
+          error: "Veuillez vous connecter pour ajouter aux favoris",
+          loginPath,
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Impossible de mettre a jour les favoris.");
+      }
+
+      return { ok: true, isFavorited: !currentlyFavorited };
+    } catch (error) {
+      revertOptimisticState();
 
       return {
         ok: false,

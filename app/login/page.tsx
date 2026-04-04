@@ -22,10 +22,14 @@ export default function LoginPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpPhone, setOtpPhone] = useState<string | null>(null);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [nextPath, setNextPath] = useState("/compte/commandes");
 
@@ -71,12 +75,10 @@ export default function LoginPage() {
     const compact = value.replace(/[^\d+]/g, "");
     const withPlus = compact.startsWith("00") ? `+${compact.slice(2)}` : compact;
 
-    // Local Moroccan number like 06XXXXXXXX -> +2126XXXXXXXX
     if (/^0\d{9}$/.test(withPlus)) {
       return `+212${withPlus.slice(1)}`;
     }
 
-    // National format without +, e.g. 2126XXXXXXXX
     if (/^212\d{9}$/.test(withPlus)) {
       return `+${withPlus}`;
     }
@@ -88,18 +90,11 @@ export default function LoginPage() {
     return withPlus.startsWith("+") ? withPlus : `+${withPlus}`;
   };
 
-  const mapLoginErrorMessage = (rawMessage: string, isPhoneAttempt: boolean): string => {
+  const mapLoginErrorMessage = (rawMessage: string): string => {
     const message = rawMessage.toLowerCase();
 
     if (message.includes("invalid login credentials")) {
-      if (isPhoneAttempt) {
-        return "Connexion telephone impossible. Verifiez le numero, le mot de passe et l'activation de Phone Auth dans Supabase.";
-      }
       return "Connexion impossible. Verifiez vos identifiants.";
-    }
-
-    if (message.includes("phone logins are disabled") || message.includes("unsupported phone provider")) {
-      return "Connexion par telephone non activee. Activez Phone Auth dans Supabase pour l'utiliser.";
     }
 
     if (message.includes("email logins are disabled")) {
@@ -107,6 +102,37 @@ export default function LoginPage() {
     }
 
     return "Connexion impossible pour le moment. Merci de reessayer.";
+  };
+
+  const mapPhoneOtpErrorMessage = (rawMessage: string): string => {
+    const message = rawMessage.toLowerCase();
+
+    if (message.includes("phone logins are disabled") || message.includes("unsupported phone provider")) {
+      return "Connexion par telephone non activee. Activez Phone Auth dans Supabase.";
+    }
+
+    if (message.includes("sms provider") || message.includes("twilio")) {
+      return "Le fournisseur SMS n'est pas configure dans Supabase.";
+    }
+
+    if (message.includes("rate limit") || message.includes("too many requests")) {
+      return "Trop de tentatives. Merci de patienter avant de redemander un code.";
+    }
+
+    if (message.includes("otp") || message.includes("token") || message.includes("invalid") || message.includes("expired")) {
+      return "Code SMS invalide ou expire. Redemandez un nouveau code.";
+    }
+
+    return "Connexion SMS impossible pour le moment.";
+  };
+
+  const getNormalizedPhoneFromIdentifier = (): string | null => {
+    const rawIdentifier = identifier.trim();
+    if (!rawIdentifier || isValidEmail(rawIdentifier)) {
+      return null;
+    }
+
+    return normalizePhone(rawIdentifier);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -127,10 +153,20 @@ export default function LoginPage() {
 
     const emailLogin = isValidEmail(rawIdentifier) ? rawIdentifier.toLowerCase() : null;
     const phoneLogin = emailLogin ? null : normalizePhone(rawIdentifier);
-    const isPhoneAttempt = !emailLogin;
 
     if (!emailLogin && !phoneLogin) {
       setErrorMessage("Format invalide. Utilisez un email valide ou un numero de telephone (ex: +212661517301).");
+      return;
+    }
+
+    if (phoneLogin) {
+      setErrorMessage('Pour un numero de telephone, utilisez le bouton "Envoyer le code SMS".');
+      return;
+    }
+
+    const emailForPassword = emailLogin;
+    if (!emailForPassword) {
+      setErrorMessage("Entrez une adresse email valide.");
       return;
     }
 
@@ -138,12 +174,12 @@ export default function LoginPage() {
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        ...(emailLogin ? { email: emailLogin } : { phone: phoneLogin! }),
+        email: emailForPassword,
         password,
       });
 
       if (error) {
-        setErrorMessage(mapLoginErrorMessage(error.message ?? "", isPhoneAttempt));
+        setErrorMessage(mapLoginErrorMessage(error.message ?? ""));
         return;
       }
 
@@ -151,6 +187,85 @@ export default function LoginPage() {
       router.refresh();
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async () => {
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    if (!supabase) {
+      setErrorMessage("Supabase Auth n'est pas configure.");
+      return;
+    }
+
+    const phone = getNormalizedPhoneFromIdentifier();
+    if (!phone) {
+      setErrorMessage("Entrez un numero de telephone valide pour recevoir le code SMS.");
+      return;
+    }
+
+    setIsSendingOtp(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone,
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+
+      if (error) {
+        setErrorMessage(mapPhoneOtpErrorMessage(error.message ?? ""));
+        return;
+      }
+
+      setOtpPhone(phone);
+      setOtpCode("");
+      setInfoMessage(`Code SMS envoye au ${phone}.`);
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    if (!supabase) {
+      setErrorMessage("Supabase Auth n'est pas configure.");
+      return;
+    }
+
+    if (!otpPhone) {
+      setErrorMessage("Demandez d'abord un code SMS.");
+      return;
+    }
+
+    const token = otpCode.trim();
+    if (!/^\d{4,8}$/.test(token)) {
+      setErrorMessage("Entrez le code SMS recu (4 a 8 chiffres).");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: otpPhone,
+        token,
+        type: "sms",
+      });
+
+      if (error) {
+        setErrorMessage(mapPhoneOtpErrorMessage(error.message ?? ""));
+        return;
+      }
+
+      router.push(nextPath);
+      router.refresh();
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -194,7 +309,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="mt-5 space-y-3">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Email ou téléphone
+              Email ou telephone
             </span>
             <input
               type="text"
@@ -202,13 +317,13 @@ export default function LoginPage() {
               onChange={(event) => setIdentifier(event.target.value)}
               required
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
-              placeholder="Email ou téléphone"
+              placeholder="Email ou telephone"
               autoComplete="username"
               inputMode="text"
               spellCheck={false}
             />
             <p className="mt-1 text-xs text-slate-500">
-              Téléphone: disponible si Phone Auth est activée dans Supabase.
+              Telephone: disponible si Phone Auth est active dans Supabase.
             </p>
           </label>
 
@@ -274,6 +389,40 @@ export default function LoginPage() {
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
             {isSubmitting ? "Connexion..." : "Se connecter"}
           </button>
+
+          <button
+            type="button"
+            onClick={handleSendPhoneOtp}
+            disabled={isSendingOtp || isSubmitting}
+            className="btn-outline-brand w-full"
+          >
+            {isSendingOtp ? "Envoi du code..." : "Envoyer le code SMS"}
+          </button>
+
+          {otpPhone ? (
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-600">
+                Code envoye a <span className="font-semibold">{otpPhone}</span>
+              </p>
+              <input
+                type="text"
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Code SMS"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-orange"
+              />
+              <button
+                type="button"
+                onClick={handleVerifyPhoneOtp}
+                disabled={isVerifyingOtp}
+                className="btn-primary w-full"
+              >
+                {isVerifyingOtp ? "Verification..." : "Verifier le code SMS"}
+              </button>
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-2 pt-1">
             <span className="h-px flex-1 bg-slate-200" />
