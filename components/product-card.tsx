@@ -9,7 +9,10 @@ import { StarRating } from "@/components/star-rating";
 import { useToast } from "@/components/toast-provider";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
-import { getProductAvailabilityMeta } from "@/lib/product-availability";
+import {
+  getProductAvailabilityMeta,
+  getProductAvailabilityStatus,
+} from "@/lib/product-availability";
 import { buildProductWhatsAppLink } from "@/lib/whatsapp";
 import type { Product } from "@/types";
 
@@ -31,11 +34,17 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
         : "";
   const hasBadge = badgeLabel.length > 0;
   const isPromoBadge = product.isPromo || badgeLabel.toLowerCase().includes("promo");
+  const availabilityStatus = getProductAvailabilityStatus(product);
   const availability = getProductAvailabilityMeta(product);
+  const isOutOfStock = availabilityStatus === "out-of-stock";
   const isHomepageVariant = variant === "homepage";
   const reviewCount = Math.max(12, Math.round(product.rating * 8));
 
   const handleAddToCart = () => {
+    if (isOutOfStock) {
+      return;
+    }
+
     addItem(product.id, 1);
     showToast("Produit ajoute au panier", {
       primaryAction: {
@@ -88,16 +97,22 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
             ))}
             <span className="ml-1 text-xs text-slate-500">({reviewCount})</span>
           </div>
+          <p
+            className={`mt-2 inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${availability.className}`}
+          >
+            {availability.label}
+          </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={handleAddToCart}
-              className={`inline-flex h-9 items-center justify-center rounded-md bg-brand-orange px-2 text-[11px] font-semibold text-white transition hover:bg-brand-orangeDark ${
+              disabled={isOutOfStock}
+              className={`inline-flex h-9 items-center justify-center rounded-md bg-brand-orange px-2 text-[11px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-brand-orange ${
                 isAdding ? "scale-[0.98]" : ""
               }`}
             >
-              Ajouter au panier
+              {isOutOfStock ? "Rupture de stock" : "Ajouter au panier"}
             </button>
             <a
               href={buildProductWhatsAppLink(product.name)}
@@ -174,11 +189,12 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
           <button
             type="button"
             onClick={handleAddToCart}
-            className={`btn-primary h-10 w-full px-2 text-center text-[11px] sm:h-11 sm:text-sm ${
+            disabled={isOutOfStock}
+            className={`btn-primary h-10 w-full px-2 text-center text-[11px] disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:text-sm ${
               isAdding ? "scale-[0.98]" : ""
             }`}
           >
-            Ajouter au panier
+            {isOutOfStock ? "Rupture de stock" : "Ajouter au panier"}
           </button>
           <a
             href={buildProductWhatsAppLink(product.name)}

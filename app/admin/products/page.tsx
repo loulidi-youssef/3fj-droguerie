@@ -430,7 +430,9 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
               />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Stock</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Quantite (stock)
+              </span>
               <input
                 type="number"
                 name="stock"
@@ -499,7 +501,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prix / Stock</p>
                       <p className="text-sm font-bold text-brand-blue">{formatDh(product.price)}</p>
-                      <p className="text-xs text-slate-600">Stock: {product.stock}</p>
+                      <p className="text-xs text-slate-600">Quantite: {product.stock}</p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Categorie</p>
@@ -596,7 +598,9 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                       />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Stock</span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Quantite (stock)
+                      </span>
                       <input
                         type="number"
                         name="stock"

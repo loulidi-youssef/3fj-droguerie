@@ -1,6 +1,6 @@
 import type { Product } from "@/types";
 
-export type ProductAvailabilityStatus = "in-stock" | "limited" | "on-order";
+export type ProductAvailabilityStatus = "in-stock" | "limited" | "out-of-stock";
 
 type ProductAvailabilityMeta = {
   label: string;
@@ -19,7 +19,7 @@ export const getProductAvailabilityStatus = (
       return "limited";
     }
 
-    return "on-order";
+    return "out-of-stock";
   }
 
   if (product.isPromo || product.isNew) {
@@ -41,10 +41,10 @@ export const getProductAvailabilityMeta = (
     };
   }
 
-  if (status === "on-order") {
+  if (status === "out-of-stock") {
     return {
-      label: "Sur commande",
-      className: "border-slate-200 bg-slate-100 text-slate-700",
+      label: "Rupture de stock",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
     };
   }
 

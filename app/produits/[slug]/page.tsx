@@ -7,7 +7,10 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { ProductCard } from "@/components/product-card";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
-import { getProductAvailabilityMeta } from "@/lib/product-availability";
+import {
+  getProductAvailabilityMeta,
+  getProductAvailabilityStatus,
+} from "@/lib/product-availability";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
 import { buildProductWhatsAppLink } from "@/lib/whatsapp";
 
@@ -53,6 +56,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         item.id !== product.id && item.categorySlug === product.categorySlug,
     )
     .slice(0, 4);
+  const availabilityStatus = getProductAvailabilityStatus(product);
   const availability = getProductAvailabilityMeta(product);
 
   return (
@@ -101,6 +105,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
             <div className="mt-6 flex flex-wrap gap-3">
               <AddToCartButton
                 productId={product.id}
+                disabled={availabilityStatus === "out-of-stock"}
                 className="btn-primary h-11 px-5"
               />
               <a

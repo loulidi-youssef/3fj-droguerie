@@ -8,18 +8,26 @@ type AddToCartButtonProps = {
   productId: string;
   quantity?: number;
   className?: string;
+  disabled?: boolean;
+  disabledLabel?: string;
 };
 
 export const AddToCartButton = ({
   productId,
   quantity = 1,
   className,
+  disabled = false,
+  disabledLabel = "Rupture de stock",
 }: AddToCartButtonProps) => {
   const { addItem } = useCart();
   const { showToast } = useToast();
   const [isActive, setIsActive] = useState(false);
 
   const handleAddToCart = () => {
+    if (disabled) {
+      return;
+    }
+
     addItem(productId, quantity);
     showToast("Produit ajout\u00E9 au panier", {
       primaryAction: {
@@ -39,11 +47,12 @@ export const AddToCartButton = ({
     <button
       type="button"
       onClick={handleAddToCart}
+      disabled={disabled}
       className={`${className ?? "btn-primary"} ${
         isActive ? "scale-[0.98]" : ""
-      }`}
+      } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
     >
-      Ajouter au panier
+      {disabled ? disabledLabel : "Ajouter au panier"}
     </button>
   );
 };
