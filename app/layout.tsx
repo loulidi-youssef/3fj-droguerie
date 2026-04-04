@@ -22,18 +22,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <html lang="fr">
-      <body>
-        <CartProvider>
-          <ToastProvider>
-            <TopBar />
-            <Header />
-            <main>{children}</main>
-            <Footer />
-          </ToastProvider>
-        </CartProvider>
-      </body>
-    </html>
-  );
+ return (
+  <html lang="fr">
+    <head>
+      <meta name="google-site-verification" content="KJZgpm6bgI4ycEFeLD_6S67eYMcmQxTSVFLfXqP5ezM" />
+    </head>
+    <body>
+      <CartProvider>
+        <ToastProvider>
+          <TopBar />
+          <Header />
+          <main>{children}</main>
+          <Footer />
+        </ToastProvider>
+      </CartProvider>
+    </body>
+  </html>
+);
 }
