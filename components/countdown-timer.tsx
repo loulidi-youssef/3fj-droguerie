@@ -61,7 +61,9 @@ export const CountdownTimer = ({
           key={item.label}
           className={`border text-center backdrop-blur-sm ${
             variant === "homepage-offer"
-              ? "rounded-lg border-white/5 bg-brand-blue px-3 py-2 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+              ? compact
+                ? "rounded-lg border-white/5 bg-brand-blue px-2 py-1.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                : "rounded-lg border-white/5 bg-brand-blue px-3 py-2 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
               : compact
                 ? "rounded-2xl border-slate-200 bg-slate-50 p-2 text-slate-700"
                 : "rounded-2xl border-white/15 bg-white/15 p-3 text-white"
@@ -70,7 +72,9 @@ export const CountdownTimer = ({
           <p
             className={`font-extrabold ${
               variant === "homepage-offer"
-                ? "text-3xl leading-none"
+                ? compact
+                  ? "text-xl leading-none"
+                  : "text-3xl leading-none"
                 : compact
                   ? "text-lg sm:text-xl"
                   : "text-2xl sm:text-[1.8rem]"
@@ -81,7 +85,9 @@ export const CountdownTimer = ({
           <p
             className={`text-xs uppercase tracking-wide ${
               variant === "homepage-offer"
-                ? "mt-1 text-[10px] text-slate-200"
+                ? compact
+                  ? "mt-0.5 text-[9px] text-slate-200"
+                  : "mt-1 text-[10px] text-slate-200"
                 : compact
                   ? "text-slate-500"
                   : "text-slate-100"

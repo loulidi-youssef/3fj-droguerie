@@ -101,52 +101,61 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
   }
 
   return (
-    <section className="section-padding">
+    <section className="pb-10 pt-6">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-brand-blue p-6 shadow-card sm:p-8">
-          {offer.imagePath ? (
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-15"
-              style={{ backgroundImage: `url('${offer.imagePath}')` }}
-            />
-          ) : null}
-          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-orange-400/20 blur-2xl" />
-          <div className="absolute -bottom-10 left-1/3 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-          <p className="relative inline-flex rounded-full bg-brand-orange px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
-            {offer.discountLabel}
-          </p>
-          <h2 className="relative mt-3 text-2xl font-extrabold text-white sm:text-3xl">{offer.title}</h2>
-          <p className="relative mt-2 text-sm font-semibold text-orange-100">Produit: {product.name}</p>
-          <p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-slate-100">
-            {offer.shortDescription}
-          </p>
-          <Link
-            href={`/produits/${product.slug}`}
-            className="relative mt-4 inline-flex rounded-xl border border-white/35 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-px hover:bg-white/20"
-          >
-            Voir le produit
-          </Link>
-          <div className="relative mt-4 grid gap-2 sm:grid-cols-3">
-            <p className="rounded-2xl border border-white/15 bg-white/10 p-3 text-sm font-semibold text-white">
-              Avant: <span className="line-through opacity-90">{formatDh(originalPrice)}</span>
-            </p>
-            <p className="rounded-2xl border border-white/15 bg-orange-400/20 p-3 text-sm font-bold text-white">
-              Maintenant: {formatDh(discountedPrice)}
-            </p>
-            <p className="rounded-2xl border border-white/15 bg-white/10 p-3 text-sm font-semibold text-white">
-              Economie: {formatDh(savingsAmount)} ({savingsPercent}%)
-            </p>
+        <article className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_12px_28px_rgba(15,42,77,0.1)] sm:p-7">
+          <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-orange-100/80" />
+          <div className="absolute -bottom-16 left-1/3 h-44 w-44 rounded-full bg-brand-blue/5" />
+          <div className="relative grid gap-6 lg:grid-cols-12 lg:items-start">
+            <div className="lg:col-span-8">
+              <p className="inline-flex rounded-full bg-brand-orange px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
+                {offer.discountLabel}
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold leading-tight text-brand-blue sm:text-4xl">
+                {offer.title}
+              </h2>
+              <p className="mt-2 text-base font-semibold text-slate-700">Produit: {product.name}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">{offer.shortDescription}</p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+                  Avant: <span className="line-through">{formatDh(originalPrice)}</span>
+                </p>
+                <p className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm font-extrabold text-brand-orange">
+                  Maintenant: {formatDh(discountedPrice)}
+                </p>
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">
+                  Economie: {formatDh(savingsAmount)} ({savingsPercent}%)
+                </p>
+              </div>
+              {offer.bannerText ? (
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {offer.bannerText}
+                </p>
+              ) : null}
+              <Link href={`/produits/${product.slug}`} className="btn-primary mt-5 px-5 py-2.5">
+                Voir le produit
+              </Link>
+            </div>
+
+            <aside className="lg:col-span-4">
+              <div className="rounded-xl bg-brand-blue p-3 text-white shadow-[0_10px_22px_rgba(15,42,77,0.25)]">
+                <p className="mb-2 text-center text-sm font-bold uppercase tracking-wide text-orange-100">
+                  Offre limitee
+                </p>
+                {offer.endAt ? (
+                  <CountdownTimer expiresAt={offer.endAt} variant="homepage-offer" />
+                ) : (
+                  <div className="rounded-lg bg-white/10 px-3 py-5 text-center text-sm text-slate-200">
+                    Offre en cours
+                  </div>
+                )}
+              </div>
+            </aside>
           </div>
-          {offer.bannerText ? (
-            <p className="relative mt-2 max-w-2xl text-xs font-semibold uppercase tracking-wide text-orange-100">
-              {offer.bannerText}
-            </p>
-          ) : null}
-          {offer.endAt ? <CountdownTimer expiresAt={offer.endAt} /> : null}
-        </div>
+        </article>
 
         {visibleOtherOffers.length > 0 ? (
-          <div className="mt-5 grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visibleOtherOffers.map((offerWithProduct) => {
               const {
                 offer: secondaryOffer,
@@ -160,12 +169,17 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
               return (
                 <article
                   key={secondaryOffer.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.12)]"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_24px_rgba(15,42,77,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.12)]"
                 >
-                  <p className="inline-flex rounded-full bg-brand-orange/10 px-2.5 py-1 text-xs font-bold text-brand-orange">
-                    {secondaryOffer.discountLabel}
-                  </p>
-                  <h3 className="mt-2 text-lg font-extrabold text-brand-blue">{secondaryProduct.name}</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="inline-flex rounded-full bg-brand-orange/10 px-2.5 py-1 text-xs font-bold text-brand-orange">
+                      {secondaryOffer.discountLabel}
+                    </p>
+                    <p className="text-sm font-bold text-emerald-700">-{secondarySavingsPercent}%</p>
+                  </div>
+                  <h3 className="mt-3 text-xl font-extrabold leading-tight text-brand-blue">
+                    {secondaryProduct.name}
+                  </h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-600">
                     {secondaryOffer.shortDescription}
                   </p>
@@ -174,25 +188,23 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
                       Avant:{" "}
                       <span className="font-semibold line-through">{formatDh(secondaryOriginalPrice)}</span>
                     </p>
-                    <p>
-                      Maintenant:{" "}
-                      <span className="text-base font-extrabold text-brand-blue">
-                        {formatDh(secondaryDiscountedPrice)}
-                      </span>
+                    <p className="font-extrabold text-brand-orange">
+                      Maintenant: {formatDh(secondaryDiscountedPrice)}
                     </p>
                     <p className="font-semibold text-emerald-700">
-                      Economie: {formatDh(secondarySavingsAmount)} ({secondarySavingsPercent}%)
+                      Economie: {formatDh(secondarySavingsAmount)}
                     </p>
                   </div>
                   {secondaryOffer.endAt ? (
                     <div className="mt-3">
-                      <CountdownTimer expiresAt={secondaryOffer.endAt} compact />
+                      <CountdownTimer
+                        expiresAt={secondaryOffer.endAt}
+                        compact
+                        variant="homepage-offer"
+                      />
                     </div>
                   ) : null}
-                  <Link
-                    href={`/produits/${secondaryProduct.slug}`}
-                    className="mt-4 inline-flex rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:border-brand-orange hover:text-brand-orange"
-                  >
+                  <Link href={`/produits/${secondaryProduct.slug}`} className="btn-primary mt-4 px-4 py-2">
                     Voir le produit
                   </Link>
                 </article>
