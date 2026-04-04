@@ -167,9 +167,13 @@ export const CustomerAuthNav = () => {
             >
               Vos commandes
             </Link>
-            <span className="block rounded-xl px-3 py-2 text-slate-400">
-              Favoris (bientot)
-            </span>
+            <Link
+              href="/compte/favoris"
+              onClick={() => setIsOpen(false)}
+              className="block rounded-xl px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100"
+            >
+              Favoris
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

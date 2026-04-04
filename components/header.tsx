@@ -10,13 +10,52 @@ import { useCart } from "@/components/cart-provider";
 import { CustomerAuthNav } from "@/components/customer-auth-nav";
 
 export const Header = () => {
+  type ProductSuggestion = {
+    id: string;
+    name: string;
+    slug: string;
+  };
+
   const router = useRouter();
   const pathname = usePathname();
   const { itemCount } = useCart();
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
+  const [allProducts, setAllProducts] = useState<ProductSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
   const categoriesDropdownRef = useRef<HTMLDivElement | null>(null);
+  const searchDropdownRef = useRef<HTMLFormElement | null>(null);
+
+  const computeSuggestions = (input: string, products: ProductSuggestion[]) => {
+    const normalizedInput = input.trim().toLowerCase();
+    if (!normalizedInput) {
+      return [];
+    }
+
+    const startsWithMatches: ProductSuggestion[] = [];
+    const containsMatches: ProductSuggestion[] = [];
+
+    for (const product of products) {
+      const normalizedName = product.name.toLowerCase();
+
+      if (normalizedName.startsWith(normalizedInput)) {
+        startsWithMatches.push(product);
+      } else if (normalizedName.includes(normalizedInput)) {
+        containsMatches.push(product);
+      }
+    }
+
+    const sorter = (first: ProductSuggestion, second: ProductSuggestion) =>
+      first.name.localeCompare(second.name);
+
+    startsWithMatches.sort(sorter);
+    containsMatches.sort(sorter);
+
+    return [...startsWithMatches, ...containsMatches].slice(0, 7);
+  };
 
   useEffect(() => {
     const syncCategoryFromUrl = () => {
@@ -33,17 +72,70 @@ export const Header = () => {
   }, [pathname]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch("/api/products", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          products?: Array<{ id: string; name: string; slug: string }>;
+        };
+
+        if (!isMounted) {
+          return;
+        }
+
+        const suggestionsSource = (payload.products ?? []).map((product) => ({
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+        }));
+
+        setAllProducts(suggestionsSource);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setAllProducts([]);
+      }
+    };
+
+    void fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextSuggestions = computeSuggestions(query, allProducts);
+    setSuggestions(nextSuggestions);
+    setHighlightedSuggestionIndex(-1);
+
+    if (!query.trim()) {
+      setIsSuggestionsOpen(false);
+    }
+  }, [allProducts, query]);
+
+  useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) {
         return;
       }
 
-      if (categoriesDropdownRef.current?.contains(target)) {
-        return;
+      if (!categoriesDropdownRef.current?.contains(target)) {
+        setIsCategoriesOpen(false);
       }
 
-      setIsCategoriesOpen(false);
+      if (!searchDropdownRef.current?.contains(target)) {
+        setIsSuggestionsOpen(false);
+        setHighlightedSuggestionIndex(-1);
+      }
     };
 
     const onEscape = (event: KeyboardEvent) => {
@@ -63,6 +155,7 @@ export const Header = () => {
 
   useEffect(() => {
     setIsCategoriesOpen(false);
+    setIsSuggestionsOpen(false);
   }, [pathname]);
 
   const activeCategoryName = selectedCategory
@@ -81,6 +174,15 @@ export const Header = () => {
       return;
     }
     router.push(`/produits?q=${encodeURIComponent(value)}`);
+    setIsSuggestionsOpen(false);
+    setHighlightedSuggestionIndex(-1);
+  };
+
+  const openSuggestion = (suggestion: ProductSuggestion) => {
+    setQuery(suggestion.name);
+    setIsSuggestionsOpen(false);
+    setHighlightedSuggestionIndex(-1);
+    router.push(`/produits/${suggestion.slug}`);
   };
 
   return (
@@ -160,14 +262,74 @@ export const Header = () => {
         </nav>
 
         <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
-          <form onSubmit={onSubmit} className="relative w-full lg:w-80">
+          <form onSubmit={onSubmit} className="relative w-full lg:w-80" ref={searchDropdownRef}>
             <input
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setQuery(value);
+                if (value.trim()) {
+                  setIsSuggestionsOpen(true);
+                } else {
+                  setIsSuggestionsOpen(false);
+                }
+              }}
+              onFocus={() => {
+                if (query.trim() && suggestions.length > 0) {
+                  setIsSuggestionsOpen(true);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (!isSuggestionsOpen || suggestions.length === 0) {
+                  return;
+                }
+
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setHighlightedSuggestionIndex((current) =>
+                    Math.min(current + 1, suggestions.length - 1),
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setHighlightedSuggestionIndex((current) => Math.max(current - 1, 0));
+                } else if (event.key === "Enter" && highlightedSuggestionIndex >= 0) {
+                  event.preventDefault();
+                  const suggestion = suggestions[highlightedSuggestionIndex];
+                  if (suggestion) {
+                    openSuggestion(suggestion);
+                  }
+                } else if (event.key === "Escape") {
+                  setIsSuggestionsOpen(false);
+                  setHighlightedSuggestionIndex(-1);
+                }
+              }}
               placeholder={homepageContent.header.searchPlaceholder}
               className="w-full rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
             />
+
+            {isSuggestionsOpen && suggestions.length > 0 ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[85] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                <ul className="max-h-72 overflow-y-auto py-1">
+                  {suggestions.map((suggestion, index) => (
+                    <li key={suggestion.id}>
+                      <button
+                        type="button"
+                        onClick={() => openSuggestion(suggestion)}
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition ${
+                          index === highlightedSuggestionIndex
+                            ? "bg-slate-100 text-brand-blue"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span>{suggestion.name}</span>
+                        <span className="text-xs text-slate-400">Produit</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </form>
 
           <Link

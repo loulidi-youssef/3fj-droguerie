@@ -172,31 +172,35 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           </div>
         </form>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold text-slate-700">Categories:</span>
-          <a
-            href={buildCategoryUrl(null)}
-            className={`rounded-full px-3 py-1 ${
-              !selectedCategory
-                ? "bg-brand-blue text-white"
-                : "bg-white text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            Toutes
-          </a>
-          {categories.map((category) => (
-            <a
-              key={category.id}
-              href={buildCategoryUrl(category.slug)}
-              className={`rounded-full px-3 py-1 ${
-                selectedCategory === category.slug
-                  ? "bg-brand-orange text-white"
-                  : "bg-white text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              {category.name}
-            </a>
-          ))}
+        <div className="mt-4 text-sm">
+          <p className="mb-2 font-semibold text-slate-700">Categories:</p>
+          <div className="-mx-1 overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible">
+            <div className="flex min-w-max gap-2 px-1 sm:min-w-0 sm:flex-wrap sm:px-0">
+              <a
+                href={buildCategoryUrl(null)}
+                className={`whitespace-nowrap rounded-full px-3 py-1 ${
+                  !selectedCategory
+                    ? "bg-brand-blue text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Toutes
+              </a>
+              {categories.map((category) => (
+                <a
+                  key={category.id}
+                  href={buildCategoryUrl(category.slug)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 ${
+                    selectedCategory === category.slug
+                      ? "bg-brand-orange text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {category.name}
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
 
         {activeCategoryName ? (
@@ -215,7 +219,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           {sortedProducts.length} produit(s) trouve(s).
         </p>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
           {sortedProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCartButton } from "@/components/add-to-cart-button";
+import { FavoriteButton } from "@/components/favorite-button";
 import { ProductCard } from "@/components/product-card";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
@@ -103,6 +104,10 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
               >
                 WhatsApp
               </a>
+              <FavoriteButton
+                productId={product.id}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+              />
             </div>
 
             <Link href="/panier" className="mt-4 inline-flex text-sm font-semibold text-brand-orange hover:underline">

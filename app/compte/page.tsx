@@ -87,7 +87,7 @@ export default function ComptePage() {
           Connecte en tant que: <span className="font-semibold">{authState.email}</span>
         </p>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/compte/commandes"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.12)]"
@@ -95,6 +95,16 @@ export default function ComptePage() {
             <h2 className="text-lg font-bold text-brand-blue">Mes commandes</h2>
             <p className="mt-2 text-sm text-slate-600">
               Consultez vos commandes et annulez celles qui sont encore eligibles.
+            </p>
+          </Link>
+
+          <Link
+            href="/compte/favoris"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.12)]"
+          >
+            <h2 className="text-lg font-bold text-brand-blue">Mes favoris</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Retrouvez rapidement les produits que vous avez sauvegardes.
             </p>
           </Link>
 

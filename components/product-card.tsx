@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/components/cart-provider";
+import { FavoriteButton } from "@/components/favorite-button";
 import { StarRating } from "@/components/star-rating";
 import { useToast } from "@/components/toast-provider";
 import { getCategoryNameBySlug } from "@/data/categories";
@@ -40,7 +41,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_22px_rgba(15,42,77,0.09)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,42,77,0.14)]">
       <Link href={`/produits/${product.slug}`} className="block p-3 pb-0">
-        <div className="relative flex h-44 w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50 sm:h-48">
+        <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50 sm:h-48">
           {hasBadge ? (
             <span
               className={`pointer-events-none absolute left-2 top-2 z-10 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
@@ -52,6 +53,10 @@ export const ProductCard = ({ product }: ProductCardProps) => {
               {badgeLabel}
             </span>
           ) : null}
+          <FavoriteButton
+            productId={product.id}
+            className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-500 shadow-sm transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+          />
           <Image
             src={product.images[0]}
             alt={product.name}
@@ -62,22 +67,24 @@ export const ProductCard = ({ product }: ProductCardProps) => {
         </div>
       </Link>
 
-      <div className="flex flex-1 flex-col p-4 sm:p-[18px]">
+      <div className="flex flex-1 flex-col p-3 sm:p-[18px]">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange">
           {getCategoryNameBySlug(product.categorySlug)}
         </p>
         <Link
           href={`/produits/${product.slug}`}
-          className="mt-1 min-h-[48px] text-[1.02rem] font-bold leading-snug text-brand-blue transition-colors duration-200 hover:text-brand-orange"
+          className="mt-1 min-h-[44px] text-sm font-bold leading-snug text-brand-blue transition-colors duration-200 hover:text-brand-orange sm:min-h-[48px] sm:text-[1.02rem]"
         >
           {product.name}
         </Link>
-        <p className="mt-1.5 min-h-[56px] text-sm leading-normal text-slate-600">
+        <p className="mt-1.5 min-h-[42px] text-xs leading-normal text-slate-600 sm:min-h-[56px] sm:text-sm">
           {product.shortDescription}
         </p>
 
         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-          <p className="text-2xl font-extrabold tracking-tight text-brand-blue">{formatDh(product.price)}</p>
+          <p className="text-lg font-extrabold tracking-tight text-brand-blue sm:text-2xl">
+            {formatDh(product.price)}
+          </p>
           <StarRating value={product.rating} />
         </div>
 
@@ -85,7 +92,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
           <button
             type="button"
             onClick={handleAddToCart}
-            className={`btn-primary h-10 w-full px-2 text-center text-[13px] sm:text-sm ${
+            className={`btn-primary h-9 w-full px-1.5 text-center text-[11px] sm:h-10 sm:px-2 sm:text-sm ${
               isAdding ? "scale-[0.98]" : ""
             }`}
           >
@@ -95,7 +102,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
             href={buildProductWhatsAppLink(product.name)}
             target="_blank"
             rel="noreferrer"
-            className="btn-outline-brand h-10 w-full px-2 text-center text-[13px] sm:text-sm"
+            className="btn-outline-brand h-9 w-full px-1.5 text-center text-[11px] sm:h-10 sm:px-2 sm:text-sm"
           >
             WhatsApp
           </a>

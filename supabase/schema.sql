@@ -162,12 +162,22 @@ execute function public.set_updated_at();
 create index if not exists idx_reviews_is_active on public.reviews(is_active);
 create index if not exists idx_reviews_created_at on public.reviews(created_at desc);
 
+create table if not exists public.favorites (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  product_id text not null references public.products(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, product_id)
+);
+
+create index if not exists idx_favorites_user_id_created_at on public.favorites(user_id, created_at desc);
+
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.offers enable row level security;
 alter table public.blog_posts enable row level security;
 alter table public.reviews enable row level security;
+alter table public.favorites enable row level security;
 
 drop policy if exists "Public can read active products" on public.products;
 create policy "Public can read active products"
@@ -225,3 +235,24 @@ with check (
   auth.uid() = user_id
   and status = 'cancelled'
 );
+
+drop policy if exists "Authenticated users can read own favorites" on public.favorites;
+create policy "Authenticated users can read own favorites"
+on public.favorites
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can add own favorites" on public.favorites;
+create policy "Authenticated users can add own favorites"
+on public.favorites
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can remove own favorites" on public.favorites;
+create policy "Authenticated users can remove own favorites"
+on public.favorites
+for delete
+to authenticated
+using (auth.uid() = user_id);

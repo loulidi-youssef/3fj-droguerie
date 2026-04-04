@@ -20,6 +20,7 @@ This guide connects the current Next.js frontend to Supabase without rebuilding 
    - `supabase/migrations/2026-04-04-link-offers-to-products.sql`
    - `supabase/migrations/2026-04-04-create-blog-and-reviews-tables.sql`
    - `supabase/migrations/2026-04-04-add-orders-user-id-auth.sql`
+   - `supabase/migrations/2026-04-04-create-favorites-table.sql`
 
 ## 3. Get API keys
 1. Open `Project Settings` -> `API`.
