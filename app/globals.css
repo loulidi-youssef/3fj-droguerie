@@ -47,6 +47,14 @@ body {
   .btn-outline-brand {
     @apply inline-flex items-center justify-center rounded-xl border border-brand-blue/70 bg-white px-4 py-2.5 text-sm font-semibold text-brand-blue transition-colors duration-200 hover:bg-brand-blue hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/20;
   }
+
+  .admin-nav-link {
+    @apply inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange;
+  }
+
+  .admin-nav-danger {
+    @apply border-rose-200 text-rose-700 hover:border-rose-300 hover:text-rose-800;
+  }
 }
 
 @keyframes fadeInUp {
@@ -66,4 +74,61 @@ body {
 
 section {
   scroll-margin-top: 84px;
+}
+
+.admin-ui section {
+  padding-top: 2rem;
+  padding-bottom: 2.5rem;
+}
+
+.admin-ui details {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 42, 77, 0.08);
+}
+
+.admin-ui details > summary {
+  padding-bottom: 0.35rem;
+}
+
+.admin-ui details[open] > summary {
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0.95rem;
+}
+
+.admin-ui input[type="text"],
+.admin-ui input[type="email"],
+.admin-ui input[type="number"],
+.admin-ui input[type="datetime-local"],
+.admin-ui input[type="password"],
+.admin-ui input[type="tel"],
+.admin-ui textarea,
+.admin-ui select {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.admin-ui input[type="text"]:focus,
+.admin-ui input[type="email"]:focus,
+.admin-ui input[type="number"]:focus,
+.admin-ui input[type="datetime-local"]:focus,
+.admin-ui input[type="password"]:focus,
+.admin-ui input[type="tel"]:focus,
+.admin-ui textarea:focus,
+.admin-ui select:focus {
+  border-color: #f97316;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.16);
+}
+
+.admin-ui table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.admin-ui table thead th {
+  background: #f8fafc;
+}
+
+.admin-ui table tr:last-child td {
+  border-bottom: 0;
 }

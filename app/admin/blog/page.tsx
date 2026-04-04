@@ -349,6 +349,12 @@ export default async function AdminBlogPage({ searchParams }: AdminBlogPageProps
               Produits
             </Link>
             <Link
+              href="/admin/customers"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Clients
+            </Link>
+            <Link
               href="/admin/offres"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
