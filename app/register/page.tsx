@@ -17,6 +17,104 @@ const resolveNextPath = (value: string | null): string => {
   return value;
 };
 
+type SupabaseAuthErrorLike = {
+  message?: string;
+  status?: number;
+  code?: string;
+  name?: string;
+};
+
+const toDebugError = (error: SupabaseAuthErrorLike | null) => {
+  if (!error) {
+    return null;
+  }
+
+  return {
+    message: error.message ?? null,
+    status: error.status ?? null,
+    code: error.code ?? null,
+    name: error.name ?? null,
+  };
+};
+
+const shouldDebugRegisterFlow = process.env.NODE_ENV !== "production";
+
+const logRegisterDebug = (step: string, details: Record<string, unknown>) => {
+  if (!shouldDebugRegisterFlow) {
+    return;
+  }
+
+  console.info(`[register] ${step}`, details);
+};
+
+const maskEmailForDebug = (email: string): string => {
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 1) {
+    return "***";
+  }
+
+  return `${email.slice(0, 2)}***${email.slice(atIndex)}`;
+};
+
+const mapSignUpErrorMessage = (error: SupabaseAuthErrorLike): string => {
+  const message = error.message?.toLowerCase() ?? "";
+
+  if (message.includes("already registered") || message.includes("already exists")) {
+    return "Cet email est deja utilise. Connectez-vous ou utilisez un autre email.";
+  }
+
+  if (message.includes("invalid email")) {
+    return "Adresse email invalide. Verifiez le format puis reessayez.";
+  }
+
+  if (
+    message.includes("password should be at least") ||
+    message.includes("weak password") ||
+    message.includes("password") && message.includes("invalid")
+  ) {
+    return "Mot de passe invalide ou trop faible. Utilisez au moins 6 caracteres.";
+  }
+
+  if (
+    message.includes("signup is disabled") ||
+    message.includes("signups not allowed")
+  ) {
+    return "Les inscriptions sont temporairement indisponibles. Merci de reessayer plus tard.";
+  }
+
+  if (message.includes("rate limit") || message.includes("too many requests")) {
+    return "Trop de tentatives d'inscription. Merci de patienter puis reessayer.";
+  }
+
+  if (error.message?.trim()) {
+    return `Inscription impossible: ${error.message.trim()}`;
+  }
+
+  return "Inscription impossible. Merci de verifier les informations.";
+};
+
+const mapAutoLoginErrorMessage = (error: SupabaseAuthErrorLike | null): string => {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  if (message.includes("email not confirmed")) {
+    return "Compte cree avec succes. Confirmez votre email, puis connectez-vous.";
+  }
+
+  if (message.includes("invalid login credentials")) {
+    return "Compte cree, mais la connexion automatique a echoue. Connectez-vous manuellement.";
+  }
+
+  if (message.includes("rate limit") || message.includes("too many requests")) {
+    return "Compte cree, mais trop de tentatives de connexion automatique. Connectez-vous dans quelques instants.";
+  }
+
+  if (error?.message?.trim()) {
+    return `Compte cree, mais connexion automatique impossible (${error.message.trim()}). Connectez-vous manuellement.`;
+  }
+
+  return "Compte cree, mais connexion automatique impossible. Connectez-vous pour continuer.";
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -62,6 +160,7 @@ export default function RegisterPage() {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    const normalizedEmail = email.trim();
 
     if (!supabase) {
       setErrorMessage("Supabase Auth n'est pas configure.");
@@ -71,39 +170,58 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
+      logRegisterDebug("signup:start", {
+        email: maskEmailForDebug(normalizedEmail),
+        nextPath,
+      });
+
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
       });
 
+      logRegisterDebug("signup:result", {
+        hasUser: Boolean(data.user),
+        hasSession: Boolean(data.session),
+        error: toDebugError(error),
+      });
+
       if (error) {
-        const message =
-          error.message?.includes("already registered")
-            ? "Cet email est deja utilise. Connectez-vous ou utilisez un autre email."
-            : "Inscription impossible. Merci de verifier les informations.";
-        setErrorMessage(message);
+        setErrorMessage(mapSignUpErrorMessage(error));
         return;
       }
 
       if (data.session) {
+        logRegisterDebug("redirect:after-signup-session", { nextPath });
         router.push(nextPath);
         router.refresh();
         return;
       }
 
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
       });
 
+      logRegisterDebug("autologin:result", {
+        hasSession: Boolean(loginData.session),
+        error: toDebugError(loginError),
+      });
+
       if (loginData.session && !loginError) {
+        logRegisterDebug("redirect:after-autologin", { nextPath });
         router.push(nextPath);
         router.refresh();
         return;
       }
 
-      setSuccessMessage(
-        "Compte cree. Verifiez votre boite email pour confirmer votre compte, puis connectez-vous.",
+      setSuccessMessage(mapAutoLoginErrorMessage(loginError));
+    } catch (error) {
+      logRegisterDebug("signup:exception", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setErrorMessage(
+        "Une erreur technique est survenue pendant l'inscription. Merci de reessayer.",
       );
     } finally {
       setIsSubmitting(false);
