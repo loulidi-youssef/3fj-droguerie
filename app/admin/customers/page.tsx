@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
 import {
@@ -6,11 +7,18 @@ import {
   hasValidAdminSession,
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
-import { getAdminCustomers } from "@/lib/admin-customers";
+import {
+  deleteAdminCustomerAccount,
+  getAdminCustomers,
+  setAdminCustomerSuspended,
+  type AdminCustomerAccountStatus,
+} from "@/lib/admin-customers";
 
 type AdminCustomersPageProps = {
   searchParams: {
     q?: string | string[];
+    success?: string | string[];
+    error?: string | string[];
   };
 };
 
@@ -40,10 +48,127 @@ const formatDateTime = (value: string | null): string => {
   }).format(date);
 };
 
+const orderStatusLabel = (status: string | null): string => {
+  if (status === "delivered") {
+    return "Livree";
+  }
+  if (status === "confirmed") {
+    return "Confirmee";
+  }
+  if (status === "cancelled") {
+    return "Annulee";
+  }
+  return "Nouvelle";
+};
+
+const orderStatusBadgeClassName = (status: string | null): string => {
+  if (status === "delivered") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "confirmed") {
+    return "bg-amber-100 text-amber-700";
+  }
+  if (status === "cancelled") {
+    return "bg-rose-100 text-rose-700";
+  }
+  return "bg-sky-100 text-sky-700";
+};
+
+const accountStatusLabel = (status: AdminCustomerAccountStatus): string => {
+  if (status === "active") {
+    return "Actif";
+  }
+  if (status === "suspended") {
+    return "Suspendu";
+  }
+  return "Invite";
+};
+
+const accountStatusBadgeClassName = (status: AdminCustomerAccountStatus): string => {
+  if (status === "active") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "suspended") {
+    return "bg-amber-100 text-amber-700";
+  }
+  return "bg-slate-200 text-slate-700";
+};
+
+const toWhatsappUrl = (rawPhone: string | null): string | null => {
+  if (!rawPhone) {
+    return null;
+  }
+
+  const digits = rawPhone.replace(/[^\d]/g, "");
+  if (!digits) {
+    return null;
+  }
+
+  return `https://wa.me/${digits}`;
+};
+
+const redirectWithSuccess = (message: string): never => {
+  redirect(`/admin/customers?success=${encodeURIComponent(message)}`);
+};
+
+const redirectWithError = (message: string): never => {
+  redirect(`/admin/customers?error=${encodeURIComponent(message)}`);
+};
+
 const logoutAdminAction = async () => {
   "use server";
   clearAdminSession();
   redirect("/admin/login");
+};
+
+const toggleCustomerSuspendedAction = async (formData: FormData) => {
+  "use server";
+
+  if (!hasValidAdminSession()) {
+    redirect("/admin/login");
+  }
+
+  const userIdRaw = formData.get("userId");
+  const nextSuspendedRaw = formData.get("nextSuspended");
+  const userId = typeof userIdRaw === "string" ? userIdRaw.trim() : "";
+  const nextSuspended = nextSuspendedRaw === "true";
+
+  if (!userId) {
+    redirectWithError("Client introuvable.");
+  }
+
+  const result = await setAdminCustomerSuspended(userId, nextSuspended);
+  if (!result.ok) {
+    redirectWithError(result.error ?? "Impossible de mettre a jour le compte.");
+  }
+
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${userId}`);
+  redirectWithSuccess(nextSuspended ? "Compte suspendu." : "Compte reactive.");
+};
+
+const deleteCustomerAccountAction = async (formData: FormData) => {
+  "use server";
+
+  if (!hasValidAdminSession()) {
+    redirect("/admin/login");
+  }
+
+  const userIdRaw = formData.get("userId");
+  const userId = typeof userIdRaw === "string" ? userIdRaw.trim() : "";
+
+  if (!userId) {
+    redirectWithError("Client introuvable.");
+  }
+
+  const result = await deleteAdminCustomerAccount(userId);
+  if (!result.ok) {
+    redirectWithError(result.error ?? "Suppression impossible.");
+  }
+
+  revalidatePath("/admin/customers");
+  revalidatePath("/admin/orders");
+  redirectWithSuccess("Compte client supprime.");
 };
 
 export default async function AdminCustomersPage({
@@ -72,6 +197,8 @@ export default async function AdminCustomersPage({
   const customers = await getAdminCustomers();
   const query = toSingleValue(searchParams.q).trim();
   const normalizedQuery = query.toLowerCase();
+  const successMessage = decodeURIComponent(toSingleValue(searchParams.success) || "");
+  const errorMessage = decodeURIComponent(toSingleValue(searchParams.error) || "");
 
   const filteredCustomers = normalizedQuery
     ? customers.filter((customer) => {
@@ -136,6 +263,18 @@ export default async function AdminCustomersPage({
           </div>
         </div>
 
+        {successMessage ? (
+          <p className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
+            {successMessage}
+          </p>
+        ) : null}
+
+        {errorMessage ? (
+          <p className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
+            {errorMessage}
+          </p>
+        ) : null}
+
         <form method="get" action="/admin/customers" className="mb-4 rounded-2xl bg-white p-4 shadow-card">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -183,36 +322,107 @@ export default async function AdminCustomersPage({
                     <th className="px-3 py-2">Email</th>
                     <th className="px-3 py-2">Telephone</th>
                     <th className="px-3 py-2">Creation compte</th>
+                    <th className="px-3 py-2">Statut compte</th>
                     <th className="px-3 py-2">Commandes</th>
                     <th className="px-3 py-2">Derniere commande</th>
+                    <th className="px-3 py-2">Statut commande</th>
                     <th className="px-3 py-2">Total</th>
-                    <th className="px-3 py-2">Action</th>
+                    <th className="px-3 py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCustomers.map((customer) => (
-                    <tr key={customer.id} className="border-b border-slate-100 text-slate-700">
-                      <td className="px-3 py-2 font-semibold text-brand-blue">{customer.displayName}</td>
-                      <td className="px-3 py-2">{customer.email ?? "-"}</td>
-                      <td className="px-3 py-2">{customer.phone ?? "-"}</td>
-                      <td className="px-3 py-2">{formatDateTime(customer.accountCreatedAt)}</td>
-                      <td className="px-3 py-2">{customer.orderCount}</td>
-                      <td className="px-3 py-2">{formatDateTime(customer.lastOrderAt)}</td>
-                      <td className="px-3 py-2 font-semibold">{formatDh(customer.totalSpent)}</td>
-                      <td className="px-3 py-2">
-                        {customer.userId ? (
-                          <Link
-                            href={`/admin/customers/${customer.userId}`}
-                            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                  {filteredCustomers.map((customer) => {
+                    const whatsappLink = toWhatsappUrl(customer.phone);
+
+                    return (
+                      <tr key={customer.id} className="border-b border-slate-100 text-slate-700">
+                        <td className="px-3 py-2 font-semibold text-brand-blue">{customer.displayName}</td>
+                        <td className="px-3 py-2">{customer.email ?? "-"}</td>
+                        <td className="px-3 py-2">{customer.phone ?? "-"}</td>
+                        <td className="px-3 py-2">{formatDateTime(customer.accountCreatedAt)}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${accountStatusBadgeClassName(customer.accountStatus)}`}
                           >
-                            Voir details
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-slate-400">Invité</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            {accountStatusLabel(customer.accountStatus)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{customer.orderCount}</td>
+                        <td className="px-3 py-2">{formatDateTime(customer.lastOrderAt)}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${orderStatusBadgeClassName(customer.latestOrderStatus)}`}
+                          >
+                            {orderStatusLabel(customer.latestOrderStatus)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-semibold">{formatDh(customer.totalSpent)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {customer.userId ? (
+                              <>
+                                <Link
+                                  href={`/admin/customers/${customer.userId}`}
+                                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                                >
+                                  Details
+                                </Link>
+
+                                {customer.email ? (
+                                  <Link
+                                    href={`/mot-de-passe-oublie?email=${encodeURIComponent(customer.email)}`}
+                                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Reset mdp
+                                  </Link>
+                                ) : null}
+
+                                <form action={toggleCustomerSuspendedAction}>
+                                  <input type="hidden" name="userId" value={customer.userId} />
+                                  <input
+                                    type="hidden"
+                                    name="nextSuspended"
+                                    value={customer.accountStatus === "suspended" ? "false" : "true"}
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                                  >
+                                    {customer.accountStatus === "suspended" ? "Reactiver" : "Suspendre"}
+                                  </button>
+                                </form>
+
+                                <form action={deleteCustomerAccountAction}>
+                                  <input type="hidden" name="userId" value={customer.userId} />
+                                  <button
+                                    type="submit"
+                                    className="rounded-lg border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:border-rose-400"
+                                  >
+                                    Supprimer
+                                  </button>
+                                </form>
+                              </>
+                            ) : (
+                              <span className="text-xs text-slate-400">Invite</span>
+                            )}
+
+                            {whatsappLink ? (
+                              <Link
+                                href={whatsappLink}
+                                className="rounded-lg border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-400"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                WhatsApp
+                              </Link>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

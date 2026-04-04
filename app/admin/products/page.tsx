@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { categories, getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
 import {
   clearAdminSession,
@@ -19,6 +20,7 @@ type AdminProductsPageProps = {
   searchParams: {
     success?: string | string[];
     error?: string | string[];
+    category?: string | string[];
   };
 };
 
@@ -74,6 +76,19 @@ const parseImages = (rawImages: string): string[] => {
     .split(/\r?\n|,/g)
     .map((value) => value.trim())
     .filter(Boolean);
+};
+
+const formatCategoryLabel = (categorySlug: string): string => {
+  const fromCatalog = getCategoryNameBySlug(categorySlug);
+  if (fromCatalog !== "Categorie") {
+    return fromCatalog;
+  }
+
+  return categorySlug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 const parseProductForm = (formData: FormData): ParsedProductForm => {
@@ -299,6 +314,36 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
 
   const successMessage = decodeURIComponent(toSingleValue(searchParams.success) || "");
   const errorMessage = decodeURIComponent(toSingleValue(searchParams.error) || "");
+  const selectedCategory = toSingleValue(searchParams.category).trim().toLowerCase();
+
+  const categoryCountMap = new Map<string, number>();
+  for (const product of products) {
+    const slug = product.category_slug.trim().toLowerCase();
+    categoryCountMap.set(slug, (categoryCountMap.get(slug) ?? 0) + 1);
+  }
+
+  const categoryOptions = [...new Set([...categories.map((category) => category.slug), ...categoryCountMap.keys()])];
+
+  const sortedCategoryEntries = [...categoryCountMap.entries()].sort((first, second) => {
+    const firstLabel = formatCategoryLabel(first[0]);
+    const secondLabel = formatCategoryLabel(second[0]);
+    return firstLabel.localeCompare(secondLabel, "fr");
+  });
+
+  const filteredProducts = selectedCategory
+    ? products.filter((product) => product.category_slug.trim().toLowerCase() === selectedCategory)
+    : products;
+
+  const groupedProductsMap = new Map<string, typeof filteredProducts>();
+  for (const product of filteredProducts) {
+    const categorySlug = product.category_slug.trim().toLowerCase();
+    const existing = groupedProductsMap.get(categorySlug) ?? [];
+    groupedProductsMap.set(categorySlug, [...existing, product]);
+  }
+
+  const groupedProducts = [...groupedProductsMap.entries()]
+    .sort((first, second) => formatCategoryLabel(first[0]).localeCompare(formatCategoryLabel(second[0]), "fr"))
+    .map(([categorySlug, categoryProducts]) => ({ categorySlug, products: categoryProducts }));
 
   return (
     <section className="bg-brand-light py-12">
@@ -365,6 +410,54 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
           </p>
         ) : null}
 
+        <div className="mb-6 rounded-2xl bg-white p-4 shadow-card">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Organisation par categorie
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/products"
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                !selectedCategory
+                  ? "border-brand-blue bg-brand-blue text-white"
+                  : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+            >
+              Toutes ({products.length})
+            </Link>
+            {sortedCategoryEntries.map(([categorySlug, total]) => (
+              <Link
+                key={categorySlug}
+                href={`/admin/products?category=${encodeURIComponent(categorySlug)}`}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  selectedCategory === categorySlug
+                    ? "border-brand-blue bg-brand-blue text-white"
+                    : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+                }`}
+              >
+                {formatCategoryLabel(categorySlug)} ({total})
+              </Link>
+            ))}
+          </div>
+          {selectedCategory ? (
+            <p className="mt-2 text-xs text-slate-600">
+              Filtre actif: <span className="font-semibold">{formatCategoryLabel(selectedCategory)}</span>
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-600">
+              Astuce: choisissez une categorie pour modifier les produits plus vite.
+            </p>
+          )}
+        </div>
+
+        <datalist id="admin-category-options">
+          {categoryOptions.map((categorySlug) => (
+            <option key={categorySlug} value={categorySlug}>
+              {formatCategoryLabel(categorySlug)}
+            </option>
+          ))}
+        </datalist>
+
         <details className="mb-6 rounded-2xl bg-white p-5 shadow-card" open>
           <summary className="cursor-pointer list-none text-lg font-bold text-brand-blue">
             Ajouter un produit
@@ -424,16 +517,18 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
               />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Category slug
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Categorie</span>
               <input
                 type="text"
                 name="categorySlug"
                 required
                 placeholder="ex: outillage"
+                list="admin-category-options"
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
+              <span className="mt-1 block text-xs text-slate-500">
+                Choisissez une categorie existante ou saisissez un nouveau slug.
+              </span>
             </label>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -494,9 +589,29 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
             <p className="text-sm text-slate-600">Aucun produit dans Supabase.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {products.map((product) => (
-              <details key={product.id} className="rounded-2xl bg-white p-5 shadow-card">
+          <div className="space-y-6">
+            {filteredProducts.length === 0 ? (
+              <div className="rounded-2xl bg-white p-6 shadow-card">
+                <p className="text-sm text-slate-600">
+                  Aucun produit dans la categorie {formatCategoryLabel(selectedCategory)}.
+                </p>
+              </div>
+            ) : null}
+
+            {groupedProducts.map((group) => (
+              <section key={group.categorySlug} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+                <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                  <h2 className="text-base font-bold text-brand-blue">
+                    {formatCategoryLabel(group.categorySlug)}
+                  </h2>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    {group.products.length} produit(s)
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {group.products.map((product) => (
+                    <details key={product.id} className="rounded-2xl bg-white p-5 shadow-card">
                 <summary className="cursor-pointer list-none">
                   <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                     <div>
@@ -511,7 +626,8 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Categorie</p>
-                      <p className="text-sm text-slate-700">{product.category_slug}</p>
+                      <p className="text-sm text-slate-700">{formatCategoryLabel(product.category_slug)}</p>
+                      <p className="text-xs text-slate-500">Slug: {product.category_slug}</p>
                       <p className="text-xs text-slate-600">Note: {product.rating}</p>
                     </div>
                     <div>
@@ -592,16 +708,18 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                       />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Category slug
-                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Categorie</span>
                       <input
                         type="text"
                         name="categorySlug"
                         required
                         defaultValue={product.category_slug}
+                        list="admin-category-options"
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />
+                      <span className="mt-1 block text-xs text-slate-500">
+                        Utilisez une categorie existante ou un nouveau slug.
+                      </span>
                     </label>
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -688,7 +806,10 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                     </form>
                   </div>
                 </div>
-              </details>
+                    </details>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
