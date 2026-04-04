@@ -1,0 +1,1 @@
+export const formatDh = (value: number): string => `${value.toFixed(0)} DH`;

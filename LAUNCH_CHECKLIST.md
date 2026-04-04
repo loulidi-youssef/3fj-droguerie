@@ -1,0 +1,67 @@
+# 3FJ Droguerie - Launch Checklist
+
+Use this checklist before going live.
+
+## 1. Environment variables (Production)
+Set these values in your hosting platform (for example Vercel):
+
+```env
+NEXT_PUBLIC_SITE_URL=https://3fj-droguerie.ma
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+ADMIN_ACCESS_PASSWORD=...
+```
+
+Rules:
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
+- Use a strong `ADMIN_ACCESS_PASSWORD` (long and unique).
+
+## 2. Supabase production checks
+1. Run latest SQL schema/migrations.
+2. Confirm tables exist: `products`, `offers`, `orders`, `order_items`, `blog_posts`, `reviews`.
+3. Confirm RLS is enabled on all public tables.
+4. Confirm public read policies exist only for active/published content.
+5. Verify `orders` and `order_items` inserts work from `/panier`.
+
+## 3. Build and deploy
+1. Run local checks:
+   - `npm run typecheck`
+   - `npm run build`
+2. Deploy production build.
+3. Attach your real domain (`3fj-droguerie.ma`).
+
+## 4. Post-deploy smoke test
+1. Visit main pages:
+   - `/`
+   - `/produits`
+   - `/offres`
+   - `/blog`
+   - `/contact`
+2. Test cart flow:
+   - Add product
+   - Go to `/panier`
+   - Confirm order
+   - Verify WhatsApp opens
+3. Verify order saved in Supabase (`orders` + `order_items`).
+4. Test admin:
+   - `/admin/login`
+   - `/admin/orders`
+   - `/admin/products`
+   - `/admin/offres`
+   - `/admin/blog`
+   - `/admin/reviews`
+5. Check SEO files:
+   - `/robots.txt`
+   - `/sitemap.xml`
+
+## 5. Launch day operations
+1. Keep one person monitoring admin orders continuously.
+2. Keep one person monitoring WhatsApp response time.
+3. Save daily Supabase backup/export for the first week.
+4. Track failed orders and customer phone issues.
+
+## 6. Nice-to-have right after launch
+1. Connect analytics (GA4 or Plausible).
+2. Add uptime monitoring for homepage and `/api/orders`.
+3. Add alerting on Supabase errors.

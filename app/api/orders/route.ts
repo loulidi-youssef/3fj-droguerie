@@ -1,0 +1,340 @@
+import { NextRequest, NextResponse } from "next/server";
+import { validateCheckoutCustomer } from "@/lib/checkout-validation";
+import { getDeliveryCost } from "@/lib/delivery";
+import { getProductsByIds } from "@/lib/products";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+
+type IncomingOrderItem = {
+  productId?: string;
+  quantity?: number;
+};
+
+type IncomingOrderBody = {
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    location?: string;
+  };
+  items?: IncomingOrderItem[];
+};
+
+type OrderErrorResponse = {
+  error: string;
+  fieldErrors?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    location?: string;
+  };
+};
+
+type NormalizedOrderItem = {
+  productId: string;
+  quantity: number;
+};
+
+type ParseOrderItemsResult =
+  | {
+      ok: true;
+      items: NormalizedOrderItem[];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type RateLimitResult = {
+  allowed: boolean;
+  retryAfterSeconds: number;
+};
+
+const MAX_ORDER_REQUEST_BYTES = 20_000;
+const MAX_DISTINCT_ITEMS_PER_ORDER = 30;
+const MAX_QUANTITY_PER_PRODUCT = 20;
+const MAX_TOTAL_UNITS_PER_ORDER = 200;
+const ORDER_RATE_LIMIT_WINDOW_MS = 60_000;
+const ORDER_RATE_LIMIT_MAX_REQUESTS = 12;
+const RATE_LIMIT_SWEEP_SIZE = 2_000;
+
+const orderRateLimitStore = new Map<string, { count: number; expiresAt: number }>();
+
+const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
+  const quantityByProductId = new Map<string, number>();
+
+  for (const item of items) {
+    const productId = item.productId?.trim() ?? "";
+    if (!productId) {
+      continue;
+    }
+
+    const quantity = Number(item.quantity ?? 0);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return { ok: false, error: "Quantite invalide. Merci de corriger votre panier." };
+    }
+
+    const currentQuantity = quantityByProductId.get(productId) ?? 0;
+    const nextQuantity = currentQuantity + quantity;
+
+    if (nextQuantity > MAX_QUANTITY_PER_PRODUCT) {
+      return {
+        ok: false,
+        error: `La quantite maximale par produit est ${MAX_QUANTITY_PER_PRODUCT}.`,
+      };
+    }
+
+    quantityByProductId.set(productId, nextQuantity);
+
+    if (quantityByProductId.size > MAX_DISTINCT_ITEMS_PER_ORDER) {
+      return {
+        ok: false,
+        error: `Maximum ${MAX_DISTINCT_ITEMS_PER_ORDER} produits differents par commande.`,
+      };
+    }
+  }
+
+  if (quantityByProductId.size === 0) {
+    return { ok: false, error: "Votre panier est vide. Ajoutez au moins un produit." };
+  }
+
+  const normalizedItems = Array.from(
+    quantityByProductId,
+    ([productId, quantity]): NormalizedOrderItem => ({
+      productId,
+      quantity,
+    }),
+  );
+
+  const totalUnits = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
+  if (totalUnits > MAX_TOTAL_UNITS_PER_ORDER) {
+    return {
+      ok: false,
+      error: `Quantite totale trop elevee (maximum ${MAX_TOTAL_UNITS_PER_ORDER} unites).`,
+    };
+  }
+
+  return { ok: true, items: normalizedItems };
+};
+
+const getRateLimitKey = (request: NextRequest): string => {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const firstIp = forwardedFor.split(",")[0]?.trim();
+    if (firstIp) {
+      return firstIp;
+    }
+  }
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) {
+    return realIp;
+  }
+
+  const forwarded = request.headers.get("forwarded");
+  if (forwarded) {
+    const match = forwarded.match(/for="?([^;,"]+)"?/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  const userAgent = request.headers.get("user-agent")?.trim() || "unknown-agent";
+  return `ua:${userAgent.slice(0, 120)}`;
+};
+
+const consumeRateLimit = (key: string): RateLimitResult => {
+  const now = Date.now();
+
+  if (orderRateLimitStore.size > RATE_LIMIT_SWEEP_SIZE) {
+    for (const [candidateKey, value] of orderRateLimitStore.entries()) {
+      if (value.expiresAt <= now) {
+        orderRateLimitStore.delete(candidateKey);
+      }
+    }
+  }
+
+  const currentEntry = orderRateLimitStore.get(key);
+
+  if (!currentEntry || currentEntry.expiresAt <= now) {
+    orderRateLimitStore.set(key, {
+      count: 1,
+      expiresAt: now + ORDER_RATE_LIMIT_WINDOW_MS,
+    });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  currentEntry.count += 1;
+
+  if (currentEntry.count > ORDER_RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((currentEntry.expiresAt - now) / 1000)),
+    };
+  }
+
+  return { allowed: true, retryAfterSeconds: 0 };
+};
+
+export async function POST(request: NextRequest) {
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_ORDER_REQUEST_BYTES) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Requete trop volumineuse. Merci de reessayer avec un panier plus simple." },
+      { status: 413 },
+    );
+  }
+
+  const rateLimitResult = consumeRateLimit(getRateLimitKey(request));
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Trop de tentatives. Merci de patienter quelques secondes." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimitResult.retryAfterSeconds),
+        },
+      },
+    );
+  }
+
+  let body: IncomingOrderBody;
+
+  try {
+    body = (await request.json()) as IncomingOrderBody;
+  } catch {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Donnees invalides. Merci de reessayer." },
+      { status: 400 },
+    );
+  }
+
+  const customerValidation = validateCheckoutCustomer({
+    name: body.customer?.name ?? "",
+    phone: body.customer?.phone ?? "",
+    address: body.customer?.address ?? "",
+    location: body.customer?.location ?? "",
+  });
+
+  if (!customerValidation.isValid) {
+    const firstError =
+      customerValidation.errors.name ||
+      customerValidation.errors.phone ||
+      customerValidation.errors.address ||
+      customerValidation.errors.location ||
+      "Merci de corriger les champs du formulaire.";
+
+    return NextResponse.json<OrderErrorResponse>(
+      {
+        error: firstError,
+        fieldErrors: customerValidation.errors,
+      },
+      { status: 400 },
+    );
+  }
+
+  const { name, phone, address, location } = customerValidation.customer;
+
+  const items = Array.isArray(body.items) ? body.items : [];
+  const parsedItems = parseOrderItems(items);
+  if (!parsedItems.ok) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: parsedItems.error },
+      { status: 400 },
+    );
+  }
+
+  const normalizedItems = parsedItems.items;
+
+  const productIds = normalizedItems.map((item) => item.productId);
+  const products = await getProductsByIds(productIds);
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  const missingProductIds = productIds.filter((productId) => !productById.has(productId));
+  if (missingProductIds.length > 0) {
+    return NextResponse.json<OrderErrorResponse>(
+      {
+        error:
+          "Certains produits du panier ne sont plus disponibles. Merci d'actualiser le panier.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const lineItems = normalizedItems.map((item) => {
+    const product = productById.get(item.productId)!;
+    const lineTotal = product.price * item.quantity;
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      quantity: item.quantity,
+      unitPrice: product.price,
+      lineTotal,
+    };
+  });
+
+  const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const deliveryFee = getDeliveryCost(subtotal);
+  const total = subtotal + deliveryFee;
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return NextResponse.json<OrderErrorResponse>(
+      {
+        error:
+          "Supabase n'est pas configure pour l'ecriture. Ajoutez SUPABASE_SERVICE_ROLE_KEY.",
+      },
+      { status: 500 },
+    );
+  }
+
+  const { data: insertedOrder, error: orderError } = await supabaseAdmin
+    .from("orders")
+    .insert({
+      customer_name: name,
+      customer_phone: phone,
+      customer_address: address,
+      customer_location: location,
+      subtotal,
+      delivery_fee: deliveryFee,
+      total,
+    })
+    .select("id")
+    .single();
+
+  if (orderError || !insertedOrder) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Impossible d'enregistrer la commande pour le moment." },
+      { status: 500 },
+    );
+  }
+
+  const orderItemsPayload = lineItems.map((item) => ({
+    order_id: insertedOrder.id,
+    product_id: item.productId,
+    product_name: item.productName,
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+    line_total: item.lineTotal,
+  }));
+
+  const { error: orderItemsError } = await supabaseAdmin
+    .from("order_items")
+    .insert(orderItemsPayload);
+
+  if (orderItemsError) {
+    await supabaseAdmin.from("orders").delete().eq("id", insertedOrder.id);
+
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "La commande n'a pas pu etre finalisee. Merci de reessayer." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    orderId: insertedOrder.id,
+    subtotal,
+    deliveryFee,
+    total,
+  });
+}
