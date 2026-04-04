@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
 import { categories, getCategoryNameBySlug } from "@/data/categories";
+import { uploadAdminProductImages } from "@/lib/admin-product-images";
 import { formatDh } from "@/lib/currency";
 import {
   clearAdminSession,
@@ -97,7 +99,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const rawShortDescription = formData.get("shortDescription");
   const rawDescription = formData.get("description");
   const rawCategorySlug = formData.get("categorySlug");
-  const rawImages = formData.get("images");
+  const rawExistingImages = formData.get("existingImages");
 
   const slug = typeof rawSlug === "string" ? normalizeSlug(rawSlug) : "";
   const name = typeof rawName === "string" ? rawName.trim() : "";
@@ -107,7 +109,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
     typeof rawDescription === "string" ? rawDescription.trim() : "";
   const categorySlug =
     typeof rawCategorySlug === "string" ? rawCategorySlug.trim() : "";
-  const images = typeof rawImages === "string" ? parseImages(rawImages) : [];
+  const images = typeof rawExistingImages === "string" ? parseImages(rawExistingImages) : [];
 
   const price = toNumber(formData.get("price"));
   const stock = toNumber(formData.get("stock"));
@@ -140,10 +142,6 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
     return { ok: false, error: "La note doit etre entre 0 et 5." };
   }
 
-  if (images.length === 0) {
-    return { ok: false, error: "Ajoutez au moins un chemin d'image." };
-  }
-
   return {
     ok: true,
     value: {
@@ -169,13 +167,39 @@ const redirectWithError = (message: string): never => {
   redirect(`/admin/products?error=${encodeURIComponent(message)}`);
 };
 
-const getValidatedProductInput = (formData: FormData): ProductFormValue => {
+const getUploadedImageFiles = (formData: FormData): File[] => {
+  return formData
+    .getAll("imageFiles")
+    .filter((value): value is File => value instanceof File && value.size > 0);
+};
+
+const mergeImagePaths = (uploadedPaths: string[], existingPaths: string[]): string[] => {
+  return [...new Set([...uploadedPaths, ...existingPaths])];
+};
+
+const getValidatedProductInput = async (formData: FormData): Promise<ProductFormValue> => {
   const parsed = parseProductForm(formData);
-  if (parsed.ok) {
-    return parsed.value;
+  if (!parsed.ok) {
+    return redirectWithError(parsed.error);
   }
 
-  return redirectWithError(parsed.error);
+  const uploadedFiles = getUploadedImageFiles(formData);
+  const uploaded = await uploadAdminProductImages(parsed.value.slug, uploadedFiles);
+  if (!uploaded.ok) {
+    return redirectWithError(uploaded.error);
+  }
+
+  const images = mergeImagePaths(uploaded.paths, parsed.value.images);
+  if (images.length === 0) {
+    return redirectWithError(
+      "Ajoutez au moins une image via telechargement ou chemin existant.",
+    );
+  }
+
+  return {
+    ...parsed.value,
+    images,
+  };
 };
 
 const logoutAdminAction = async () => {
@@ -191,7 +215,7 @@ const createProductAction = async (formData: FormData) => {
     redirect("/admin/login");
   }
 
-  const validInput = getValidatedProductInput(formData);
+  const validInput = await getValidatedProductInput(formData);
   const created = await createAdminProduct(validInput);
   if (!created.ok) {
     redirectWithError(created.error ?? "Impossible d'ajouter le produit.");
@@ -218,7 +242,7 @@ const updateProductAction = async (formData: FormData) => {
     redirectWithError("Produit introuvable.");
   }
 
-  const validInput = getValidatedProductInput(formData);
+  const validInput = await getValidatedProductInput(formData);
   const updated = await updateAdminProduct(productId, validInput);
   if (!updated.ok) {
     redirectWithError(updated.error ?? "Impossible de modifier le produit.");
@@ -463,7 +487,11 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
             Ajouter un produit
           </summary>
 
-          <form action={createProductAction} className="mt-4 grid gap-3 md:grid-cols-2">
+          <form
+            action={createProductAction}
+            encType="multipart/form-data"
+            className="mt-4 grid gap-3 md:grid-cols-2"
+          >
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Nom</span>
               <input
@@ -557,14 +585,14 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
+            <AdminProductImageUploadInput inputName="imageFiles" idPrefix="create-product" />
             <label className="block md:col-span-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Chemins images (1 par ligne ou separes par virgule)
+                Chemins images existants (optionnel)
               </span>
               <textarea
-                name="images"
+                name="existingImages"
                 rows={3}
-                required
                 placeholder="/images/products/mon-produit.jpg"
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
@@ -648,7 +676,11 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 <div className="mt-4 border-t border-slate-200 pt-4">
                   <p className="text-xs text-slate-500">ID: {product.id}</p>
 
-                  <form action={updateProductAction} className="mt-3 grid gap-3 md:grid-cols-2">
+                  <form
+                    action={updateProductAction}
+                    encType="multipart/form-data"
+                    className="mt-3 grid gap-3 md:grid-cols-2"
+                  >
                     <input type="hidden" name="productId" value={product.id} />
 
                     <label className="block">
@@ -748,14 +780,17 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />
                     </label>
+                    <AdminProductImageUploadInput
+                      inputName="imageFiles"
+                      idPrefix={`edit-product-${product.id}`}
+                    />
                     <label className="block md:col-span-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Chemins images (1 par ligne ou separes par virgule)
+                        Chemins images existants (optionnel)
                       </span>
                       <textarea
-                        name="images"
+                        name="existingImages"
                         rows={3}
-                        required
                         defaultValue={product.images.join("\n")}
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />

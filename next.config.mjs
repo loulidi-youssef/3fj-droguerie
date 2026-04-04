@@ -1,7 +1,23 @@
 /** @type {import('next').NextConfig} */
+const storageRemotePatterns = [];
+
+if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  try {
+    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    storageRemotePatterns.push({
+      protocol: supabaseUrl.protocol.replace(":", ""),
+      hostname: supabaseUrl.hostname,
+      pathname: "/storage/v1/object/public/**",
+    });
+  } catch {
+    // Ignore invalid URL and keep default config.
+  }
+}
+
 const nextConfig = {
   images: {
     unoptimized: true,
+    remotePatterns: storageRemotePatterns,
   },
   async headers() {
     return [
