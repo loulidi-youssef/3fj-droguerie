@@ -367,6 +367,7 @@ const createProductAction = async (formData: FormData) => {
 
   revalidatePath("/admin/products");
   revalidatePath("/produits");
+  revalidatePath(`/produits/${validInput.slug}`);
   revalidatePath("/offres");
   revalidatePath("/");
   redirectWithSuccess("Produit ajouté avec succès.");
@@ -380,7 +381,10 @@ const updateProductAction = async (formData: FormData) => {
   }
 
   const productIdRaw = formData.get("productId");
+  const previousSlugRaw = formData.get("previousSlug");
   const productId = typeof productIdRaw === "string" ? productIdRaw.trim() : "";
+  const previousSlug =
+    typeof previousSlugRaw === "string" ? previousSlugRaw.trim() : "";
 
   if (!productId) {
     redirectWithError("Produit introuvable.");
@@ -394,6 +398,10 @@ const updateProductAction = async (formData: FormData) => {
 
   revalidatePath("/admin/products");
   revalidatePath("/produits");
+  if (previousSlug) {
+    revalidatePath(`/produits/${previousSlug}`);
+  }
+  revalidatePath(`/produits/${validInput.slug}`);
   revalidatePath("/offres");
   revalidatePath("/");
   redirectWithSuccess("Produit mis à jour avec succès.");
@@ -436,7 +444,9 @@ const deleteProductAction = async (formData: FormData) => {
   }
 
   const productIdRaw = formData.get("productId");
+  const productSlugRaw = formData.get("productSlug");
   const productId = typeof productIdRaw === "string" ? productIdRaw.trim() : "";
+  const productSlug = typeof productSlugRaw === "string" ? productSlugRaw.trim() : "";
 
   if (!productId) {
     redirectWithError("Produit introuvable.");
@@ -452,6 +462,9 @@ const deleteProductAction = async (formData: FormData) => {
 
   revalidatePath("/admin/products");
   revalidatePath("/produits");
+  if (productSlug) {
+    revalidatePath(`/produits/${productSlug}`);
+  }
   revalidatePath("/offres");
   revalidatePath("/");
   redirectWithSuccess("Produit supprime.");
@@ -840,6 +853,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                     className="mt-3 grid gap-3 md:grid-cols-2"
                   >
                     <input type="hidden" name="productId" value={product.id} />
+                    <input type="hidden" name="previousSlug" value={product.slug} />
 
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Nom</span>
@@ -1005,6 +1019,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
 
                     <form action={deleteProductAction}>
                       <input type="hidden" name="productId" value={product.id} />
+                      <input type="hidden" name="productSlug" value={product.slug} />
                       <button
                         type="submit"
                         className="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700"
