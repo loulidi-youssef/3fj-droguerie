@@ -4,7 +4,10 @@ import {
   isOrderCancellable,
 } from "@/lib/order-cancellation";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedCustomerFromRequest } from "@/lib/supabase/auth-user";
+import {
+  RequestAuthError,
+  getAuthenticatedCustomerFromRequest,
+} from "@/lib/supabase/auth-user";
 
 type ApiOrderItem = {
   id: number;
@@ -27,7 +30,18 @@ type ApiOrderRow = {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  let authenticatedCustomer: { id: string; email: string | null } | null;
+  try {
+    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  } catch (error) {
+    if (error instanceof RequestAuthError) {
+      return NextResponse.json(
+        { error: "Session invalide. Merci de vous reconnecter." },
+        { status: 401 },
+      );
+    }
+    throw error;
+  }
 
   if (!authenticatedCustomer) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });

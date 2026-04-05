@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedCustomerFromRequest } from "@/lib/supabase/auth-user";
+import {
+  RequestAuthError,
+  getAuthenticatedCustomerFromRequest,
+} from "@/lib/supabase/auth-user";
 
 type RouteContext = {
   params: {
@@ -42,7 +45,18 @@ const mapFavoriteDatabaseError = (
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
-  const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  let authenticatedCustomer: { id: string; email: string | null } | null;
+  try {
+    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  } catch (error) {
+    if (error instanceof RequestAuthError) {
+      return NextResponse.json(
+        { error: "Session invalide. Merci de vous reconnecter." },
+        { status: 401 },
+      );
+    }
+    throw error;
+  }
 
   if (!authenticatedCustomer) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
@@ -112,7 +126,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
-  const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  let authenticatedCustomer: { id: string; email: string | null } | null;
+  try {
+    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  } catch (error) {
+    if (error instanceof RequestAuthError) {
+      return NextResponse.json(
+        { error: "Session invalide. Merci de vous reconnecter." },
+        { status: 401 },
+      );
+    }
+    throw error;
+  }
 
   if (!authenticatedCustomer) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });

@@ -147,6 +147,10 @@ begin
     raise exception 'INVALID_ORDER_TOTALS';
   end if;
 
+  if p_user_id is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
   for v_item in
     select *
     from jsonb_to_recordset(p_items) as item(

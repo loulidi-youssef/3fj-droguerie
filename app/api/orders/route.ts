@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getProductsByIds } from "@/lib/products";
-import { getAuthenticatedCustomerFromRequest } from "@/lib/supabase/auth-user";
+import {
+  RequestAuthError,
+  getAuthenticatedCustomerFromRequestStrict,
+} from "@/lib/supabase/auth-user";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type IncomingOrderItem = {
@@ -211,6 +214,25 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let authenticatedCustomer: { id: string; email: string | null };
+  try {
+    authenticatedCustomer = await getAuthenticatedCustomerFromRequestStrict(request);
+  } catch (error) {
+    const errorCode =
+      error instanceof RequestAuthError ? error.code : "unknown_auth_error";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    console.warn("[api/orders] Auth validation failed.", {
+      code: errorCode,
+      message: errorMessage,
+    });
+
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Connexion requise ou session invalide. Merci de vous reconnecter." },
+      { status: 401 },
+    );
+  }
+
   let body: IncomingOrderBody;
 
   try {
@@ -361,7 +383,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+  const orderUserId = authenticatedCustomer.id?.trim();
+  if (!orderUserId) {
+    console.error("[api/orders] Missing authenticated user id before order creation.");
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Impossible de lier la commande a votre compte. Merci de vous reconnecter." },
+      { status: 401 },
+    );
+  }
 
   const orderItemsPayload = lineItems.map((item) => ({
     product_id: item.productId,
@@ -384,13 +413,21 @@ export async function POST(request: NextRequest) {
       p_subtotal: subtotal,
       p_delivery_fee: deliveryFee,
       p_total: total,
-      p_user_id: authenticatedCustomer?.id ?? null,
+      p_user_id: orderUserId,
       p_items: orderItemsPayload,
     },
   );
 
   if (createOrderError || !createdOrderId) {
     const normalizedMessage = (createOrderError?.message ?? "").toUpperCase();
+    if (normalizedMessage.includes("AUTH_REQUIRED")) {
+      console.error("[api/orders] Database rejected order without linked user_id.");
+      return NextResponse.json<OrderErrorResponse>(
+        { error: "Connexion requise pour confirmer votre commande." },
+        { status: 401 },
+      );
+    }
+
     if (
       normalizedMessage.includes("INSUFFICIENT_STOCK") ||
       normalizedMessage.includes("INSUFFICIENT_VARIANT_STOCK")
