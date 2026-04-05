@@ -22,6 +22,7 @@ type IncomingOrderBody = {
     location?: string;
   };
   items?: IncomingOrderItem[];
+  fulfillmentMethod?: string;
 };
 
 type OrderErrorResponse = {
@@ -55,6 +56,8 @@ type RateLimitResult = {
   retryAfterSeconds: number;
 };
 
+type FulfillmentMethod = "delivery" | "pickup";
+
 const MAX_ORDER_REQUEST_BYTES = 20_000;
 const MAX_DISTINCT_ITEMS_PER_ORDER = 30;
 const MAX_QUANTITY_PER_PRODUCT = 20;
@@ -64,6 +67,19 @@ const ORDER_RATE_LIMIT_MAX_REQUESTS = 12;
 const RATE_LIMIT_SWEEP_SIZE = 2_000;
 
 const orderRateLimitStore = new Map<string, { count: number; expiresAt: number }>();
+
+const normalizeFulfillmentMethod = (value: unknown): FulfillmentMethod | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "delivery" || normalized === "pickup") {
+    return normalized;
+  }
+
+  return null;
+};
 
 const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
   const quantityByCompositeKey = new Map<string, NormalizedOrderItem>();
@@ -244,11 +260,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const fulfillmentMethod = normalizeFulfillmentMethod(body.fulfillmentMethod);
+  if (!fulfillmentMethod) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Choisissez un mode de reception valide (livraison ou retrait)." },
+      { status: 400 },
+    );
+  }
+
   const customerValidation = validateCheckoutCustomer({
     name: body.customer?.name ?? "",
     phone: body.customer?.phone ?? "",
     address: body.customer?.address ?? "",
     location: body.customer?.location ?? "",
+  }, {
+    requireAddress: fulfillmentMethod === "delivery",
   });
 
   if (!customerValidation.isValid) {
@@ -269,6 +295,8 @@ export async function POST(request: NextRequest) {
   }
 
   const { name, phone, address, location } = customerValidation.customer;
+  const orderAddress =
+    fulfillmentMethod === "pickup" ? "Retrait en magasin" : address;
 
   const items = Array.isArray(body.items) ? body.items : [];
   const parsedItems = parseOrderItems(items);
@@ -369,7 +397,7 @@ export async function POST(request: NextRequest) {
   }
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
-  const deliveryFee = getDeliveryCost(subtotal);
+  const deliveryFee = fulfillmentMethod === "pickup" ? 0 : getDeliveryCost(subtotal);
   const total = subtotal + deliveryFee;
 
   const supabaseAdmin = getSupabaseAdminClient();
@@ -408,12 +436,13 @@ export async function POST(request: NextRequest) {
     {
       p_customer_name: name,
       p_customer_phone: phone,
-      p_customer_address: address,
+      p_customer_address: orderAddress,
       p_customer_location: location,
       p_subtotal: subtotal,
       p_delivery_fee: deliveryFee,
       p_total: total,
       p_user_id: orderUserId,
+      p_fulfillment_method: fulfillmentMethod,
       p_items: orderItemsPayload,
     },
   );
@@ -452,5 +481,6 @@ export async function POST(request: NextRequest) {
     subtotal,
     deliveryFee,
     total,
+    fulfillmentMethod,
   });
 }

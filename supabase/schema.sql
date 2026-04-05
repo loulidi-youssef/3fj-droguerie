@@ -72,6 +72,7 @@ create index if not exists idx_product_variants_size on public.product_variants(
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid null references auth.users(id) on delete set null,
+  fulfillment_method text not null default 'delivery' check (fulfillment_method in ('delivery', 'pickup')),
   customer_name text not null,
   customer_phone text not null,
   customer_address text not null,
@@ -79,7 +80,17 @@ create table if not exists public.orders (
   subtotal integer not null check (subtotal >= 0),
   delivery_fee integer not null check (delivery_fee >= 0),
   total integer not null check (total >= 0),
-  status text not null default 'new' check (status in ('new', 'confirmed', 'delivered', 'cancelled')),
+  status text not null default 'new' check (status in ('new', 'confirmed', 'preparing', 'ready', 'collected', 'delivered', 'cancelled')),
+  constraint orders_status_fulfillment_compat_check check (
+    (
+      fulfillment_method = 'delivery'
+      and status in ('new', 'confirmed', 'delivered', 'cancelled')
+    )
+    or (
+      fulfillment_method = 'pickup'
+      and status in ('new', 'confirmed', 'preparing', 'ready', 'collected', 'cancelled')
+    )
+  ),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -129,7 +140,8 @@ create or replace function public.create_order_with_items_atomic(
   p_delivery_fee integer,
   p_total integer,
   p_user_id uuid,
-  p_items jsonb
+  p_items jsonb,
+  p_fulfillment_method text default 'delivery'
 )
 returns uuid
 language plpgsql
@@ -138,6 +150,7 @@ declare
   v_order_id uuid;
   v_item record;
   v_rows integer;
+  v_fulfillment_method text;
 begin
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'ORDER_ITEMS_EMPTY';
@@ -149,6 +162,11 @@ begin
 
   if p_user_id is null then
     raise exception 'AUTH_REQUIRED';
+  end if;
+
+  v_fulfillment_method := coalesce(nullif(btrim(p_fulfillment_method), ''), 'delivery');
+  if v_fulfillment_method not in ('delivery', 'pickup') then
+    raise exception 'INVALID_FULFILLMENT_METHOD';
   end if;
 
   for v_item in
@@ -211,6 +229,7 @@ begin
 
   insert into public.orders (
     user_id,
+    fulfillment_method,
     customer_name,
     customer_phone,
     customer_address,
@@ -221,6 +240,7 @@ begin
   )
   values (
     p_user_id,
+    v_fulfillment_method,
     p_customer_name,
     p_customer_phone,
     p_customer_address,

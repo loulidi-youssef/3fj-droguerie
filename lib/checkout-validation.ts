@@ -17,6 +17,10 @@ type CheckoutCustomerValidationResult = {
   customer: CheckoutCustomerInput;
 };
 
+type CheckoutValidationOptions = {
+  requireAddress?: boolean;
+};
+
 const normalizeText = (value: string): string => {
   return value.trim().replace(/\s+/g, " ");
 };
@@ -44,7 +48,9 @@ const isValidMoroccanPhone = (value: string): boolean => {
 
 export const validateCheckoutCustomer = (
   input: CheckoutCustomerInput,
+  options?: CheckoutValidationOptions,
 ): CheckoutCustomerValidationResult => {
+  const requireAddress = options?.requireAddress ?? true;
   const normalizedName = normalizeText(input.name);
   const normalizedPhone = input.phone.trim();
   const normalizedAddress = normalizeText(input.address);
@@ -69,11 +75,15 @@ export const validateCheckoutCustomer = (
       "Numero invalide. Utilisez un numero marocain (ex: 06XXXXXXXX ou +2126XXXXXXXX).";
   }
 
-  if (!normalizedAddress) {
-    errors.address = "L'adresse est obligatoire.";
-  } else if (normalizedAddress.length < 4) {
-    errors.address = "L'adresse doit contenir au moins 4 caracteres.";
-  } else if (normalizedAddress.length > MAX_ADDRESS_LENGTH) {
+  if (requireAddress) {
+    if (!normalizedAddress) {
+      errors.address = "L'adresse est obligatoire.";
+    } else if (normalizedAddress.length < 4) {
+      errors.address = "L'adresse doit contenir au moins 4 caracteres.";
+    } else if (normalizedAddress.length > MAX_ADDRESS_LENGTH) {
+      errors.address = `L'adresse ne doit pas depasser ${MAX_ADDRESS_LENGTH} caracteres.`;
+    }
+  } else if (normalizedAddress && normalizedAddress.length > MAX_ADDRESS_LENGTH) {
     errors.address = `L'adresse ne doit pas depasser ${MAX_ADDRESS_LENGTH} caracteres.`;
   }
 

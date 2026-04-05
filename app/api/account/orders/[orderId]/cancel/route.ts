@@ -11,7 +11,14 @@ import {
 
 type OrderRow = {
   id: string;
-  status: "new" | "confirmed" | "delivered" | "cancelled";
+  status:
+    | "new"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "collected"
+    | "delivered"
+    | "cancelled";
   created_at: string;
 };
 

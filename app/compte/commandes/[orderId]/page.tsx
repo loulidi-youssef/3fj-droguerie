@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { businessInfo } from "@/data/business";
 import { formatDh } from "@/lib/currency";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -17,7 +18,15 @@ type CustomerOrderItem = {
 type CustomerOrder = {
   id: string;
   created_at: string;
-  status: "new" | "confirmed" | "delivered" | "cancelled";
+  status:
+    | "new"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "collected"
+    | "delivered"
+    | "cancelled";
+  fulfillmentMethod: "delivery" | "pickup";
   customer_name: string;
   customer_phone: string;
   customer_address: string;
@@ -40,6 +49,9 @@ type OrderDetailsApiResponse = {
 const statusLabel: Record<CustomerOrder["status"], string> = {
   new: "Nouvelle",
   confirmed: "Acceptee / Confirmee",
+  preparing: "En preparation",
+  ready: "Prete",
+  collected: "Recuperee",
   delivered: "Livree",
   cancelled: "Annulee",
 };
@@ -47,11 +59,14 @@ const statusLabel: Record<CustomerOrder["status"], string> = {
 const statusClassName: Record<CustomerOrder["status"], string> = {
   new: "bg-sky-100 text-sky-700",
   confirmed: "bg-amber-100 text-amber-700",
+  preparing: "bg-orange-100 text-orange-700",
+  ready: "bg-indigo-100 text-indigo-700",
+  collected: "bg-emerald-100 text-emerald-700",
   delivered: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-rose-100 text-rose-700",
 };
 
-const trackingSteps = [
+const deliveryTrackingSteps = [
   { id: "new", label: "Nouvelle" },
   { id: "confirmed", label: "Acceptee / Confirmee" },
   { id: "preparing", label: "En preparation" },
@@ -59,7 +74,15 @@ const trackingSteps = [
   { id: "delivered", label: "Livree" },
 ] as const;
 
-const getTrackingIndex = (status: CustomerOrder["status"]): number => {
+const pickupTrackingSteps = [
+  { id: "new", label: "Nouvelle" },
+  { id: "confirmed", label: "Acceptee / Confirmee" },
+  { id: "preparing", label: "En preparation" },
+  { id: "ready", label: "Prete" },
+  { id: "collected", label: "Recuperee" },
+] as const;
+
+const getDeliveryTrackingIndex = (status: CustomerOrder["status"]): number => {
   if (status === "new") {
     return 0;
   }
@@ -67,6 +90,25 @@ const getTrackingIndex = (status: CustomerOrder["status"]): number => {
     return 1;
   }
   if (status === "delivered") {
+    return 4;
+  }
+  return -1;
+};
+
+const getPickupTrackingIndex = (status: CustomerOrder["status"]): number => {
+  if (status === "new") {
+    return 0;
+  }
+  if (status === "confirmed") {
+    return 1;
+  }
+  if (status === "preparing") {
+    return 2;
+  }
+  if (status === "ready") {
+    return 3;
+  }
+  if (status === "collected") {
     return 4;
   }
   return -1;
@@ -302,7 +344,11 @@ export default function CompteCommandeDetailsPage() {
     );
   }
 
-  const trackingIndex = getTrackingIndex(order.status);
+  const isPickupOrder = order.fulfillmentMethod === "pickup";
+  const trackingIndex = isPickupOrder
+    ? getPickupTrackingIndex(order.status)
+    : getDeliveryTrackingIndex(order.status);
+  const trackingSteps = isPickupOrder ? pickupTrackingSteps : deliveryTrackingSteps;
   const isCancelled = order.status === "cancelled";
   const showSuccessBanner = searchParams.get("success") === "1";
   const canCancelNow = isOrderStillCancellable(order, nowMs);
@@ -404,6 +450,12 @@ export default function CompteCommandeDetailsPage() {
                 })}
               </ol>
             )}
+
+            {isPickupOrder && order.status === "ready" ? (
+              <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+                Votre commande est prete en magasin.
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-5 overflow-x-auto">
@@ -443,14 +495,31 @@ export default function CompteCommandeDetailsPage() {
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <p>
+                Mode de reception:{" "}
+                <span className="font-semibold">
+                  {isPickupOrder ? "Retrait en magasin" : "Livraison"}
+                </span>
+              </p>
+              <p>
                 Nom: <span className="font-semibold">{order.customer_name}</span>
               </p>
               <p>
                 Telephone: <span className="font-semibold">{order.customer_phone}</span>
               </p>
-              <p>
-                Adresse: <span className="font-semibold">{order.customer_address}</span>
-              </p>
+              {isPickupOrder ? (
+                <>
+                  <p>
+                    Magasin: <span className="font-semibold">{businessInfo.address}</span>
+                  </p>
+                  <p>
+                    Horaires: <span className="font-semibold">{businessInfo.openingHours}</span>
+                  </p>
+                </>
+              ) : (
+                <p>
+                  Adresse: <span className="font-semibold">{order.customer_address}</span>
+                </p>
+              )}
               <p>
                 Localisation: <span className="font-semibold">{order.customer_location}</span>
               </p>

@@ -20,7 +20,15 @@ type ApiOrderItem = {
 type ApiOrderRow = {
   id: string;
   created_at: string;
-  status: "new" | "confirmed" | "delivered" | "cancelled";
+  status:
+    | "new"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "collected"
+    | "delivered"
+    | "cancelled";
+  fulfillment_method: "delivery" | "pickup" | null;
   customer_name: string;
   customer_phone: string;
   customer_address: string;
@@ -76,7 +84,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, created_at, status, customer_name, customer_phone, customer_address, customer_location, subtotal, delivery_fee, total, order_items(id, product_name, quantity, unit_price, line_total)",
+      "id, created_at, status, fulfillment_method, customer_name, customer_phone, customer_address, customer_location, subtotal, delivery_fee, total, order_items(id, product_name, quantity, unit_price, line_total)",
     )
     .eq("id", orderId)
     .eq("user_id", authenticatedCustomer.id)
@@ -104,6 +112,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     {
       order: {
         ...order,
+        fulfillmentMethod: order.fulfillment_method === "pickup" ? "pickup" : "delivery",
         paymentMethod: null,
         canCancel,
         cancellationDeadline: cancellationDeadline?.toISOString() ?? null,

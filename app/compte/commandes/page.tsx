@@ -17,7 +17,15 @@ type CustomerOrderItem = {
 type CustomerOrder = {
   id: string;
   created_at: string;
-  status: "new" | "confirmed" | "delivered" | "cancelled";
+  status:
+    | "new"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "collected"
+    | "delivered"
+    | "cancelled";
+  fulfillmentMethod: "delivery" | "pickup";
   subtotal: number;
   delivery_fee: number;
   total: number;
@@ -35,6 +43,9 @@ type OrdersApiResponse = {
 const statusLabel: Record<CustomerOrder["status"], string> = {
   new: "Nouvelle",
   confirmed: "Acceptee / Confirmee",
+  preparing: "En preparation",
+  ready: "Prete",
+  collected: "Recuperee",
   delivered: "Livree",
   cancelled: "Annulee",
 };
@@ -42,6 +53,9 @@ const statusLabel: Record<CustomerOrder["status"], string> = {
 const statusClassName: Record<CustomerOrder["status"], string> = {
   new: "bg-sky-100 text-sky-700",
   confirmed: "bg-amber-100 text-amber-700",
+  preparing: "bg-orange-100 text-orange-700",
+  ready: "bg-indigo-100 text-indigo-700",
+  collected: "bg-emerald-100 text-emerald-700",
   delivered: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-rose-100 text-rose-700",
 };
@@ -305,6 +319,9 @@ export default function CompteCommandesPage() {
                     </Link>
                     <p className="mt-1 text-xs text-slate-600">
                       {formatOrderDate(order.created_at)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Mode: {order.fulfillmentMethod === "pickup" ? "Retrait en magasin" : "Livraison"}
                     </p>
                   </div>
 

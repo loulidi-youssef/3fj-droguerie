@@ -24,9 +24,12 @@ type OrderApiResponse = {
   subtotal?: number;
   deliveryFee?: number;
   total?: number;
+  fulfillmentMethod?: "delivery" | "pickup";
   error?: string;
   fieldErrors?: CheckoutFieldErrors;
 };
+
+type FulfillmentMethod = "delivery" | "pickup";
 
 const initialCheckoutForm: CheckoutFormValues = {
   name: "",
@@ -63,6 +66,8 @@ export default function PanierPage() {
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
   const [authRequiredPrompt, setAuthRequiredPrompt] = useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] =
+    useState<FulfillmentMethod>("delivery");
 
   useEffect(() => {
     try {
@@ -225,9 +230,11 @@ export default function PanierPage() {
 
   const missingProductsCount = items.length - detailedItems.length;
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
-  const deliveryCost = getDeliveryCost(subtotal);
+  const deliveryCost =
+    fulfillmentMethod === "pickup" ? 0 : getDeliveryCost(subtotal);
   const total = subtotal + deliveryCost;
-  const amountForFreeDelivery = getAmountForFreeDelivery(subtotal);
+  const amountForFreeDelivery =
+    fulfillmentMethod === "pickup" ? 0 : getAmountForFreeDelivery(subtotal);
 
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
@@ -239,10 +246,23 @@ export default function PanierPage() {
     deliveryCost,
   );
 
-  const validateAndSetErrors = (nextForm: CheckoutFormValues) => {
-    const validation = validateCheckoutCustomer(nextForm);
+  const validateAndSetErrors = (
+    nextForm: CheckoutFormValues,
+    method: FulfillmentMethod = fulfillmentMethod,
+  ) => {
+    const validation = validateCheckoutCustomer(nextForm, {
+      requireAddress: method === "delivery",
+    });
     setFieldErrors(validation.errors);
     return validation;
+  };
+
+  const handleFulfillmentMethodChange = (nextMethod: FulfillmentMethod) => {
+    setFulfillmentMethod(nextMethod);
+    setSubmitError(null);
+    setSubmitInfo(null);
+    setAuthRequiredPrompt(false);
+    validateAndSetErrors(checkoutForm, nextMethod);
   };
 
   const handleCheckoutFieldChange = (field: CheckoutField, value: string) => {
@@ -353,6 +373,7 @@ export default function PanierPage() {
         },
         body: JSON.stringify({
           customer,
+          fulfillmentMethod,
           items: detailedItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -468,6 +489,42 @@ export default function PanierPage() {
               </p>
 
               <div className="mt-4 space-y-3">
+                <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Mode de reception *
+                  </legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                      <input
+                        type="radio"
+                        name="fulfillmentMethod"
+                        checked={fulfillmentMethod === "delivery"}
+                        onChange={() => handleFulfillmentMethodChange("delivery")}
+                      />
+                      <span className="text-sm text-slate-700">
+                        <span className="block font-semibold text-brand-blue">Livraison</span>
+                        <span className="block text-xs text-slate-500">
+                          Livraison a votre adresse.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                      <input
+                        type="radio"
+                        name="fulfillmentMethod"
+                        checked={fulfillmentMethod === "pickup"}
+                        onChange={() => handleFulfillmentMethodChange("pickup")}
+                      />
+                      <span className="text-sm text-slate-700">
+                        <span className="block font-semibold text-brand-blue">Retrait en magasin</span>
+                        <span className="block text-xs text-slate-500">
+                          Vous recupererez votre commande directement en magasin.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
+
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Nom complet *
@@ -506,24 +563,30 @@ export default function PanierPage() {
                   ) : null}
                 </label>
 
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Adresse *
-                  </span>
-                  <input
-                    type="text"
-                    value={checkoutForm.address}
-                    onChange={(event) => handleCheckoutFieldChange("address", event.target.value)}
-                    onBlur={() => handleFieldBlur("address")}
-                    className={getInputClassName("address")}
-                    placeholder="Quartier, rue, numero..."
-                    autoComplete="street-address"
-                    aria-invalid={touchedFields.address && Boolean(fieldErrors.address)}
-                  />
-                  {touchedFields.address && fieldErrors.address ? (
-                    <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.address}</p>
-                  ) : null}
-                </label>
+                {fulfillmentMethod === "delivery" ? (
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Adresse *
+                    </span>
+                    <input
+                      type="text"
+                      value={checkoutForm.address}
+                      onChange={(event) => handleCheckoutFieldChange("address", event.target.value)}
+                      onBlur={() => handleFieldBlur("address")}
+                      className={getInputClassName("address")}
+                      placeholder="Quartier, rue, numero..."
+                      autoComplete="street-address"
+                      aria-invalid={touchedFields.address && Boolean(fieldErrors.address)}
+                    />
+                    {touchedFields.address && fieldErrors.address ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.address}</p>
+                    ) : null}
+                  </label>
+                ) : (
+                  <p className="rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
+                    Vous recupererez votre commande directement en magasin.
+                  </p>
+                )}
 
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -612,7 +675,11 @@ export default function PanierPage() {
                 </p>
               </div>
 
-              {amountForFreeDelivery > 0 ? (
+              {fulfillmentMethod === "pickup" ? (
+                <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
+                  Retrait en magasin: aucun frais de livraison.
+                </p>
+              ) : amountForFreeDelivery > 0 ? (
                 <p className="mt-3 rounded-xl bg-orange-50 p-3 text-sm font-medium text-orange-700">
                   Ajoutez encore {formatDh(amountForFreeDelivery)} pour beneficier de la livraison gratuite.
                 </p>
@@ -680,7 +747,7 @@ export default function PanierPage() {
               </button>
 
               <p className="mt-2 text-center text-[11px] text-slate-500">
-                Apres confirmation, votre commande est enregistree puis WhatsApp s'ouvre automatiquement.
+                Apres confirmation, vous serez redirige vers le suivi de commande.
               </p>
 
               <a

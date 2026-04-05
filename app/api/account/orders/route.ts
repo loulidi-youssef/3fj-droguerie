@@ -20,7 +20,15 @@ type ApiOrderItem = {
 type ApiOrderRow = {
   id: string;
   created_at: string;
-  status: "new" | "confirmed" | "delivered" | "cancelled";
+  status:
+    | "new"
+    | "confirmed"
+    | "preparing"
+    | "ready"
+    | "collected"
+    | "delivered"
+    | "cancelled";
+  fulfillment_method: "delivery" | "pickup" | null;
   subtotal: number;
   delivery_fee: number;
   total: number;
@@ -61,7 +69,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(
-      "id, created_at, status, subtotal, delivery_fee, total, order_items(id, product_name, quantity, unit_price, line_total)",
+      "id, created_at, status, fulfillment_method, subtotal, delivery_fee, total, order_items(id, product_name, quantity, unit_price, line_total)",
     )
     .eq("user_id", authenticatedCustomer.id)
     .order("created_at", { ascending: false });
@@ -82,6 +90,7 @@ export async function GET(request: NextRequest) {
 
     return {
       ...order,
+      fulfillmentMethod: order.fulfillment_method === "pickup" ? "pickup" : "delivery",
       canCancel,
       cancellationDeadline: cancellationDeadline?.toISOString() ?? null,
       cannotCancelMessage: canCancel ? null : CANCELLATION_EXPIRED_MESSAGE,
