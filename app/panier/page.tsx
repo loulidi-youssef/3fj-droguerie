@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
@@ -27,11 +28,6 @@ type OrderApiResponse = {
   fieldErrors?: CheckoutFieldErrors;
 };
 
-type SavedOrderState = {
-  orderId: string;
-  whatsappLink: string;
-};
-
 const initialCheckoutForm: CheckoutFormValues = {
   name: "",
   phone: "",
@@ -51,6 +47,7 @@ const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
 const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 
 export default function PanierPage() {
+  const router = useRouter();
   const { items, updateQuantity, removeItem, clearCart } = useCart();
   const { showToast } = useToast();
 
@@ -63,7 +60,6 @@ export default function PanierPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitInfo, setSubmitInfo] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [savedOrder, setSavedOrder] = useState<SavedOrderState | null>(null);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
   const [authRequiredPrompt, setAuthRequiredPrompt] = useState(false);
@@ -382,42 +378,6 @@ export default function PanierPage() {
         throw new Error(payload.error ?? "Impossible de sauvegarder la commande.");
       }
 
-      const confirmedSubtotal =
-        typeof payload.subtotal === "number" ? payload.subtotal : subtotal;
-      const confirmedDeliveryFee =
-        typeof payload.deliveryFee === "number" ? payload.deliveryFee : deliveryCost;
-
-      const whatsappLink = buildCartWhatsAppLink(
-        detailedItems.map((item) => ({
-          name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
-        confirmedSubtotal,
-        confirmedDeliveryFee,
-        {
-          ...customer,
-          orderId: payload.orderId,
-        },
-      );
-
-      setSavedOrder({
-        orderId: payload.orderId,
-        whatsappLink,
-      });
-
-      const popup = window.open(whatsappLink, "_blank", "noopener,noreferrer");
-
-      if (popup) {
-        setSubmitInfo(
-          `Commande enregistree avec succes (ref: ${payload.orderId}). WhatsApp est ouvert.`,
-        );
-      } else {
-        setSubmitInfo(
-          `Commande enregistree (ref: ${payload.orderId}). Cliquez sur le bouton WhatsApp ci-dessous pour continuer.`,
-        );
-      }
-
       clearCart();
       window.localStorage.removeItem(CHECKOUT_DRAFT_STORAGE_KEY);
       setCheckoutForm(initialCheckoutForm);
@@ -425,6 +385,8 @@ export default function PanierPage() {
       setTouchedFields(initialTouchedFields);
       setAuthRequiredPrompt(false);
       showToast("Commande enregistree avec succes.");
+      setSubmitInfo(`Commande enregistree (ref: ${payload.orderId}). Redirection...`);
+      router.push(`/compte/commandes/${encodeURIComponent(payload.orderId)}?success=1`);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Une erreur est survenue.";
@@ -441,29 +403,7 @@ export default function PanierPage() {
 
         {items.length === 0 ? (
           <div className="mt-6 rounded-2xl bg-white p-6 shadow-card">
-            {savedOrder ? (
-              <>
-                <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
-                  Commande enregistree avec succes. Reference: {savedOrder.orderId}
-                </p>
-                <Link
-                  href="/compte/commandes"
-                  className="mt-3 inline-flex rounded-xl border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue"
-                >
-                  Suivre mes commandes
-                </Link>
-                <a
-                  href={savedOrder.whatsappLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Continuer sur WhatsApp
-                </a>
-              </>
-            ) : (
-              <p className="text-sm text-slate-600">Votre panier est vide.</p>
-            )}
+            <p className="text-sm text-slate-600">Votre panier est vide.</p>
             <Link href="/produits" className="mt-3 inline-flex text-sm font-semibold text-brand-orange hover:underline">
               Voir les produits
             </Link>

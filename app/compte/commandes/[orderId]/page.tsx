@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatDh } from "@/lib/currency";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -39,7 +39,7 @@ type OrderDetailsApiResponse = {
 
 const statusLabel: Record<CustomerOrder["status"], string> = {
   new: "Nouvelle",
-  confirmed: "Confirmee",
+  confirmed: "Acceptee / Confirmee",
   delivered: "Livree",
   cancelled: "Annulee",
 };
@@ -53,9 +53,9 @@ const statusClassName: Record<CustomerOrder["status"], string> = {
 
 const trackingSteps = [
   { id: "new", label: "Nouvelle" },
-  { id: "confirmed", label: "Confirmee" },
+  { id: "confirmed", label: "Acceptee / Confirmee" },
   { id: "preparing", label: "En preparation" },
-  { id: "shipped", label: "Expediee" },
+  { id: "shipped", label: "En livraison / Expediee" },
   { id: "delivered", label: "Livree" },
 ] as const;
 
@@ -103,6 +103,7 @@ const formatCancellationDeadline = (value: string | null): string => {
 export default function CompteCommandeDetailsPage() {
   const router = useRouter();
   const params = useParams<{ orderId: string }>();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [order, setOrder] = useState<CustomerOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -278,6 +279,7 @@ export default function CompteCommandeDetailsPage() {
 
   const trackingIndex = getTrackingIndex(order.status);
   const isCancelled = order.status === "cancelled";
+  const showSuccessBanner = searchParams.get("success") === "1";
 
   return (
     <section className="section-padding bg-brand-light">
@@ -285,16 +287,35 @@ export default function CompteCommandeDetailsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-brand-blue sm:text-4xl">
-              Detail de commande
+              Suivre votre commande
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               Reference: <span className="font-semibold text-brand-blue">{order.id}</span>
             </p>
           </div>
-          <Link href="/compte/commandes" className="btn-outline-brand">
-            Retour a mes commandes
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/compte/commandes" className="btn-outline-brand">
+              Retour a mes commandes
+            </Link>
+            <Link
+              href="/produits"
+              className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
+            >
+              Continuer mes achats
+            </Link>
+          </div>
         </div>
+
+        {showSuccessBanner ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-emerald-800">
+              Votre commande a bien ete enregistree.
+            </p>
+            <p className="mt-1 text-sm text-emerald-700">
+              Vous pouvez suivre votre commande ci-dessous.
+            </p>
+          </div>
+        ) : null}
 
         {actionMessage ? (
           <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">

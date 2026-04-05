@@ -34,7 +34,7 @@ type OrdersApiResponse = {
 
 const statusLabel: Record<CustomerOrder["status"], string> = {
   new: "Nouvelle",
-  confirmed: "Confirmee",
+  confirmed: "Acceptee / Confirmee",
   delivered: "Livree",
   cancelled: "Annulee",
 };
