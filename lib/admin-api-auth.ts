@@ -1,7 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { hasValidAdminSession, isAdminAuthConfigured } from "@/lib/admin-auth";
 
-export const requireAdminApiSession = (): NextResponse | null => {
+export const requireAdminApiSession = async (): Promise<NextResponse | null> => {
   if (!isAdminAuthConfigured()) {
     return NextResponse.json(
       { error: "Admin non configure." },
@@ -9,7 +9,7 @@ export const requireAdminApiSession = (): NextResponse | null => {
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     return NextResponse.json(
       { error: "Acces admin non autorise." },
       { status: 401 },
@@ -18,4 +18,3 @@ export const requireAdminApiSession = (): NextResponse | null => {
 
   return null;
 };
-

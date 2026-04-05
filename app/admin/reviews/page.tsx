@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -123,14 +123,14 @@ const getValidatedReviewInput = (formData: FormData): ReviewFormValue => {
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const createReviewAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -148,7 +148,7 @@ const createReviewAction = async (formData: FormData) => {
 const updateReviewAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -172,7 +172,7 @@ const updateReviewAction = async (formData: FormData) => {
 const toggleReviewActiveAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -199,7 +199,7 @@ const toggleReviewActiveAction = async (formData: FormData) => {
 const deleteReviewAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -236,7 +236,7 @@ export default async function AdminReviewsPage({ searchParams }: AdminReviewsPag
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -554,3 +554,4 @@ export default async function AdminReviewsPage({ searchParams }: AdminReviewsPag
     </section>
   );
 }
+

@@ -1,34 +1,82 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import {
+  clearAdminLoginFailures,
   createAdminSession,
+  getAdminLoginAllowance,
   hasValidAdminSession,
   isAdminAuthConfigured,
+  registerAdminLoginFailure,
   verifyAdminPassword,
 } from "@/lib/admin-auth";
 
 type LoginPageProps = {
   searchParams: {
     error?: string | string[];
+    retryAfter?: string | string[];
   };
 };
 
-const loginErrorMessage = "Mot de passe invalide. Merci de reessayer.";
+const loginErrorMessage = "Identifiants admin invalides. Merci de reessayer.";
+
+const getRetryAfterSecondsFromSearchParams = (
+  value: string | string[] | undefined,
+): number => {
+  const rawValue =
+    typeof value === "string"
+      ? value
+      : Array.isArray(value)
+      ? value[0] ?? ""
+      : "";
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return Math.ceil(parsed);
+};
+
+const buildTooManyAttemptsMessage = (retryAfterSeconds: number): string => {
+  const retryAfterMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+  return `Trop de tentatives. Reessayez dans ${retryAfterMinutes} minute(s).`;
+};
 
 const loginAdminAction = async (formData: FormData) => {
   "use server";
+
+  const loginAllowance = await getAdminLoginAllowance();
+  if (!loginAllowance.allowed) {
+    redirect(
+      `/admin/login?error=too-many-attempts&retryAfter=${encodeURIComponent(
+        String(loginAllowance.retryAfterSeconds),
+      )}`,
+    );
+  }
 
   const password = formData.get("password");
   const candidatePassword = typeof password === "string" ? password : "";
 
   if (!verifyAdminPassword(candidatePassword)) {
-    redirect("/admin/login?error=invalid-password");
+    const failureResult = await registerAdminLoginFailure(loginAllowance.context);
+    if (failureResult.locked) {
+      redirect(
+        `/admin/login?error=too-many-attempts&retryAfter=${encodeURIComponent(
+          String(failureResult.retryAfterSeconds),
+        )}`,
+      );
+    }
+
+    redirect("/admin/login?error=invalid-credentials");
   }
 
-  createAdminSession();
+  try {
+    await clearAdminLoginFailures(loginAllowance.context);
+    await createAdminSession();
+  } catch {
+    redirect("/admin/login?error=auth-unavailable");
+  }
   redirect("/admin/orders");
 };
 
-export default function AdminLoginPage({ searchParams }: LoginPageProps) {
+export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
   if (!isAdminAuthConfigured()) {
     return (
       <section className="bg-brand-light py-12">
@@ -44,16 +92,38 @@ export default function AdminLoginPage({ searchParams }: LoginPageProps) {
     );
   }
 
-  if (hasValidAdminSession()) {
+  if (await hasValidAdminSession()) {
     redirect("/admin/orders");
   }
 
-  const hasError =
+  const hasInvalidCredentialsError =
     typeof searchParams.error === "string"
-      ? searchParams.error === "invalid-password"
+      ? searchParams.error === "invalid-credentials"
       : Array.isArray(searchParams.error)
-        ? searchParams.error.includes("invalid-password")
+        ? searchParams.error.includes("invalid-credentials")
         : false;
+  const hasTooManyAttemptsError =
+    typeof searchParams.error === "string"
+      ? searchParams.error === "too-many-attempts"
+      : Array.isArray(searchParams.error)
+      ? searchParams.error.includes("too-many-attempts")
+      : false;
+  const hasAuthUnavailableError =
+    typeof searchParams.error === "string"
+      ? searchParams.error === "auth-unavailable"
+      : Array.isArray(searchParams.error)
+      ? searchParams.error.includes("auth-unavailable")
+      : false;
+  const retryAfterSeconds = getRetryAfterSecondsFromSearchParams(
+    searchParams.retryAfter,
+  );
+  const hasError =
+    hasInvalidCredentialsError || hasTooManyAttemptsError || hasAuthUnavailableError;
+  const errorMessage = hasTooManyAttemptsError
+    ? buildTooManyAttemptsMessage(retryAfterSeconds)
+    : hasAuthUnavailableError
+    ? "Connexion admin indisponible. Merci de reessayer."
+    : loginErrorMessage;
 
   return (
     <section className="bg-brand-light py-12">
@@ -65,7 +135,7 @@ export default function AdminLoginPage({ searchParams }: LoginPageProps) {
 
         {hasError ? (
           <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
-            {loginErrorMessage}
+            {errorMessage}
           </p>
         ) : null}
 
@@ -94,3 +164,4 @@ export default function AdminLoginPage({ searchParams }: LoginPageProps) {
     </section>
   );
 }
+

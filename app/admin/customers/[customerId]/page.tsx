@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
@@ -119,14 +119,14 @@ const redirectWithError = (customerId: string, message: string): never => {
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const toggleCustomerSuspendedAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -152,7 +152,7 @@ const toggleCustomerSuspendedAction = async (formData: FormData) => {
 const deleteCustomerAccountAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -193,7 +193,7 @@ export default async function AdminCustomerDetailPage({
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -394,3 +394,4 @@ export default async function AdminCustomerDetailPage({
     </section>
   );
 }
+

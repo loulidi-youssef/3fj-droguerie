@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
 import { getAdminAdAnalyticsDashboard } from "@/lib/admin-ad-analytics";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -13,3 +13,4 @@ export async function GET() {
   const analytics = await getAdminAdAnalyticsDashboard();
   return NextResponse.json(analytics);
 }
+

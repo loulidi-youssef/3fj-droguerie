@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
@@ -69,14 +69,14 @@ const formatOrderDate = (value: string): string => {
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const updateOrderStatusAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -125,7 +125,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -336,3 +336,4 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
     </section>
   );
 }
+

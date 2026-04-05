@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { clearAdminSession, hasValidAdminSession } from "@/lib/admin-auth";
@@ -16,16 +16,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const isAuthenticated = hasValidAdminSession();
+  const isAuthenticated = await hasValidAdminSession();
 
   const logoutAdminAction = async () => {
     "use server";
-    clearAdminSession();
+    await clearAdminSession();
     redirect("/admin/login");
   };
 
@@ -75,3 +75,4 @@ export default function AdminLayout({
     </div>
   );
 }
+

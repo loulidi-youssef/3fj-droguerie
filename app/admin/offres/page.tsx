@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
@@ -284,14 +284,14 @@ const resolveDiscountRule = (
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const createOfferAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -313,7 +313,7 @@ const createOfferAction = async (formData: FormData) => {
 const updateOfferAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -342,7 +342,7 @@ const updateOfferAction = async (formData: FormData) => {
 const toggleOfferActiveAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -368,7 +368,7 @@ const toggleOfferActiveAction = async (formData: FormData) => {
 const deleteOfferAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -405,7 +405,7 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -887,3 +887,4 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
     </section>
   );
 }
+

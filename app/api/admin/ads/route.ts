@@ -7,7 +7,7 @@ import { parseAdminAdInputFromJson } from "@/lib/admin-ads-validation";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -37,4 +37,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
+
 

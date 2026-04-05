@@ -3,10 +3,9 @@ import {
   ORDER_CANCELLATION_WINDOW_MS,
   isOrderCancellable,
 } from "@/lib/order-cancellation";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   RequestAuthError,
-  getAuthenticatedCustomerFromRequest,
+  getAuthenticatedCustomerContextFromRequest,
 } from "@/lib/supabase/auth-user";
 
 type OrderRow = {
@@ -31,9 +30,11 @@ type RouteContext = {
 const CANCELLATION_EXPIRED_MESSAGE = "Le délai d'annulation est dépassé.";
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
-  let authenticatedCustomer: { id: string; email: string | null } | null;
+  let authenticatedContext: Awaited<
+    ReturnType<typeof getAuthenticatedCustomerContextFromRequest>
+  >;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+    authenticatedContext = await getAuthenticatedCustomerContextFromRequest(request);
   } catch (error) {
     if (error instanceof RequestAuthError) {
       return NextResponse.json(
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     throw error;
   }
 
-  if (!authenticatedCustomer) {
+  if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
 
@@ -53,19 +54,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Commande introuvable." }, { status: 400 });
   }
 
-  const supabaseAdmin = getSupabaseAdminClient();
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin non configure." },
-      { status: 500 },
-    );
-  }
-
-  const { data: orderData, error: orderError } = await supabaseAdmin
+  const { data: orderData, error: orderError } = await authenticatedContext.supabase
     .from("orders")
     .select("id, status, created_at")
     .eq("id", orderId)
-    .eq("user_id", authenticatedCustomer.id)
     .maybeSingle();
 
   if (orderError) {
@@ -96,11 +88,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     Date.now() - ORDER_CANCELLATION_WINDOW_MS,
   ).toISOString();
 
-  const { data: cancelledOrder, error: cancelError } = await supabaseAdmin
+  const { data: cancelledOrder, error: cancelError } = await authenticatedContext.supabase
     .from("orders")
     .update({ status: "cancelled" })
     .eq("id", orderId)
-    .eq("user_id", authenticatedCustomer.id)
     .eq("status", "new")
     .gte("created_at", cancellationBoundaryIso)
     .select("id")

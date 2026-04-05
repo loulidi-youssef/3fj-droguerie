@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   RequestAuthError,
-  getAuthenticatedCustomerFromRequest,
+  getAuthenticatedCustomerContextFromRequest,
 } from "@/lib/supabase/auth-user";
 
 type FavoriteRow = {
@@ -30,9 +29,11 @@ const mapFavoritesQueryError = (error: DbErrorLike): string => {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  let authenticatedCustomer: { id: string; email: string | null } | null;
+  let authenticatedContext: Awaited<
+    ReturnType<typeof getAuthenticatedCustomerContextFromRequest>
+  >;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+    authenticatedContext = await getAuthenticatedCustomerContextFromRequest(request);
   } catch (error) {
     if (error instanceof RequestAuthError) {
       return NextResponse.json(
@@ -43,22 +44,13 @@ export async function GET(request: NextRequest) {
     throw error;
   }
 
-  if (!authenticatedCustomer) {
+  if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
 
-  const supabaseAdmin = getSupabaseAdminClient();
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin non configure." },
-      { status: 500 },
-    );
-  }
-
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await authenticatedContext.supabase
     .from("favorites")
     .select("product_id")
-    .eq("user_id", authenticatedCustomer.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -67,7 +59,7 @@ export async function GET(request: NextRequest) {
       message: error.message,
       details: error.details,
       hint: error.hint,
-      userId: authenticatedCustomer.id,
+      userId: authenticatedContext.customer.id,
     });
 
     return NextResponse.json(

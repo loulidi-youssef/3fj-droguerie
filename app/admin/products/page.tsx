@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
@@ -348,14 +348,14 @@ const getValidatedProductInput = async (formData: FormData): Promise<ProductForm
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const createProductAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -370,13 +370,13 @@ const createProductAction = async (formData: FormData) => {
   revalidatePath(`/produits/${validInput.slug}`);
   revalidatePath("/offres");
   revalidatePath("/");
-  redirectWithSuccess("Produit ajouté avec succès.");
+  redirectWithSuccess("Produit ajoutÃ© avec succÃ¨s.");
 };
 
 const updateProductAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -404,13 +404,13 @@ const updateProductAction = async (formData: FormData) => {
   revalidatePath(`/produits/${validInput.slug}`);
   revalidatePath("/offres");
   revalidatePath("/");
-  redirectWithSuccess("Produit mis à jour avec succès.");
+  redirectWithSuccess("Produit mis Ã  jour avec succÃ¨s.");
 };
 
 const toggleProductActiveAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -439,7 +439,7 @@ const toggleProductActiveAction = async (formData: FormData) => {
 const deleteProductAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -487,7 +487,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -589,7 +589,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
             aria-live="polite"
             className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800"
           >
-            <p className="text-sm font-bold">Succès</p>
+            <p className="text-sm font-bold">SuccÃ¨s</p>
             <p className="mt-1 text-sm font-medium">{successMessage}</p>
           </div>
         ) : null}
@@ -1040,3 +1040,4 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
     </section>
   );
 }
+

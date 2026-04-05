@@ -3,10 +3,9 @@ import {
   getOrderCancellationDeadline,
   isOrderCancellable,
 } from "@/lib/order-cancellation";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   RequestAuthError,
-  getAuthenticatedCustomerFromRequest,
+  getAuthenticatedCustomerContextFromRequest,
 } from "@/lib/supabase/auth-user";
 
 type ApiOrderItem = {
@@ -41,9 +40,11 @@ export const revalidate = 0;
 const CANCELLATION_EXPIRED_MESSAGE = "Le délai d'annulation est dépassé.";
 
 export async function GET(request: NextRequest) {
-  let authenticatedCustomer: { id: string; email: string | null } | null;
+  let authenticatedContext: Awaited<
+    ReturnType<typeof getAuthenticatedCustomerContextFromRequest>
+  >;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+    authenticatedContext = await getAuthenticatedCustomerContextFromRequest(request);
   } catch (error) {
     if (error instanceof RequestAuthError) {
       return NextResponse.json(
@@ -54,24 +55,15 @@ export async function GET(request: NextRequest) {
     throw error;
   }
 
-  if (!authenticatedCustomer) {
+  if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
 
-  const supabaseAdmin = getSupabaseAdminClient();
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin non configure." },
-      { status: 500 },
-    );
-  }
-
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await authenticatedContext.supabase
     .from("orders")
     .select(
       "id, created_at, status, fulfillment_method, subtotal, delivery_fee, total, order_items(id, product_name, quantity, unit_price, line_total)",
     )
-    .eq("user_id", authenticatedCustomer.id)
     .order("created_at", { ascending: false });
 
   if (error || !data) {

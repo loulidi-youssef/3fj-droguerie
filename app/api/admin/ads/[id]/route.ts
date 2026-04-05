@@ -18,7 +18,7 @@ const getSafeId = (params: AdminAdByIdRouteContext["params"]): string => {
 };
 
 export async function PUT(request: NextRequest, context: AdminAdByIdRouteContext) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -55,7 +55,7 @@ export async function PUT(request: NextRequest, context: AdminAdByIdRouteContext
 }
 
 export async function DELETE(_request: NextRequest, context: AdminAdByIdRouteContext) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -78,4 +78,5 @@ export async function DELETE(_request: NextRequest, context: AdminAdByIdRouteCon
 
   return NextResponse.json({ ok: true });
 }
+
 

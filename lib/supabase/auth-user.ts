@@ -1,9 +1,17 @@
 import type { NextRequest } from "next/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabaseEnv } from "@/lib/supabase/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export type AuthenticatedCustomer = {
   id: string;
   email: string | null;
+};
+
+export type AuthenticatedCustomerContext = {
+  customer: AuthenticatedCustomer;
+  accessToken: string;
+  supabase: SupabaseClient;
 };
 
 export type RequestAuthErrorCode =
@@ -31,9 +39,30 @@ const readBearerToken = (request: NextRequest): string | null => {
   return token ? token : null;
 };
 
+const createSupabaseUserScopedClient = (accessToken: string): SupabaseClient => {
+  return createClient(supabaseEnv.url!, supabaseEnv.anonKey!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+};
+
 export const getAuthenticatedCustomerFromRequestStrict = async (
   request: NextRequest,
 ): Promise<AuthenticatedCustomer> => {
+  const context = await getAuthenticatedCustomerContextFromRequestStrict(request);
+  return context.customer;
+};
+
+export const getAuthenticatedCustomerContextFromRequestStrict = async (
+  request: NextRequest,
+): Promise<AuthenticatedCustomerContext> => {
   const accessToken = readBearerToken(request);
   if (!accessToken) {
     throw new RequestAuthError(
@@ -59,9 +88,15 @@ export const getAuthenticatedCustomerFromRequestStrict = async (
     );
   }
 
-  return {
+  const customer: AuthenticatedCustomer = {
     id: data.user.id,
     email: data.user.email ?? null,
+  };
+
+  return {
+    customer,
+    accessToken,
+    supabase: createSupabaseUserScopedClient(accessToken),
   };
 };
 
@@ -70,6 +105,23 @@ export const getAuthenticatedCustomerFromRequest = async (
 ): Promise<AuthenticatedCustomer | null> => {
   try {
     return await getAuthenticatedCustomerFromRequestStrict(request);
+  } catch (error) {
+    if (
+      error instanceof RequestAuthError &&
+      error.code === "missing_bearer_token"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const getAuthenticatedCustomerContextFromRequest = async (
+  request: NextRequest,
+): Promise<AuthenticatedCustomerContext | null> => {
+  try {
+    return await getAuthenticatedCustomerContextFromRequestStrict(request);
   } catch (error) {
     if (
       error instanceof RequestAuthError &&

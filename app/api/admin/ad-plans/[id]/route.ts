@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
 import { deleteAdminAdPlan, updateAdminAdPlan } from "@/lib/admin-ad-plans";
@@ -19,7 +19,7 @@ const isUuid = (value: string): boolean => {
 export const dynamic = "force-dynamic";
 
 export async function PUT(request: NextRequest, context: AdminAdPlanByIdRouteContext) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest, context: AdminAdPlanByIdRouteCon
 }
 
 export async function DELETE(_request: NextRequest, context: AdminAdPlanByIdRouteContext) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -75,3 +75,4 @@ export async function DELETE(_request: NextRequest, context: AdminAdPlanByIdRout
   revalidatePath("/admin/publicites");
   return NextResponse.json({ ok: true });
 }
+

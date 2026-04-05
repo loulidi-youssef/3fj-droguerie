@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -197,14 +197,14 @@ const getValidatedBlogPostInput = (formData: FormData): BlogPostFormValue => {
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const createBlogPostAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -223,7 +223,7 @@ const createBlogPostAction = async (formData: FormData) => {
 const updateBlogPostAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -248,7 +248,7 @@ const updateBlogPostAction = async (formData: FormData) => {
 const toggleBlogPostPublishedAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -278,7 +278,7 @@ const toggleBlogPostPublishedAction = async (formData: FormData) => {
 const deleteBlogPostAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -316,7 +316,7 @@ export default async function AdminBlogPage({ searchParams }: AdminBlogPageProps
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -696,3 +696,4 @@ export default async function AdminBlogPage({ searchParams }: AdminBlogPageProps
     </section>
   );
 }
+

@@ -122,14 +122,14 @@ const ensureAdPlanMatchesPosition = async (
 
 const logoutAdminAction = async () => {
   "use server";
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 };
 
 const createAdAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -155,7 +155,7 @@ const createAdAction = async (formData: FormData) => {
 const updateAdAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -187,7 +187,7 @@ const updateAdAction = async (formData: FormData) => {
 const toggleAdActiveAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -212,7 +212,7 @@ const toggleAdActiveAction = async (formData: FormData) => {
 const deleteAdAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -234,7 +234,7 @@ const deleteAdAction = async (formData: FormData) => {
 const createPlanAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -255,7 +255,7 @@ const createPlanAction = async (formData: FormData) => {
 const updatePlanAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -282,7 +282,7 @@ const updatePlanAction = async (formData: FormData) => {
 const togglePlanActiveAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -307,7 +307,7 @@ const togglePlanActiveAction = async (formData: FormData) => {
 const deletePlanAction = async (formData: FormData) => {
   "use server";
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -343,7 +343,7 @@ export default async function AdminPublicitesPage({ searchParams }: AdminAdsPage
     );
   }
 
-  if (!hasValidAdminSession()) {
+  if (!(await hasValidAdminSession())) {
     redirect("/admin/login");
   }
 
@@ -526,3 +526,4 @@ export default async function AdminPublicitesPage({ searchParams }: AdminAdsPage
     </section>
   );
 }
+

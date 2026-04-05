@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
 import { createAdminAdPlan, getAdminAdPlans } from "@/lib/admin-ad-plans";
@@ -7,7 +7,7 @@ import { parseAdminAdPlanInputFromJson } from "@/lib/admin-ad-plans-validation";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -17,7 +17,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const unauthorizedResponse = requireAdminApiSession();
+  const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
   }
@@ -45,3 +45,4 @@ export async function POST(request: NextRequest) {
   revalidatePath("/admin/publicites");
   return NextResponse.json({ ok: true }, { status: 201 });
 }
+
