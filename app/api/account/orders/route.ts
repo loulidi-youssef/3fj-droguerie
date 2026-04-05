@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
       cancellationDeadline: cancellationDeadline?.toISOString() ?? null,
       cannotCancelMessage: canCancel
         ? null
-        : "Vous ne pouvez plus annuler cette commande",
+        : "Annulation possible uniquement pendant les 2 premieres heures et pour une commande nouvelle.",
     };
   });
 

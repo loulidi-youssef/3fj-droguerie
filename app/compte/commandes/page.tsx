@@ -229,7 +229,7 @@ export default function CompteCommandesPage() {
               Mes commandes
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Suivez vos commandes. L&apos;annulation est possible uniquement pendant 1 heure
+              Suivez vos commandes. L&apos;annulation est possible uniquement pendant 2 heures
               si la commande est encore nouvelle.
             </p>
           </div>
@@ -269,7 +269,12 @@ export default function CompteCommandesPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Reference
                     </p>
-                    <p className="text-sm font-bold text-brand-blue">{order.id}</p>
+                    <Link
+                      href={`/compte/commandes/${order.id}`}
+                      className="text-sm font-bold text-brand-blue hover:underline"
+                    >
+                      {order.id}
+                    </Link>
                     <p className="mt-1 text-xs text-slate-600">
                       {formatOrderDate(order.created_at)}
                     </p>
@@ -315,6 +320,12 @@ export default function CompteCommandesPage() {
                     <p className="font-bold text-brand-blue">
                       Total: {formatDh(order.total)}
                     </p>
+                    <Link
+                      href={`/compte/commandes/${order.id}`}
+                      className="mt-2 inline-flex text-xs font-semibold text-brand-orange hover:underline"
+                    >
+                      Voir le detail de la commande
+                    </Link>
                   </div>
 
                   <div className="text-right">

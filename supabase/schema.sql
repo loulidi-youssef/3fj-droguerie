@@ -423,7 +423,7 @@ to authenticated
 using (
   auth.uid() = user_id
   and status = 'new'
-  and created_at >= now() - interval '1 hour'
+  and created_at >= now() - interval '2 hour'
 )
 with check (
   auth.uid() = user_id

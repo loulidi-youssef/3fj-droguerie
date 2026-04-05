@@ -1,4 +1,6 @@
-export const ORDER_CANCELLATION_WINDOW_MS = 60 * 60 * 1000;
+export const ORDER_CANCELLATION_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+const CANCELLABLE_EARLY_STATUSES = new Set(["new"]);
 
 export const getOrderCancellationDeadline = (createdAt: string): Date | null => {
   const createdAtTime = new Date(createdAt).getTime();
@@ -15,7 +17,7 @@ export const isOrderCancellable = (input: {
   createdAt: string;
   now?: number;
 }): boolean => {
-  if (input.status !== "new") {
+  if (!CANCELLABLE_EARLY_STATUSES.has(input.status)) {
     return false;
   }
 
