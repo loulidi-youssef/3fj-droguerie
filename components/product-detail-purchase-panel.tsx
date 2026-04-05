@@ -21,8 +21,18 @@ const normalizeVariantLabel = (value: string | null | undefined): string | null 
     return null;
   }
 
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\s+/g, " ");
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeColorKey = (value: string | null | undefined): string | null => {
+  const normalized = normalizeVariantLabel(value);
+  return normalized ? normalized.toLocaleLowerCase("fr") : null;
+};
+
+const normalizeSizeKey = (value: string | null | undefined): string | null => {
+  const normalized = normalizeVariantLabel(value);
+  return normalized ? normalized.replace(/\s+/g, "").toLocaleLowerCase("fr") : null;
 };
 
 export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePanelProps) => {
@@ -54,66 +64,67 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
       activeVariants.find((variant) => variant.id === selectedVariantId) ?? defaultVariant
     );
   }, [activeVariants, defaultVariant, selectedVariantId]);
-  const selectedColor = normalizeVariantLabel(selectedVariant?.color);
+  const selectedColorKey = normalizeColorKey(selectedVariant?.color);
 
   const hasVariants = activeVariants.length > 0;
-  const hasColorOptions = activeVariants.some((variant) => Boolean(normalizeVariantLabel(variant.color)));
-  const hasSizeOptions = activeVariants.some((variant) => Boolean(normalizeVariantLabel(variant.size)));
-
   const colorOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const values: string[] = [];
+    const valuesByKey = new Map<string, string>();
 
     for (const variant of activeVariants) {
-      const color = normalizeVariantLabel(variant.color);
-      if (!color || seen.has(color)) {
+      const colorLabel = normalizeVariantLabel(variant.color);
+      const colorKey = normalizeColorKey(variant.color);
+      if (!colorLabel || !colorKey || valuesByKey.has(colorKey)) {
         continue;
       }
 
-      seen.add(color);
-      values.push(color);
+      valuesByKey.set(colorKey, colorLabel);
     }
 
-    return values;
+    return Array.from(valuesByKey.entries()).map(([key, label]) => ({ key, label }));
   }, [activeVariants]);
+  const hasColorOptions = colorOptions.length > 1;
 
   const allSizeOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const values: string[] = [];
+    const valuesByKey = new Map<string, string>();
 
     for (const variant of activeVariants) {
-      const size = normalizeVariantLabel(variant.size);
-      if (!size || seen.has(size)) {
+      const sizeLabel = normalizeVariantLabel(variant.size);
+      const sizeKey = normalizeSizeKey(variant.size);
+      if (!sizeLabel || !sizeKey || valuesByKey.has(sizeKey)) {
         continue;
       }
 
-      seen.add(size);
-      values.push(size);
+      valuesByKey.set(sizeKey, sizeLabel);
     }
 
-    return values;
+    return Array.from(valuesByKey.entries()).map(([key, label]) => ({ key, label }));
   }, [activeVariants]);
+  const hasSizeOptions = allSizeOptions.length > 1;
   const sizeOptions = useMemo(() => {
-    if (!selectedColor) {
+    if (!selectedColorKey) {
       return allSizeOptions;
     }
 
-    const seen = new Set<string>();
-    const values: string[] = [];
+    const valuesByKey = new Map<string, string>();
 
     for (const variant of activeVariants) {
-      const variantColor = normalizeVariantLabel(variant.color);
-      const size = normalizeVariantLabel(variant.size);
-      if (variantColor !== selectedColor || !size || seen.has(size)) {
+      const variantColorKey = normalizeColorKey(variant.color);
+      const sizeLabel = normalizeVariantLabel(variant.size);
+      const sizeKey = normalizeSizeKey(variant.size);
+      if (
+        variantColorKey !== selectedColorKey ||
+        !sizeLabel ||
+        !sizeKey ||
+        valuesByKey.has(sizeKey)
+      ) {
         continue;
       }
 
-      seen.add(size);
-      values.push(size);
+      valuesByKey.set(sizeKey, sizeLabel);
     }
 
-    return values;
-  }, [activeVariants, allSizeOptions, selectedColor]);
+    return Array.from(valuesByKey.entries()).map(([key, label]) => ({ key, label }));
+  }, [activeVariants, allSizeOptions, selectedColorKey]);
 
   useEffect(() => {
     if (activeVariants.length === 0) {
@@ -132,38 +143,44 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
     }
   }, [activeVariants, defaultVariant, selectedVariantId]);
 
-  const pickVariantForColor = (color: string): ProductVariant | null => {
+  const pickVariantForColor = (colorKey: string): ProductVariant | null => {
     if (activeVariants.length === 0) {
       return null;
     }
 
-    const selectedSize = normalizeVariantLabel(selectedVariant?.size);
+    const selectedSizeKey = normalizeSizeKey(selectedVariant?.size);
 
     return (
       activeVariants.find((variant) => {
-        const variantColor = normalizeVariantLabel(variant.color);
-        const variantSize = normalizeVariantLabel(variant.size);
-        return variantColor === color && (!selectedSize || variantSize === selectedSize);
+        const variantColorKey = normalizeColorKey(variant.color);
+        const variantSizeKey = normalizeSizeKey(variant.size);
+        return (
+          variantColorKey === colorKey &&
+          (!selectedSizeKey || variantSizeKey === selectedSizeKey)
+        );
       }) ??
-      activeVariants.find((variant) => normalizeVariantLabel(variant.color) === color) ??
+      activeVariants.find((variant) => normalizeColorKey(variant.color) === colorKey) ??
       null
     );
   };
 
-  const pickVariantForSize = (size: string): ProductVariant | null => {
+  const pickVariantForSize = (sizeKey: string): ProductVariant | null => {
     if (activeVariants.length === 0) {
       return null;
     }
 
-    const currentSelectedColor = normalizeVariantLabel(selectedVariant?.color);
+    const currentSelectedColorKey = normalizeColorKey(selectedVariant?.color);
 
     return (
       activeVariants.find((variant) => {
-        const variantColor = normalizeVariantLabel(variant.color);
-        const variantSize = normalizeVariantLabel(variant.size);
-        return variantSize === size && (!currentSelectedColor || variantColor === currentSelectedColor);
+        const variantColorKey = normalizeColorKey(variant.color);
+        const variantSizeKey = normalizeSizeKey(variant.size);
+        return (
+          variantSizeKey === sizeKey &&
+          (!currentSelectedColorKey || variantColorKey === currentSelectedColorKey)
+        );
       }) ??
-      activeVariants.find((variant) => normalizeVariantLabel(variant.size) === size) ??
+      activeVariants.find((variant) => normalizeSizeKey(variant.size) === sizeKey) ??
       null
     );
   };
@@ -215,13 +232,13 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Couleur</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {colorOptions.map((color) => {
-              const targetVariant = pickVariantForColor(color);
-              const isSelected = normalizeVariantLabel(selectedVariant?.color) === color;
+              const targetVariant = pickVariantForColor(color.key);
+              const isSelected = normalizeColorKey(selectedVariant?.color) === color.key;
               const isOutOfStock = (targetVariant?.stock ?? 1) <= 0;
 
               return (
                 <button
-                  key={color}
+                  key={color.key}
                   type="button"
                   onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
                   className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
@@ -230,7 +247,7 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
                       : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
                   } ${isOutOfStock ? "opacity-70" : ""}`}
                 >
-                  {color}
+                  {color.label}
                 </button>
               );
             })}
@@ -243,13 +260,13 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Taille</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {sizeOptions.map((size) => {
-              const targetVariant = pickVariantForSize(size);
-              const isSelected = normalizeVariantLabel(selectedVariant?.size) === size;
+              const targetVariant = pickVariantForSize(size.key);
+              const isSelected = normalizeSizeKey(selectedVariant?.size) === size.key;
               const isOutOfStock = (targetVariant?.stock ?? 1) <= 0;
 
               return (
                 <button
-                  key={size}
+                  key={size.key}
                   type="button"
                   onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
                   className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition ${
@@ -258,7 +275,7 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
                       : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
                   } ${isOutOfStock ? "opacity-70" : ""}`}
                 >
-                  {size}
+                  {size.label}
                 </button>
               );
             })}
