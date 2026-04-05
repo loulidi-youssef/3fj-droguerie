@@ -53,6 +53,9 @@ export default function AdminLayout({
               <Link href="/admin/offres" className="admin-nav-link">
                 Offres
               </Link>
+              <Link href="/admin/publicites" className="admin-nav-link">
+                Publicites
+              </Link>
               <Link href="/admin/blog" className="admin-nav-link">
                 Blog
               </Link>

@@ -80,6 +80,21 @@ export type Offer = {
   createdAt?: string;
 };
 
+export type AdPosition = "top" | "middle";
+
+export type Ad = {
+  id: string;
+  imageUrl: string;
+  title?: string | null;
+  description?: string | null;
+  link: string;
+  position: AdPosition;
+  isActive: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+  createdAt?: string;
+};
+
 export type CartItem = {
   productId: string;
   quantity: number;

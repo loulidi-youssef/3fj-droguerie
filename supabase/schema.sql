@@ -322,6 +322,27 @@ create index if not exists idx_offers_featured on public.offers(is_featured);
 create index if not exists idx_offers_end_at on public.offers(end_at);
 create index if not exists idx_offers_product_id on public.offers(product_id);
 
+create table if not exists public.ads (
+  id uuid primary key default gen_random_uuid(),
+  image_url text not null,
+  title text null,
+  description text null,
+  link text not null,
+  position text not null,
+  is_active boolean not null default false,
+  start_date timestamptz null,
+  end_date timestamptz null,
+  created_at timestamptz not null default now(),
+  constraint ads_position_check check (position in ('top', 'middle')),
+  constraint ads_date_range_check check (end_date is null or start_date is null or end_date > start_date)
+);
+
+create index if not exists idx_ads_is_active on public.ads(is_active);
+create index if not exists idx_ads_position on public.ads(position);
+create index if not exists idx_ads_created_at on public.ads(created_at desc);
+create index if not exists idx_ads_start_date on public.ads(start_date);
+create index if not exists idx_ads_end_date on public.ads(end_date);
+
 create table if not exists public.blog_posts (
   id text primary key,
   slug text not null unique,
@@ -382,6 +403,7 @@ alter table public.product_variants enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.offers enable row level security;
+alter table public.ads enable row level security;
 alter table public.blog_posts enable row level security;
 alter table public.reviews enable row level security;
 alter table public.favorites enable row level security;
@@ -409,6 +431,17 @@ using (
   is_active = true
   and (start_at is null or start_at <= now())
   and (end_at is null or end_at > now())
+);
+
+drop policy if exists "Public can read active scheduled ads" on public.ads;
+create policy "Public can read active scheduled ads"
+on public.ads
+for select
+to anon, authenticated
+using (
+  is_active = true
+  and (start_date is null or start_date <= now())
+  and (end_date is null or end_date > now())
 );
 
 drop policy if exists "Public can read published blog posts" on public.blog_posts;
