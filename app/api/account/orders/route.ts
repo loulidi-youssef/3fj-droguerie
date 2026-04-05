@@ -28,6 +28,9 @@ type ApiOrderRow = {
 };
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const CANCELLATION_EXPIRED_MESSAGE = "Le délai d'annulation est dépassé.";
 
 export async function GET(request: NextRequest) {
   let authenticatedCustomer: { id: string; email: string | null } | null;
@@ -81,11 +84,16 @@ export async function GET(request: NextRequest) {
       ...order,
       canCancel,
       cancellationDeadline: cancellationDeadline?.toISOString() ?? null,
-      cannotCancelMessage: canCancel
-        ? null
-        : "Annulation possible uniquement pendant les 2 premieres heures et pour une commande nouvelle.",
+      cannotCancelMessage: canCancel ? null : CANCELLATION_EXPIRED_MESSAGE,
     };
   });
 
-  return NextResponse.json({ orders });
+  return NextResponse.json(
+    { orders },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      },
+    },
+  );
 }

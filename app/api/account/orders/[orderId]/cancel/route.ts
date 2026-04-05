@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isOrderCancellable } from "@/lib/order-cancellation";
+import {
+  ORDER_CANCELLATION_WINDOW_MS,
+  isOrderCancellable,
+} from "@/lib/order-cancellation";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   RequestAuthError,
@@ -17,6 +20,8 @@ type RouteContext = {
     orderId: string;
   };
 };
+
+const CANCELLATION_EXPIRED_MESSAGE = "Le délai d'annulation est dépassé.";
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   let authenticatedCustomer: { id: string; email: string | null } | null;
@@ -75,13 +80,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   if (!canCancel) {
     return NextResponse.json(
-      {
-        error:
-          "Annulation possible uniquement pendant les 2 premieres heures et pour une commande nouvelle.",
-      },
+      { error: CANCELLATION_EXPIRED_MESSAGE },
       { status: 400 },
     );
   }
+
+  const cancellationBoundaryIso = new Date(
+    Date.now() - ORDER_CANCELLATION_WINDOW_MS,
+  ).toISOString();
 
   const { data: cancelledOrder, error: cancelError } = await supabaseAdmin
     .from("orders")
@@ -89,6 +95,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     .eq("id", orderId)
     .eq("user_id", authenticatedCustomer.id)
     .eq("status", "new")
+    .gte("created_at", cancellationBoundaryIso)
     .select("id")
     .maybeSingle();
 
@@ -101,10 +108,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   if (!cancelledOrder) {
     return NextResponse.json(
-      {
-        error:
-          "Annulation impossible: la commande n'est plus dans un etat annulable.",
-      },
+      { error: CANCELLATION_EXPIRED_MESSAGE },
       { status: 400 },
     );
   }

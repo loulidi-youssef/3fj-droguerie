@@ -100,6 +100,22 @@ const formatCancellationDeadline = (value: string | null): string => {
   }).format(date);
 };
 
+const isOrderStillCancellable = (
+  order: CustomerOrder,
+  nowMs: number,
+): boolean => {
+  if (!order.canCancel || order.status !== "new" || !order.cancellationDeadline) {
+    return false;
+  }
+
+  const deadlineMs = new Date(order.cancellationDeadline).getTime();
+  if (Number.isNaN(deadlineMs)) {
+    return false;
+  }
+
+  return nowMs <= deadlineMs;
+};
+
 export default function CompteCommandeDetailsPage() {
   const router = useRouter();
   const params = useParams<{ orderId: string }>();
@@ -110,8 +126,17 @@ export default function CompteCommandeDetailsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const orderId = typeof params.orderId === "string" ? params.orderId : "";
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const fetchOrder = async (accessToken: string) => {
     const response = await fetch(`/api/account/orders/${encodeURIComponent(orderId)}`, {
@@ -280,6 +305,7 @@ export default function CompteCommandeDetailsPage() {
   const trackingIndex = getTrackingIndex(order.status);
   const isCancelled = order.status === "cancelled";
   const showSuccessBanner = searchParams.get("success") === "1";
+  const canCancelNow = isOrderStillCancellable(order, nowMs);
 
   return (
     <section className="section-padding bg-brand-light">
@@ -438,7 +464,7 @@ export default function CompteCommandeDetailsPage() {
           </div>
 
           <div className="mt-5 border-t border-slate-100 pt-4">
-            {order.canCancel ? (
+            {canCancelNow ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-600">
                   Annulation possible jusqu&apos;a{" "}
@@ -458,8 +484,7 @@ export default function CompteCommandeDetailsPage() {
               </div>
             ) : (
               <p className="text-sm font-medium text-slate-600">
-                {order.cannotCancelMessage ??
-                  "Vous ne pouvez plus annuler cette commande."}
+                {order.cannotCancelMessage ?? "Le délai d'annulation est dépassé."}
               </p>
             )}
           </div>

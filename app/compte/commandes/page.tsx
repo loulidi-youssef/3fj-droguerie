@@ -74,6 +74,22 @@ const formatCancellationDeadline = (value: string | null): string => {
   }).format(date);
 };
 
+const isOrderStillCancellable = (
+  order: CustomerOrder,
+  nowMs: number,
+): boolean => {
+  if (!order.canCancel || order.status !== "new" || !order.cancellationDeadline) {
+    return false;
+  }
+
+  const deadlineMs = new Date(order.cancellationDeadline).getTime();
+  if (Number.isNaN(deadlineMs)) {
+    return false;
+  }
+
+  return nowMs <= deadlineMs;
+};
+
 export default function CompteCommandesPage() {
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -82,6 +98,15 @@ export default function CompteCommandesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 30_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const fetchOrders = async (accessToken: string) => {
     const response = await fetch("/api/account/orders", {
@@ -262,7 +287,10 @@ export default function CompteCommandesPage() {
           </div>
         ) : (
           <div className="mt-6 space-y-4">
-            {orders.map((order) => (
+            {orders.map((order) => {
+              const canCancelNow = isOrderStillCancellable(order, nowMs);
+
+              return (
               <article key={order.id} className="rounded-2xl bg-white p-5 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -329,7 +357,7 @@ export default function CompteCommandesPage() {
                   </div>
 
                   <div className="text-right">
-                    {order.canCancel ? (
+                    {canCancelNow ? (
                       <>
                         <button
                           type="button"
@@ -349,14 +377,14 @@ export default function CompteCommandesPage() {
                       </>
                     ) : (
                       <p className="text-xs font-medium text-slate-500">
-                        {order.cannotCancelMessage ??
-                          "Vous ne pouvez plus annuler cette commande"}
+                        {order.cannotCancelMessage ?? "Le délai d'annulation est dépassé."}
                       </p>
                     )}
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

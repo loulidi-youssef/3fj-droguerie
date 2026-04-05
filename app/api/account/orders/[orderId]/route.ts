@@ -38,6 +38,9 @@ type RouteContext = {
 };
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const CANCELLATION_EXPIRED_MESSAGE = "Le délai d'annulation est dépassé.";
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   let authenticatedCustomer: { id: string; email: string | null } | null;
@@ -97,15 +100,20 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   });
   const cancellationDeadline = getOrderCancellationDeadline(order.created_at);
 
-  return NextResponse.json({
-    order: {
-      ...order,
-      paymentMethod: null,
-      canCancel,
-      cancellationDeadline: cancellationDeadline?.toISOString() ?? null,
-      cannotCancelMessage: canCancel
-        ? null
-        : "Annulation possible uniquement pendant les 2 premieres heures et pour une commande nouvelle.",
+  return NextResponse.json(
+    {
+      order: {
+        ...order,
+        paymentMethod: null,
+        canCancel,
+        cancellationDeadline: cancellationDeadline?.toISOString() ?? null,
+        cannotCancelMessage: canCancel ? null : CANCELLATION_EXPIRED_MESSAGE,
+      },
     },
-  });
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      },
+    },
+  );
 }
