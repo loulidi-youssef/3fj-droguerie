@@ -11,6 +11,7 @@ type AdRow = {
   is_active: boolean;
   start_date: string | null;
   end_date: string | null;
+  plan_id: string | null;
   created_at: string;
 };
 
@@ -20,7 +21,7 @@ export type ActiveAdsByPosition = {
 };
 
 const ADS_SELECT =
-  "id, image_url, title, description, link, position, is_active, start_date, end_date, created_at";
+  "id, image_url, title, description, link, position, is_active, start_date, end_date, plan_id, created_at";
 
 const isAdPosition = (value: string): value is AdPosition => {
   return value === "top" || value === "middle";
@@ -54,6 +55,7 @@ const mapAdRow = (row: AdRow): Ad | null => {
     isActive: row.is_active,
     startDate: row.start_date,
     endDate: row.end_date,
+    planId: row.plan_id,
     createdAt: row.created_at,
   };
 };

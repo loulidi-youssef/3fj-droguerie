@@ -68,6 +68,19 @@ const parseBooleanInput = (value: unknown): boolean => {
   return false;
 };
 
+const parseOptionalUuid = (value: unknown): string | null | "invalid" => {
+  const rawValue = toOptionalString(value);
+  if (!rawValue) {
+    return null;
+  }
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawValue)) {
+    return "invalid";
+  }
+
+  return rawValue;
+};
+
 const normalizeLink = (value: string): string | null => {
   try {
     const parsed = new URL(value);
@@ -89,6 +102,7 @@ const parseFromUnknown = (payload: {
   isActive: unknown;
   startDate: unknown;
   endDate: unknown;
+  planId: unknown;
 }): ParsedAdInput => {
   const imageUrl = toRequiredString(payload.imageUrl);
   const title = toOptionalString(payload.title);
@@ -98,6 +112,7 @@ const parseFromUnknown = (payload: {
   const isActive = parseBooleanInput(payload.isActive);
   const startDate = parseDateInput(payload.startDate);
   const endDate = parseDateInput(payload.endDate);
+  const planId = parseOptionalUuid(payload.planId);
 
   if (!imageUrl) {
     return { ok: false, error: "L'image de la publicite est obligatoire." };
@@ -128,6 +143,10 @@ const parseFromUnknown = (payload: {
     return { ok: false, error: "La date de fin doit etre apres la date de debut." };
   }
 
+  if (planId === "invalid") {
+    return { ok: false, error: "Plan publicitaire invalide." };
+  }
+
   return {
     ok: true,
     value: {
@@ -139,6 +158,7 @@ const parseFromUnknown = (payload: {
       isActive,
       startDate,
       endDate,
+      planId,
     },
   };
 };
@@ -155,6 +175,7 @@ export const parseAdminAdInputFromJson = (
     isActive: payload.is_active,
     startDate: payload.start_date,
     endDate: payload.end_date,
+    planId: payload.plan_id,
   });
 };
 
@@ -168,6 +189,7 @@ export const parseAdminAdInputFromFormData = (formData: FormData): ParsedAdInput
     isActive: formData.get("isActive"),
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
+    planId: formData.get("planId"),
   });
 };
 

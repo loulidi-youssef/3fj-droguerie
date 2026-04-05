@@ -10,6 +10,15 @@ export type AdminAd = {
   is_active: boolean;
   start_date: string | null;
   end_date: string | null;
+  plan_id: string | null;
+  ad_plan: {
+    id: string;
+    name: string;
+    position: "top" | "middle";
+    duration_days: number;
+    price: number;
+    is_active: boolean;
+  } | null;
   created_at: string;
 };
 
@@ -22,6 +31,7 @@ export type UpsertAdminAdInput = {
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
+  planId: string | null;
 };
 
 type AdminActionResult = {
@@ -57,7 +67,36 @@ const normalizeDatabaseError = (
     return "Le lien cible est obligatoire.";
   }
 
+  if (message.includes("ads_plan_id_fkey")) {
+    return "Le plan selectionne est introuvable.";
+  }
+
   return fallbackMessage;
+};
+
+type AdminAdPlanRow = {
+  id: string;
+  name: string;
+  position: "top" | "middle";
+  duration_days: number;
+  price: number;
+  is_active: boolean;
+};
+
+type AdminAdRow = Omit<AdminAd, "ad_plan"> & {
+  ad_plans: AdminAdPlanRow | AdminAdPlanRow[] | null;
+};
+
+const getNormalizedPlan = (rawValue: AdminAdRow["ad_plans"]): AdminAd["ad_plan"] => {
+  if (!rawValue) {
+    return null;
+  }
+
+  if (Array.isArray(rawValue)) {
+    return rawValue[0] ?? null;
+  }
+
+  return rawValue;
 };
 
 export const getAdminAds = async (): Promise<AdminAd[]> => {
@@ -69,14 +108,29 @@ export const getAdminAds = async (): Promise<AdminAd[]> => {
 
   const { data, error } = await supabaseAdmin
     .from("ads")
-    .select("id, image_url, title, description, link, position, is_active, start_date, end_date, created_at")
+    .select(
+      "id, image_url, title, description, link, position, is_active, start_date, end_date, plan_id, created_at, ad_plans(id, name, position, duration_days, price, is_active)",
+    )
     .order("created_at", { ascending: false });
 
   if (error || !data) {
     return [];
   }
 
-  return data as AdminAd[];
+  return (data as AdminAdRow[]).map((row) => ({
+    id: row.id,
+    image_url: row.image_url,
+    title: row.title,
+    description: row.description,
+    link: row.link,
+    position: row.position,
+    is_active: row.is_active,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    plan_id: row.plan_id,
+    ad_plan: getNormalizedPlan(row.ad_plans),
+    created_at: row.created_at,
+  }));
 };
 
 export const createAdminAd = async (
@@ -97,6 +151,7 @@ export const createAdminAd = async (
     is_active: input.isActive,
     start_date: input.startDate,
     end_date: input.endDate,
+    plan_id: input.planId,
   });
 
   if (error) {
@@ -130,6 +185,7 @@ export const updateAdminAd = async (
       is_active: input.isActive,
       start_date: input.startDate,
       end_date: input.endDate,
+      plan_id: input.planId,
     })
     .eq("id", id);
 

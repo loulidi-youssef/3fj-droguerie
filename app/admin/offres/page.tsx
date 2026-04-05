@@ -3,6 +3,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
 import {
+  calculateOfferPricing,
+  formatOfferDiscountLabel,
+  isOfferDiscountType,
+  normalizeOfferDiscountValue,
+} from "@/lib/offer-pricing";
+import {
   clearAdminSession,
   hasValidAdminSession,
   isAdminAuthConfigured,
@@ -15,6 +21,7 @@ import {
   setAdminOfferActiveState,
   updateAdminOffer,
 } from "@/lib/admin-offers";
+import type { OfferDiscountType } from "@/types";
 
 type AdminOffersPageProps = {
   searchParams: {
@@ -26,9 +33,9 @@ type AdminOffersPageProps = {
 type OfferFormValue = {
   title: string;
   shortDescription: string;
-  discountLabel: string;
   productId: string;
-  discountedPrice: number;
+  discountType: OfferDiscountType;
+  discountValue: number;
   startAt: string | null;
   endAt: string | null;
   imagePath: string | null;
@@ -123,16 +130,16 @@ const formatDateTime = (value: string | null): string => {
 const parseOfferForm = (formData: FormData): ParsedOfferForm => {
   const titleRaw = formData.get("title");
   const shortDescriptionRaw = formData.get("shortDescription");
-  const discountLabelRaw = formData.get("discountLabel");
+  const discountTypeRaw = formData.get("discountType");
   const productIdRaw = formData.get("productId");
 
   const title = typeof titleRaw === "string" ? titleRaw.trim() : "";
   const shortDescription =
     typeof shortDescriptionRaw === "string" ? shortDescriptionRaw.trim() : "";
-  const discountLabel =
-    typeof discountLabelRaw === "string" ? discountLabelRaw.trim() : "";
+  const discountTypeRawValue =
+    typeof discountTypeRaw === "string" ? discountTypeRaw.trim() : "";
   const productId = typeof productIdRaw === "string" ? productIdRaw.trim() : "";
-  const discountedPrice = toNumber(formData.get("discountedPrice"));
+  const discountValue = toNumber(formData.get("discountValue"));
 
   const startInput = toNullableString(formData.get("startAt"));
   const endInput = toNullableString(formData.get("endAt"));
@@ -153,16 +160,20 @@ const parseOfferForm = (formData: FormData): ParsedOfferForm => {
     return { ok: false, error: "La description courte est obligatoire." };
   }
 
-  if (!discountLabel) {
-    return { ok: false, error: "Le label de remise est obligatoire (ex: -20%)." };
+  if (!isOfferDiscountType(discountTypeRawValue)) {
+    return { ok: false, error: "Le type de remise doit etre percent ou fixed." };
   }
 
   if (!productId) {
     return { ok: false, error: "Selectionnez un produit pour cette offre." };
   }
 
-  if (!Number.isFinite(discountedPrice) || discountedPrice <= 0) {
-    return { ok: false, error: "Le prix promotionnel doit etre superieur a 0." };
+  if (!Number.isFinite(discountValue) || discountValue < 0) {
+    return { ok: false, error: "La valeur de remise doit etre superieure ou egale a 0." };
+  }
+
+  if (discountTypeRawValue === "percent" && discountValue > 100) {
+    return { ok: false, error: "Le pourcentage de remise doit etre entre 0 et 100." };
   }
 
   if (startInput && !startAt) {
@@ -182,9 +193,9 @@ const parseOfferForm = (formData: FormData): ParsedOfferForm => {
     value: {
       title,
       shortDescription,
-      discountLabel,
       productId,
-      discountedPrice: Math.round(discountedPrice),
+      discountType: discountTypeRawValue,
+      discountValue: normalizeOfferDiscountValue(discountTypeRawValue, discountValue),
       startAt,
       endAt,
       imagePath,
@@ -201,6 +212,14 @@ const redirectWithSuccess = (message: string): never => {
 
 const redirectWithError = (message: string): never => {
   redirect(`/admin/offres?error=${encodeURIComponent(message)}`);
+};
+
+const revalidateOfferStorefrontPaths = () => {
+  revalidatePath("/admin/offres");
+  revalidatePath("/offres");
+  revalidatePath("/");
+  revalidatePath("/produits");
+  revalidatePath("/produits/[slug]", "page");
 };
 
 const getValidatedOfferInput = (formData: FormData): OfferFormValue => {
@@ -222,8 +241,42 @@ const validateOfferProductPricing = async (
     return "Le produit selectionne n'existe pas ou n'est plus disponible.";
   }
 
-  if (input.discountedPrice >= linkedProduct.price) {
-    return "Le prix promotionnel doit etre inferieur au prix normal du produit.";
+  const previewPricing = calculateOfferPricing(
+    linkedProduct.price,
+    input.discountType,
+    input.discountValue,
+  );
+
+  if (previewPricing.discountedPrice < 0) {
+    return "Le prix promotionnel calcule est invalide.";
+  }
+
+  return null;
+};
+
+const resolveDiscountRule = (
+  discountType: string | null,
+  discountValue: number | null,
+  legacyDiscountedPrice: number | null,
+  productPrice: number | null,
+): { discountType: OfferDiscountType; discountValue: number } | null => {
+  const normalizedType = discountType ?? "";
+  if (
+    isOfferDiscountType(normalizedType) &&
+    typeof discountValue === "number" &&
+    Number.isFinite(discountValue)
+  ) {
+    return {
+      discountType: normalizedType,
+      discountValue: normalizeOfferDiscountValue(normalizedType, discountValue),
+    };
+  }
+
+  if (typeof legacyDiscountedPrice === "number" && typeof productPrice === "number") {
+    return {
+      discountType: "fixed",
+      discountValue: Math.max(0, productPrice - legacyDiscountedPrice),
+    };
   }
 
   return null;
@@ -253,9 +306,7 @@ const createOfferAction = async (formData: FormData) => {
     redirectWithError(created.error ?? "Impossible d'ajouter l'offre.");
   }
 
-  revalidatePath("/admin/offres");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateOfferStorefrontPaths();
   redirectWithSuccess("Offre ajoutee avec succes.");
 };
 
@@ -284,9 +335,7 @@ const updateOfferAction = async (formData: FormData) => {
     redirectWithError(updated.error ?? "Impossible de modifier l'offre.");
   }
 
-  revalidatePath("/admin/offres");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateOfferStorefrontPaths();
   redirectWithSuccess("Offre modifiee avec succes.");
 };
 
@@ -312,9 +361,7 @@ const toggleOfferActiveAction = async (formData: FormData) => {
     redirectWithError(updated.error ?? "Impossible de changer le statut de l'offre.");
   }
 
-  revalidatePath("/admin/offres");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateOfferStorefrontPaths();
   redirectWithSuccess(nextActive ? "Offre activee." : "Offre desactivee.");
 };
 
@@ -337,9 +384,7 @@ const deleteOfferAction = async (formData: FormData) => {
     redirectWithError(deleted.error ?? "Suppression impossible.");
   }
 
-  revalidatePath("/admin/offres");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateOfferStorefrontPaths();
   redirectWithSuccess("Offre supprimee.");
 };
 
@@ -452,15 +497,17 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
             </label>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Label remise
+                Type remise
               </span>
-              <input
-                type="text"
-                name="discountLabel"
+              <select
+                name="discountType"
                 required
-                placeholder="-20%"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
+                defaultValue="percent"
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="percent">Pourcentage (%)</option>
+                <option value="fixed">Montant fixe (DH)</option>
+              </select>
             </label>
 
             <label className="block md:col-span-2">
@@ -495,14 +542,15 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
 
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Prix promotionnel (DH)
+                Valeur remise
               </span>
               <input
                 type="number"
-                name="discountedPrice"
-                min="1"
-                step="1"
+                name="discountValue"
+                min="0"
+                step="0.01"
                 required
+                placeholder="20"
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
@@ -578,16 +626,39 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
           </div>
         ) : (
           <div className="space-y-4">
-            {offers.map((offer) => (
-              <details key={offer.id} className="rounded-2xl bg-white p-5 shadow-card">
+            {offers.map((offer) => {
+              const linkedProduct = productById.get(offer.product_id ?? "");
+              const resolvedDiscount = resolveDiscountRule(
+                offer.discount_type,
+                offer.discount_value,
+                offer.discounted_price,
+                linkedProduct?.price ?? null,
+              );
+              const pricingPreview =
+                linkedProduct && resolvedDiscount
+                  ? calculateOfferPricing(
+                      linkedProduct.price,
+                      resolvedDiscount.discountType,
+                      resolvedDiscount.discountValue,
+                    )
+                  : null;
+              const discountLabel = resolvedDiscount
+                ? formatOfferDiscountLabel(
+                    resolvedDiscount.discountType,
+                    resolvedDiscount.discountValue,
+                  )
+                : offer.discount_label;
+
+              return (
+                <details key={offer.id} className="rounded-2xl bg-white p-5 shadow-card">
                 <summary className="cursor-pointer list-none">
                   <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Titre</p>
                       <p className="text-sm font-bold text-brand-blue">{offer.title}</p>
-                      <p className="text-xs text-slate-600">{offer.discount_label}</p>
+                      <p className="text-xs text-slate-600">{discountLabel}</p>
                       <p className="text-xs text-slate-600">
-                        Produit: {productById.get(offer.product_id ?? "")?.name ?? "Non defini"}
+                        Produit: {linkedProduct?.name ?? "Non defini"}
                       </p>
                     </div>
                     <div>
@@ -598,16 +669,13 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prix</p>
                       <p className="text-xs text-slate-700">
-                        Avant:{" "}
-                        {offer.product_id
-                          ? formatDh(productById.get(offer.product_id)?.price ?? 0)
-                          : "Non defini"}
+                        Avant: {linkedProduct ? formatDh(linkedProduct.price) : "Non defini"}
                       </p>
                       <p className="text-xs font-semibold text-brand-blue">
-                        Maintenant:{" "}
-                        {typeof offer.discounted_price === "number"
-                          ? formatDh(offer.discounted_price)
-                          : "Non defini"}
+                        Maintenant: {pricingPreview ? formatDh(pricingPreview.discountedPrice) : "Non defini"}
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        Economie: {pricingPreview ? formatDh(pricingPreview.savingsAmount) : "Non definie"}
                       </p>
                     </div>
                     <div>
@@ -656,15 +724,17 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
 
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Label remise
+                        Type remise
                       </span>
-                      <input
-                        type="text"
-                        name="discountLabel"
+                      <select
+                        name="discountType"
                         required
-                        defaultValue={offer.discount_label}
-                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      />
+                        defaultValue={resolvedDiscount?.discountType ?? "percent"}
+                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="percent">Pourcentage (%)</option>
+                        <option value="fixed">Montant fixe (DH)</option>
+                      </select>
                     </label>
 
                     <label className="block md:col-span-2">
@@ -701,15 +771,15 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
 
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Prix promotionnel (DH)
+                        Valeur remise
                       </span>
                       <input
                         type="number"
-                        name="discountedPrice"
-                        min="1"
-                        step="1"
+                        name="discountValue"
+                        min="0"
+                        step="0.01"
                         required
-                        defaultValue={offer.discounted_price ?? ""}
+                        defaultValue={resolvedDiscount?.discountValue ?? 0}
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                       />
                     </label>
@@ -808,8 +878,9 @@ export default async function AdminOffresPage({ searchParams }: AdminOffersPageP
                     </form>
                   </div>
                 </div>
-              </details>
-            ))}
+                </details>
+              );
+            })}
           </div>
         )}
       </div>

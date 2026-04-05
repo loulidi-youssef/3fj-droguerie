@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ProductDetailPurchasePanel } from "@/components/product-detail-purchase-panel";
 import { ProductCard } from "@/components/product-card";
+import { getActiveOffersWithProducts } from "@/lib/offers";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
 
 type ProductDetailProps = {
@@ -32,14 +33,29 @@ export const generateMetadata = async ({ params }: ProductDetailProps): Promise<
 };
 
 export default async function ProductDetailPage({ params }: ProductDetailProps) {
-  const [product, products] = await Promise.all([
+  const [product, products, offersWithProducts] = await Promise.all([
     getProductBySlug(params.slug),
     getAllProducts(),
+    getActiveOffersWithProducts(),
   ]);
 
   if (!product) {
     notFound();
   }
+
+  const activeOffer = offersWithProducts.find(
+    (offerWithProduct) => offerWithProduct.product.id === product.id,
+  );
+  const activeOfferPricing = activeOffer
+    ? {
+        originalPrice: activeOffer.originalPrice,
+        discountedPrice: activeOffer.discountedPrice,
+        savingsAmount: activeOffer.savingsAmount,
+        savingsPercent: activeOffer.savingsPercent,
+        discountLabel: activeOffer.offer.discountLabel,
+        endAt: activeOffer.offer.endAt ?? null,
+      }
+    : undefined;
 
   const relatedProducts = products
     .filter(
@@ -74,7 +90,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
             </div>
           </div>
 
-          <ProductDetailPurchasePanel product={product} />
+          <ProductDetailPurchasePanel product={product} offerPricing={activeOfferPricing} />
         </div>
 
         {relatedProducts.length > 0 ? (

@@ -14,6 +14,14 @@ import type { Product, ProductVariant } from "@/types";
 
 type ProductDetailPurchasePanelProps = {
   product: Product;
+  offerPricing?: {
+    originalPrice: number;
+    discountedPrice: number;
+    savingsAmount: number;
+    savingsPercent: number;
+    discountLabel: string;
+    endAt?: string | null;
+  };
 };
 
 const normalizeVariantLabel = (value: string | null | undefined): string | null => {
@@ -35,7 +43,10 @@ const normalizeSizeKey = (value: string | null | undefined): string | null => {
   return normalized ? normalized.replace(/\s+/g, "").toLocaleLowerCase("fr") : null;
 };
 
-export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePanelProps) => {
+export const ProductDetailPurchasePanel = ({
+  product,
+  offerPricing,
+}: ProductDetailPurchasePanelProps) => {
   const activeVariants = useMemo(
     () => (product.variants ?? []).filter((variant) => variant.isActive),
     [product.variants],
@@ -221,6 +232,28 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
           </p>
         ) : null}
       </div>
+      {offerPricing ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+            Offre active {offerPricing.discountLabel}
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <p className="text-sm font-semibold text-slate-700">
+              Prix normal:{" "}
+              <span className="line-through">{formatDh(offerPricing.originalPrice)}</span>
+            </p>
+            <p className="text-sm font-extrabold text-brand-orange">
+              Prix promo: {formatDh(offerPricing.discountedPrice)}
+            </p>
+            <p className="text-sm font-semibold text-emerald-700">
+              Economie: {formatDh(offerPricing.savingsAmount)}
+            </p>
+            <p className="text-sm font-semibold text-emerald-700">
+              Remise: {offerPricing.savingsPercent}%
+            </p>
+          </div>
+        </div>
+      ) : null}
       <p
         className={`mt-2 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${availability.className}`}
       >

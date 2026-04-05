@@ -1,7 +1,12 @@
 import { offers as fallbackOffers } from "@/data/offers";
+import {
+  calculateOfferPricing,
+  formatOfferDiscountLabel,
+  isOfferDiscountType,
+} from "@/lib/offer-pricing";
 import { getProductsByIds } from "@/lib/products";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { Offer, Product } from "@/types";
+import type { Offer, OfferDiscountType, Product } from "@/types";
 
 type OfferRow = {
   id: string;
@@ -9,6 +14,8 @@ type OfferRow = {
   short_description: string;
   discount_label: string;
   product_id: string | null;
+  discount_type?: string | null;
+  discount_value?: number | null;
   discounted_price: number | null;
   start_at: string | null;
   end_at: string | null;
@@ -30,11 +37,37 @@ export type FeaturedOfferWithProduct = {
 
 export type OfferWithProductPricing = FeaturedOfferWithProduct;
 
-const OFFER_SELECT =
+const OFFER_SELECT_WITH_RULES =
+  "id, title, short_description, discount_label, product_id, discount_type, discount_value, discounted_price, start_at, end_at, image_path, banner_text, is_active, is_featured, created_at";
+const OFFER_SELECT_LEGACY =
   "id, title, short_description, discount_label, product_id, discounted_price, start_at, end_at, image_path, banner_text, is_active, is_featured, created_at";
 
+const normalizeDiscountType = (
+  value: string | null | undefined,
+): OfferDiscountType | null => {
+  if (!value) {
+    return null;
+  }
+
+  return isOfferDiscountType(value) ? value : null;
+};
+
 const mapOfferRow = (row: OfferRow): Offer | null => {
-  if (!row.product_id || typeof row.discounted_price !== "number") {
+  if (!row.product_id) {
+    return null;
+  }
+
+  const discountType = normalizeDiscountType(row.discount_type);
+  const discountValue =
+    typeof row.discount_value === "number" && Number.isFinite(row.discount_value)
+      ? row.discount_value
+      : null;
+  const legacyDiscountedPrice =
+    typeof row.discounted_price === "number" && Number.isFinite(row.discounted_price)
+      ? row.discounted_price
+      : null;
+
+  if (!discountType && legacyDiscountedPrice === null) {
     return null;
   }
 
@@ -44,7 +77,9 @@ const mapOfferRow = (row: OfferRow): Offer | null => {
     shortDescription: row.short_description,
     discountLabel: row.discount_label,
     productId: row.product_id,
-    discountedPrice: row.discounted_price,
+    discountType: discountType ?? "fixed",
+    discountValue: discountValue ?? 0,
+    legacyDiscountedPrice,
     startAt: row.start_at,
     endAt: row.end_at,
     imagePath: row.image_path,
@@ -108,19 +143,27 @@ const toOfferWithProductPricing = (
   offer: Offer,
   product: Product,
 ): OfferWithProductPricing => {
-  const originalPrice = product.price;
-  const discountedPrice = offer.discountedPrice;
-  const savingsAmount = Math.max(0, originalPrice - discountedPrice);
-  const savingsPercent =
-    originalPrice > 0 ? Math.round((savingsAmount / originalPrice) * 100) : 0;
+  const discountType: OfferDiscountType =
+    offer.legacyDiscountedPrice === null || offer.legacyDiscountedPrice === undefined
+      ? offer.discountType
+      : "fixed";
+  const discountValue =
+    offer.legacyDiscountedPrice === null || offer.legacyDiscountedPrice === undefined
+      ? offer.discountValue
+      : Math.max(0, product.price - offer.legacyDiscountedPrice);
+  const pricing = calculateOfferPricing(product.price, discountType, discountValue);
+  const normalizedOffer: Offer = {
+    ...offer,
+    discountType,
+    discountValue,
+    discountLabel: offer.discountLabel || formatOfferDiscountLabel(discountType, discountValue),
+    legacyDiscountedPrice: null,
+  };
 
   return {
-    offer,
+    offer: normalizedOffer,
     product,
-    originalPrice,
-    discountedPrice,
-    savingsAmount,
-    savingsPercent,
+    ...pricing,
   };
 };
 
@@ -155,22 +198,38 @@ export const getActiveOffers = async (): Promise<Offer[]> => {
     return getFallbackActiveOffers();
   }
 
-  const { data, error } = await supabase
-    .from("offers")
-    .select(OFFER_SELECT)
-    .eq("is_active", true)
-    .not("product_id", "is", null)
-    .not("discounted_price", "is", null)
-    .order("is_featured", { ascending: false })
-    .order("created_at", { ascending: false });
+  const fetchOfferRows = async (selectClause: string) => {
+    return supabase
+      .from("offers")
+      .select(selectClause)
+      .eq("is_active", true)
+      .not("product_id", "is", null)
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false })
+      .returns<OfferRow[]>();
+  };
+  const { data, error } = await fetchOfferRows(OFFER_SELECT_WITH_RULES);
 
-  if (error || !data) {
+  let rows: OfferRow[] | null = data ?? null;
+
+  if (
+    error &&
+    (error.message.includes("discount_type") || error.message.includes("discount_value"))
+  ) {
+    const { data: legacyData, error: legacyError } = await fetchOfferRows(OFFER_SELECT_LEGACY);
+
+    if (legacyError || !legacyData) {
+      return getFallbackActiveOffers();
+    }
+
+    rows = legacyData;
+  }
+
+  if ((error && !rows) || !rows) {
     return getFallbackActiveOffers();
   }
 
-  const mapped = (data as OfferRow[])
-    .map(mapOfferRow)
-    .filter((offer): offer is Offer => Boolean(offer));
+  const mapped = rows.map(mapOfferRow).filter((offer): offer is Offer => Boolean(offer));
   return sortOffersForStorefront(mapped.filter(isOfferActiveNow));
 };
 

@@ -1,4 +1,9 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  formatOfferDiscountLabel,
+  normalizeOfferDiscountValue,
+} from "@/lib/offer-pricing";
+import type { OfferDiscountType } from "@/types";
 
 export type AdminOffer = {
   id: string;
@@ -6,6 +11,8 @@ export type AdminOffer = {
   short_description: string;
   discount_label: string;
   product_id: string | null;
+  discount_type: OfferDiscountType | null;
+  discount_value: number | null;
   discounted_price: number | null;
   start_at: string | null;
   end_at: string | null;
@@ -21,9 +28,9 @@ export type UpsertAdminOfferInput = {
   id?: string;
   title: string;
   shortDescription: string;
-  discountLabel: string;
   productId: string;
-  discountedPrice: number;
+  discountType: OfferDiscountType;
+  discountValue: number;
   startAt: string | null;
   endAt: string | null;
   imagePath: string | null;
@@ -66,27 +73,39 @@ const normalizeDatabaseError = (
   }
 
   if (message.includes("relation \"offers\" does not exist")) {
-    return "La table offers est manquante. Lancez supabase/migrations/2026-04-04-create-offers-table.sql.";
+    return "La table offers est manquante. Lancez supabase/migrations/20260404090200_create_offers_table.sql.";
   }
 
   if (message.includes("column \"product_id\" does not exist")) {
-    return "La colonne product_id est manquante. Lancez supabase/migrations/2026-04-04-link-offers-to-products.sql.";
+    return "La colonne product_id est manquante. Lancez supabase/migrations/20260404090300_link_offers_to_products.sql.";
   }
 
-  if (message.includes("column \"discounted_price\" does not exist")) {
-    return "La colonne discounted_price est manquante. Lancez supabase/migrations/2026-04-04-link-offers-to-products.sql.";
+  if (message.includes("column \"discount_type\" does not exist")) {
+    return "Les colonnes discount_type / discount_value sont manquantes. Lancez la migration 20260407120000.";
   }
 
-  if (message.includes("offers_discounted_price_check")) {
-    return "Le prix promotionnel doit etre superieur a 0.";
+  if (message.includes("column \"discount_value\" does not exist")) {
+    return "Les colonnes discount_type / discount_value sont manquantes. Lancez la migration 20260407120000.";
+  }
+
+  if (message.includes("offers_discount_value_check")) {
+    return "La valeur de remise est invalide.";
+  }
+
+  if (message.includes("offers_discount_percent_range_check")) {
+    return "Le pourcentage de remise doit etre entre 0 et 100.";
+  }
+
+  if (message.includes("offers_discount_type_check")) {
+    return "Le type de remise doit etre percent ou fixed.";
+  }
+
+  if (message.includes("discounted_price") && message.includes("null value")) {
+    return "La migration 20260407120000 doit etre appliquee (discounted_price legacy encore obligatoire).";
   }
 
   if (message.includes("product_id") && message.includes("null value")) {
     return "Selectionnez un produit pour cette offre.";
-  }
-
-  if (message.includes("discounted_price") && message.includes("null value")) {
-    return "Le prix promotionnel est obligatoire.";
   }
 
   return fallbackMessage;
@@ -135,13 +154,24 @@ export const createAdminOffer = async (
 
   const id = input.id?.trim() || toOfferId(input.title);
 
+  const normalizedDiscountValue = normalizeOfferDiscountValue(
+    input.discountType,
+    input.discountValue,
+  );
+  const discountLabel = formatOfferDiscountLabel(
+    input.discountType,
+    normalizedDiscountValue,
+  );
+
   const { error } = await supabaseAdmin.from("offers").insert({
     id,
     title: input.title.trim(),
     short_description: input.shortDescription.trim(),
-    discount_label: input.discountLabel.trim(),
+    discount_label: discountLabel,
     product_id: input.productId,
-    discounted_price: input.discountedPrice,
+    discount_type: input.discountType,
+    discount_value: normalizedDiscountValue,
+    discounted_price: null,
     start_at: input.startAt,
     end_at: input.endAt,
     image_path: input.imagePath,
@@ -174,14 +204,25 @@ export const updateAdminOffer = async (
     return { ok: false, error: "Supabase admin non configure." };
   }
 
+  const normalizedDiscountValue = normalizeOfferDiscountValue(
+    input.discountType,
+    input.discountValue,
+  );
+  const discountLabel = formatOfferDiscountLabel(
+    input.discountType,
+    normalizedDiscountValue,
+  );
+
   const { error } = await supabaseAdmin
     .from("offers")
     .update({
       title: input.title.trim(),
       short_description: input.shortDescription.trim(),
-      discount_label: input.discountLabel.trim(),
+      discount_label: discountLabel,
       product_id: input.productId,
-      discounted_price: input.discountedPrice,
+      discount_type: input.discountType,
+      discount_value: normalizedDiscountValue,
+      discounted_price: null,
       start_at: input.startAt,
       end_at: input.endAt,
       image_path: input.imagePath,

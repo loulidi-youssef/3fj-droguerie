@@ -70,7 +70,9 @@ export type Offer = {
   shortDescription: string;
   discountLabel: string;
   productId: string;
-  discountedPrice: number;
+  discountType: OfferDiscountType;
+  discountValue: number;
+  legacyDiscountedPrice?: number | null;
   startAt?: string | null;
   endAt?: string | null;
   imagePath?: string | null;
@@ -79,6 +81,8 @@ export type Offer = {
   isFeatured?: boolean;
   createdAt?: string;
 };
+
+export type OfferDiscountType = "percent" | "fixed";
 
 export type AdPosition = "top" | "middle";
 
@@ -92,6 +96,20 @@ export type Ad = {
   isActive: boolean;
   startDate?: string | null;
   endDate?: string | null;
+  planId?: string | null;
+  createdAt?: string;
+};
+
+export type AdEventType = "view" | "click";
+
+export type AdPlan = {
+  id: string;
+  name: string;
+  description?: string | null;
+  position: AdPosition;
+  durationDays: number;
+  price: number;
+  isActive: boolean;
   createdAt?: string;
 };
 
