@@ -13,6 +13,7 @@ import {
 } from "@/lib/checkout-validation";
 import { formatDh } from "@/lib/currency";
 import { getAmountForFreeDelivery, getDeliveryCost } from "@/lib/delivery";
+import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 import type { Product } from "@/types";
@@ -30,6 +31,11 @@ type OrderApiResponse = {
 };
 
 type FulfillmentMethod = "delivery" | "pickup";
+
+type ProductsApiResponse = {
+  products?: Product[];
+  activeOfferRulesByProductId?: Record<string, OfferUnitPricingRule>;
+};
 
 const initialCheckoutForm: CheckoutFormValues = {
   name: "",
@@ -55,6 +61,9 @@ export default function PanierPage() {
   const { showToast } = useToast();
 
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
+  const [activeOfferRulesByProductId, setActiveOfferRulesByProductId] = useState<
+    Record<string, OfferUnitPricingRule>
+  >({});
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutFormValues>(initialCheckoutForm);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
@@ -97,6 +106,7 @@ export default function PanierPage() {
 
     if (uniqueProductIds.length === 0) {
       setProductsById({});
+      setActiveOfferRulesByProductId({});
       setIsProductsLoading(false);
       return;
     }
@@ -119,8 +129,8 @@ export default function PanierPage() {
           throw new Error("Erreur API produits");
         }
 
-        const payload = (await response.json()) as { products: Product[] };
-        const nextProductsById = payload.products.reduce<Record<string, Product>>(
+        const payload = (await response.json()) as ProductsApiResponse;
+        const nextProductsById = (payload.products ?? []).reduce<Record<string, Product>>(
           (accumulator, product) => {
             accumulator[product.id] = product;
             return accumulator;
@@ -128,11 +138,13 @@ export default function PanierPage() {
           {},
         );
         setProductsById(nextProductsById);
+        setActiveOfferRulesByProductId(payload.activeOfferRulesByProductId ?? {});
       } catch (error) {
         if ((error as { name?: string }).name === "AbortError") {
           return;
         }
         setProductsById({});
+        setActiveOfferRulesByProductId({});
       } finally {
         setIsProductsLoading(false);
       }
@@ -206,10 +218,18 @@ export default function PanierPage() {
           const product = productsById[item.productId];
           if (!product) return null;
 
-          const unitPrice =
-            typeof item.selectedPrice === "number" && item.selectedPrice > 0
-              ? item.selectedPrice
-              : product.price;
+          const selectedVariant =
+            item.variantId && Array.isArray(product.variants)
+              ? product.variants.find((variant) => variant.id === item.variantId)
+              : undefined;
+          const baseUnitPrice = selectedVariant?.price ?? product.price;
+          const offerRule = activeOfferRulesByProductId[item.productId];
+          const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
+          const unitPrice = effectivePricing.discountedPrice;
+          const originalUnitPrice =
+            effectivePricing.originalPrice > effectivePricing.discountedPrice
+              ? effectivePricing.originalPrice
+              : null;
           const variantLabelParts = [
             item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
             item.selectedSize ? `Taille: ${item.selectedSize}` : null,
@@ -218,6 +238,7 @@ export default function PanierPage() {
           return {
             ...item,
             product,
+            originalUnitPrice,
             unitPrice,
             lineTotal: unitPrice * item.quantity,
             variantLabel: variantLabelParts.join(" | "),
@@ -225,7 +246,7 @@ export default function PanierPage() {
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),
-    [items, productsById],
+    [items, productsById, activeOfferRulesByProductId],
   );
 
   const missingProductsCount = items.length - detailedItems.length;
@@ -441,7 +462,12 @@ export default function PanierPage() {
                         {item.variantLabel ? (
                           <p className="text-xs font-medium text-slate-500">{item.variantLabel}</p>
                         ) : null}
-                        <p className="text-sm text-slate-600">{formatDh(item.unitPrice)} / unite</p>
+                        <p className="text-sm text-slate-600">
+                          {item.originalUnitPrice ? (
+                            <span className="mr-2 line-through">{formatDh(item.originalUnitPrice)}</span>
+                          ) : null}
+                          <span>{formatDh(item.unitPrice)} / unite</span>
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-2">

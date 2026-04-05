@@ -48,10 +48,8 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
   );
   const activeOfferPricing = activeOffer
     ? {
-        originalPrice: activeOffer.originalPrice,
-        discountedPrice: activeOffer.discountedPrice,
-        savingsAmount: activeOffer.savingsAmount,
-        savingsPercent: activeOffer.savingsPercent,
+        discountType: activeOffer.offer.discountType,
+        discountValue: activeOffer.offer.discountValue,
         discountLabel: activeOffer.offer.discountLabel,
         endAt: activeOffer.offer.endAt ?? null,
       }

@@ -7,6 +7,12 @@ export type OfferPricing = {
   savingsPercent: number;
 };
 
+export type OfferUnitPricingRule = {
+  discountType: OfferDiscountType;
+  discountValue: number;
+  legacyDiscountedPrice?: number | null;
+};
+
 const roundCurrency = (value: number): number => {
   if (!Number.isFinite(value)) {
     return 0;
@@ -73,4 +79,32 @@ export const calculateOfferPricing = (
     savingsAmount,
     savingsPercent,
   };
+};
+
+export const calculateEffectiveUnitPricing = (
+  baseUnitPrice: number,
+  offerRule?: OfferUnitPricingRule | null,
+): OfferPricing => {
+  const normalizedBaseUnitPrice = roundCurrency(baseUnitPrice);
+
+  if (!offerRule) {
+    return calculateOfferPricing(normalizedBaseUnitPrice, "fixed", 0);
+  }
+
+  if (
+    typeof offerRule.legacyDiscountedPrice === "number" &&
+    Number.isFinite(offerRule.legacyDiscountedPrice)
+  ) {
+    const inferredFixedDiscount = Math.max(
+      0,
+      normalizedBaseUnitPrice - roundCurrency(offerRule.legacyDiscountedPrice),
+    );
+    return calculateOfferPricing(normalizedBaseUnitPrice, "fixed", inferredFixedDiscount);
+  }
+
+  return calculateOfferPricing(
+    normalizedBaseUnitPrice,
+    offerRule.discountType,
+    offerRule.discountValue,
+  );
 };

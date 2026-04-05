@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
+import { getActiveOfferRulesByProductIds } from "@/lib/offers";
+import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import { getProductsByIds } from "@/lib/products";
 import {
   RequestAuthError,
@@ -311,6 +313,7 @@ export async function POST(request: NextRequest) {
 
   const productIds = normalizedItems.map((item) => item.productId);
   const products = await getProductsByIds(productIds);
+  const activeOfferRulesByProductId = await getActiveOfferRulesByProductIds(productIds);
   const productById = new Map(products.map((product) => [product.id, product]));
 
   const missingProductIds = productIds.filter((productId) => !productById.has(productId));
@@ -363,7 +366,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const unitPrice = selectedVariant ? selectedVariant.price : product.price;
+    // Policy: product-level active offers apply to the selected unit base price,
+    // including variant prices when a variant is chosen.
+    const baseUnitPrice = selectedVariant ? selectedVariant.price : product.price;
+    const offerRule = activeOfferRulesByProductId.get(product.id);
+    const unitPrice = calculateEffectiveUnitPricing(baseUnitPrice, offerRule).discountedPrice;
     const stock = selectedVariant?.stock ?? product.stock;
 
     if (typeof stock === "number" && item.quantity > stock) {

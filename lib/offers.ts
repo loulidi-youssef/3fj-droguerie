@@ -1,8 +1,10 @@
 import { offers as fallbackOffers } from "@/data/offers";
 import {
   calculateOfferPricing,
+  calculateEffectiveUnitPricing,
   formatOfferDiscountLabel,
   isOfferDiscountType,
+  type OfferUnitPricingRule,
 } from "@/lib/offer-pricing";
 import { getProductsByIds } from "@/lib/products";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -36,6 +38,11 @@ export type FeaturedOfferWithProduct = {
 };
 
 export type OfferWithProductPricing = FeaturedOfferWithProduct;
+
+export type ActiveOfferPricingRule = OfferUnitPricingRule & {
+  productId: string;
+  discountLabel: string;
+};
 
 const OFFER_SELECT_WITH_RULES =
   "id, title, short_description, discount_label, product_id, discount_type, discount_value, discounted_price, start_at, end_at, image_path, banner_text, is_active, is_featured, created_at";
@@ -245,6 +252,42 @@ export const getFeaturedActiveOffer = async (): Promise<Offer | undefined> => {
 export const getActiveOffersWithProducts = async (): Promise<OfferWithProductPricing[]> => {
   const activeOffers = await getActiveOffers();
   return buildOffersWithProducts(activeOffers);
+};
+
+export const getActiveOfferRulesByProductIds = async (
+  productIds: string[],
+): Promise<Map<string, ActiveOfferPricingRule>> => {
+  const uniqueProductIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueProductIds.length === 0) {
+    return new Map();
+  }
+
+  const activeOffers = await getActiveOffers();
+  const productIdSet = new Set(uniqueProductIds);
+  const rulesByProductId = new Map<string, ActiveOfferPricingRule>();
+
+  for (const offer of activeOffers) {
+    if (!productIdSet.has(offer.productId) || rulesByProductId.has(offer.productId)) {
+      continue;
+    }
+
+    rulesByProductId.set(offer.productId, {
+      productId: offer.productId,
+      discountType: offer.discountType,
+      discountValue: offer.discountValue,
+      legacyDiscountedPrice: offer.legacyDiscountedPrice ?? null,
+      discountLabel: offer.discountLabel || formatOfferDiscountLabel(offer.discountType, offer.discountValue),
+    });
+  }
+
+  return rulesByProductId;
+};
+
+export const getEffectiveUnitPriceFromOfferRule = (
+  baseUnitPrice: number,
+  offerRule?: OfferUnitPricingRule | null,
+): number => {
+  return calculateEffectiveUnitPricing(baseUnitPrice, offerRule).discountedPrice;
 };
 
 export const getFeaturedActiveOfferWithProduct = async (): Promise<

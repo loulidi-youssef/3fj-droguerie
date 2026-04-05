@@ -6,19 +6,18 @@ import { AddToCartButton } from "@/components/add-to-cart-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
+import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import {
   getProductAvailabilityMeta,
   getProductAvailabilityStatus,
 } from "@/lib/product-availability";
-import type { Product, ProductVariant } from "@/types";
+import type { OfferDiscountType, Product, ProductVariant } from "@/types";
 
 type ProductDetailPurchasePanelProps = {
   product: Product;
   offerPricing?: {
-    originalPrice: number;
-    discountedPrice: number;
-    savingsAmount: number;
-    savingsPercent: number;
+    discountType: OfferDiscountType;
+    discountValue: number;
     discountLabel: string;
     endAt?: string | null;
   };
@@ -196,9 +195,20 @@ export const ProductDetailPurchasePanel = ({
     );
   };
 
-  const displayedPrice = selectedVariant?.price ?? product.price;
+  const baseDisplayedPrice = selectedVariant?.price ?? product.price;
+  const effectiveOfferPricing = offerPricing
+    ? calculateEffectiveUnitPricing(baseDisplayedPrice, {
+        discountType: offerPricing.discountType,
+        discountValue: offerPricing.discountValue,
+      })
+    : null;
+  const displayedPrice = effectiveOfferPricing?.discountedPrice ?? baseDisplayedPrice;
   const displayedPreviousPrice =
-    typeof selectedVariant?.previousPrice === "number" && selectedVariant.previousPrice > displayedPrice
+    effectiveOfferPricing
+      ? effectiveOfferPricing.originalPrice > effectiveOfferPricing.discountedPrice
+        ? effectiveOfferPricing.originalPrice
+        : null
+      : typeof selectedVariant?.previousPrice === "number" && selectedVariant.previousPrice > displayedPrice
       ? selectedVariant.previousPrice
       : typeof product.previousPrice === "number" && product.previousPrice > displayedPrice
         ? product.previousPrice
@@ -232,7 +242,7 @@ export const ProductDetailPurchasePanel = ({
           </p>
         ) : null}
       </div>
-      {offerPricing ? (
+      {offerPricing && effectiveOfferPricing ? (
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
             Offre active {offerPricing.discountLabel}
@@ -240,16 +250,16 @@ export const ProductDetailPurchasePanel = ({
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <p className="text-sm font-semibold text-slate-700">
               Prix normal:{" "}
-              <span className="line-through">{formatDh(offerPricing.originalPrice)}</span>
+              <span className="line-through">{formatDh(effectiveOfferPricing.originalPrice)}</span>
             </p>
             <p className="text-sm font-extrabold text-brand-orange">
-              Prix promo: {formatDh(offerPricing.discountedPrice)}
+              Prix promo: {formatDh(effectiveOfferPricing.discountedPrice)}
             </p>
             <p className="text-sm font-semibold text-emerald-700">
-              Economie: {formatDh(offerPricing.savingsAmount)}
+              Economie: {formatDh(effectiveOfferPricing.savingsAmount)}
             </p>
             <p className="text-sm font-semibold text-emerald-700">
-              Remise: {offerPricing.savingsPercent}%
+              Remise: {effectiveOfferPricing.savingsPercent}%
             </p>
           </div>
         </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { formatDh } from "@/lib/currency";
+import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
 import type { Product } from "@/types";
 
 type CartDrawerProps = {
@@ -12,9 +13,17 @@ type CartDrawerProps = {
   onClose: () => void;
 };
 
+type ProductsApiResponse = {
+  products?: Product[];
+  activeOfferRulesByProductId?: Record<string, OfferUnitPricingRule>;
+};
+
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const { items, itemCount, updateQuantity, removeItem } = useCart();
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
+  const [activeOfferRulesByProductId, setActiveOfferRulesByProductId] = useState<
+    Record<string, OfferUnitPricingRule>
+  >({});
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   const uniqueProductIds = useMemo(
@@ -59,6 +68,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
     if (uniqueProductIds.length === 0) {
       setProductsById({});
+      setActiveOfferRulesByProductId({});
       setIsLoadingProducts(false);
       return;
     }
@@ -82,7 +92,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           throw new Error("Erreur API produits");
         }
 
-        const payload = (await response.json()) as { products?: Product[] };
+        const payload = (await response.json()) as ProductsApiResponse;
         const nextProductsById = (payload.products ?? []).reduce<Record<string, Product>>(
           (accumulator, product) => {
             accumulator[product.id] = product;
@@ -92,11 +102,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         );
 
         setProductsById(nextProductsById);
+        setActiveOfferRulesByProductId(payload.activeOfferRulesByProductId ?? {});
       } catch (error) {
         if ((error as { name?: string }).name === "AbortError") {
           return;
         }
         setProductsById({});
+        setActiveOfferRulesByProductId({});
       } finally {
         setIsLoadingProducts(false);
       }
@@ -118,10 +130,18 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
             return null;
           }
 
-          const unitPrice =
-            typeof item.selectedPrice === "number" && item.selectedPrice > 0
-              ? item.selectedPrice
-              : product.price;
+          const selectedVariant =
+            item.variantId && Array.isArray(product.variants)
+              ? product.variants.find((variant) => variant.id === item.variantId)
+              : undefined;
+          const baseUnitPrice = selectedVariant?.price ?? product.price;
+          const offerRule = activeOfferRulesByProductId[item.productId];
+          const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
+          const unitPrice = effectivePricing.discountedPrice;
+          const originalUnitPrice =
+            effectivePricing.originalPrice > effectivePricing.discountedPrice
+              ? effectivePricing.originalPrice
+              : null;
 
           const variantLabelParts = [
             item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
@@ -131,6 +151,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           return {
             ...item,
             product,
+            originalUnitPrice,
             unitPrice,
             lineTotal: unitPrice * item.quantity,
             variantLabel: variantLabelParts.join(" | "),
@@ -138,7 +159,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),
-    [items, productsById],
+    [items, productsById, activeOfferRulesByProductId],
   );
 
   const subtotal = useMemo(
@@ -251,6 +272,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       <p className="mt-0.5 text-[1.7rem] font-extrabold leading-none text-[#ef4444]">
                         {formatDh(item.unitPrice)}
                       </p>
+                      {item.originalUnitPrice ? (
+                        <p className="mt-0.5 text-xs font-semibold text-slate-400 line-through">
+                          {formatDh(item.originalUnitPrice)}
+                        </p>
+                      ) : null}
                       <div className="mt-3 flex items-center gap-2">
                         <button
                           type="button"
