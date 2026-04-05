@@ -682,6 +682,8 @@ export const createAdminSession = async (): Promise<void> => {
     throw new Error("Unable to generate admin session token.");
   }
 
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+
   cookies().set({
     name: ADMIN_SESSION_COOKIE,
     value: sessionToken,
@@ -690,6 +692,7 @@ export const createAdminSession = async (): Promise<void> => {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
+    expires: expiresAt,
   });
 };
 
@@ -700,5 +703,15 @@ export const clearAdminSession = async (): Promise<void> => {
     await revokeDbSessionToken(currentSessionToken);
   }
 
+  cookies().set({
+    name: ADMIN_SESSION_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
   cookies().delete(ADMIN_SESSION_COOKIE);
 };

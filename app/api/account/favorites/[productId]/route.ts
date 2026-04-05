@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   RequestAuthError,
-  getAuthenticatedCustomerFromRequest,
+  getAuthenticatedCustomerContextFromRequest,
 } from "@/lib/supabase/auth-user";
 
 type RouteContext = {
@@ -45,9 +44,11 @@ const mapFavoriteDatabaseError = (
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
-  let authenticatedCustomer: { id: string; email: string | null } | null;
+  let authenticatedContext: Awaited<
+    ReturnType<typeof getAuthenticatedCustomerContextFromRequest>
+  >;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+    authenticatedContext = await getAuthenticatedCustomerContextFromRequest(request);
   } catch (error) {
     if (error instanceof RequestAuthError) {
       return NextResponse.json(
@@ -58,16 +59,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     throw error;
   }
 
-  if (!authenticatedCustomer) {
+  if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
-  }
-
-  const supabaseAdmin = getSupabaseAdminClient();
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin non configure." },
-      { status: 500 },
-    );
   }
 
   const productId = resolveProductId(params.productId);
@@ -75,30 +68,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Produit introuvable." }, { status: 400 });
   }
 
-  const { data: productRow, error: productError } = await supabaseAdmin
-    .from("products")
-    .select("id")
-    .eq("id", productId)
-    .maybeSingle();
-
-  if (productError) {
-    console.error("[favorites:add:product-check]", {
-      code: productError.code,
-      message: productError.message,
-      details: productError.details,
-      hint: productError.hint,
-      productId,
-    });
-
-    return NextResponse.json({ error: "Verification produit impossible." }, { status: 500 });
-  }
-
-  if (!productRow) {
-    return NextResponse.json({ error: "Produit introuvable." }, { status: 404 });
-  }
-
-  const { error } = await supabaseAdmin.from("favorites").insert({
-    user_id: authenticatedCustomer.id,
+  const { error } = await authenticatedContext.supabase.from("favorites").insert({
+    user_id: authenticatedContext.customer.id,
     product_id: productId,
   });
 
@@ -113,7 +84,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       details: error.details,
       hint: error.hint,
       productId,
-      userId: authenticatedCustomer.id,
+      userId: authenticatedContext.customer.id,
     });
 
     return NextResponse.json(
@@ -126,9 +97,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
-  let authenticatedCustomer: { id: string; email: string | null } | null;
+  let authenticatedContext: Awaited<
+    ReturnType<typeof getAuthenticatedCustomerContextFromRequest>
+  >;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
+    authenticatedContext = await getAuthenticatedCustomerContextFromRequest(request);
   } catch (error) {
     if (error instanceof RequestAuthError) {
       return NextResponse.json(
@@ -139,7 +112,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     throw error;
   }
 
-  if (!authenticatedCustomer) {
+  if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
 
@@ -148,18 +121,9 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Produit introuvable." }, { status: 400 });
   }
 
-  const supabaseAdmin = getSupabaseAdminClient();
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin non configure." },
-      { status: 500 },
-    );
-  }
-
-  const { error } = await supabaseAdmin
+  const { error } = await authenticatedContext.supabase
     .from("favorites")
     .delete()
-    .eq("user_id", authenticatedCustomer.id)
     .eq("product_id", productId);
 
   if (error) {
@@ -169,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       details: error.details,
       hint: error.hint,
       productId,
-      userId: authenticatedCustomer.id,
+      userId: authenticatedContext.customer.id,
     });
 
     return NextResponse.json(

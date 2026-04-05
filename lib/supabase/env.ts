@@ -3,16 +3,13 @@ const readEnv = (value: string | undefined): string | null => {
   return trimmed ? trimmed : null;
 };
 
+// Shared Supabase env (safe for server and browser-adjacent imports).
+// Never add service-role secrets in this module.
 export const supabaseEnv = {
   url: readEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
   anonKey: readEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-  serviceRoleKey: readEnv(process.env.SUPABASE_SERVICE_ROLE_KEY),
 };
 
 export const isSupabaseReadConfigured = Boolean(
   supabaseEnv.url && supabaseEnv.anonKey,
-);
-
-export const isSupabaseWriteConfigured = Boolean(
-  supabaseEnv.url && supabaseEnv.serviceRoleKey,
 );

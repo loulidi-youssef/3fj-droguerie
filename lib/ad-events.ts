@@ -40,19 +40,49 @@ const normalizeSessionKey = (value: string | null | undefined): string | null =>
   return trimmed;
 };
 
-const toEventBucket = (eventType: AdEventType, now: Date): string => {
-  const year = String(now.getUTCFullYear());
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(now.getUTCDate()).padStart(2, "0");
-  const datePart = `${year}${month}${day}`;
+const DEDUPE_WINDOW_SECONDS: Record<AdEventType, number> = {
+  view: 10,
+  click: 30,
+};
 
-  if (eventType === "view") {
-    return datePart;
+const toEventBucket = (eventType: AdEventType, nowMs: number): string => {
+  const windowSeconds = DEDUPE_WINDOW_SECONDS[eventType];
+  return String(Math.floor(nowMs / (windowSeconds * 1000)));
+};
+
+const isAdTrackable = async (adId: string): Promise<boolean> => {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return false;
   }
 
-  const hour = String(now.getUTCHours()).padStart(2, "0");
-  const minute = String(now.getUTCMinutes()).padStart(2, "0");
-  return `${datePart}${hour}${minute}`;
+  const { data, error } = await supabaseAdmin
+    .from("ads")
+    .select("id,is_active,start_date,end_date")
+    .eq("id", adId)
+    .maybeSingle();
+
+  if (error) {
+    return false;
+  }
+
+  if (!data?.id || !data.is_active) {
+    return false;
+  }
+
+  const nowMs = Date.now();
+  const startMs = data.start_date ? Date.parse(data.start_date) : null;
+  const endMs = data.end_date ? Date.parse(data.end_date) : null;
+
+  if (typeof startMs === "number" && Number.isFinite(startMs) && nowMs < startMs) {
+    return false;
+  }
+
+  if (typeof endMs === "number" && Number.isFinite(endMs) && nowMs > endMs) {
+    return false;
+  }
+
+  return true;
 };
 
 export const recordAdEvent = async (
@@ -63,13 +93,18 @@ export const recordAdEvent = async (
     return { ok: false, error: "Supabase admin non configure." };
   }
 
-  const now = new Date();
+  const trackable = await isAdTrackable(input.adId);
+  if (!trackable) {
+    return { ok: true, counted: false };
+  }
+
+  const nowMs = Date.now();
   const normalizedSessionKey = normalizeSessionKey(input.sessionKey);
   const sessionIdentity =
     normalizedSessionKey ??
     `fp_${hashValue(input.fallbackFingerprint).slice(0, 24)}`;
   const dedupeKey = hashValue(
-    `${input.adId}|${input.eventType}|${sessionIdentity}|${toEventBucket(input.eventType, now)}`,
+    `${input.adId}|${input.eventType}|${sessionIdentity}|${toEventBucket(input.eventType, nowMs)}`,
   );
 
   const { error } = await supabaseAdmin.from("ad_events").insert({

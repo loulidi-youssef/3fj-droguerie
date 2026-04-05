@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recordAdEvent } from "@/lib/ad-events";
+import {
+  buildTrackingFallbackFingerprint,
+  getTrackingRequestIp,
+  getTrackingRequestUserAgent,
+  guardAdTrackingRequest,
+} from "@/lib/ad-tracking-guard";
 
 type TrackAdRouteContext = {
   params: {
@@ -11,13 +17,6 @@ const isUuid = (value: string): boolean => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
-};
-
-const getFallbackFingerprint = (request: NextRequest): string => {
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown-ip";
-  const userAgent = request.headers.get("user-agent")?.trim() || "unknown-agent";
-  const acceptLanguage = request.headers.get("accept-language")?.trim() || "unknown-language";
-  return `${forwardedFor}|${userAgent.slice(0, 120)}|${acceptLanguage.slice(0, 40)}`;
 };
 
 export const dynamic = "force-dynamic";
@@ -36,11 +35,25 @@ export async function POST(request: NextRequest, context: TrackAdRouteContext) {
   }
 
   const sessionKey = typeof payload.session_key === "string" ? payload.session_key : null;
+  const ip = getTrackingRequestIp(request);
+  const userAgent = getTrackingRequestUserAgent(request);
+  const guarded = guardAdTrackingRequest({
+    adId,
+    eventType: "view",
+    ip,
+    userAgent,
+    sessionKey,
+  });
+
+  if (!guarded.allowed) {
+    return NextResponse.json({ ok: true, counted: false });
+  }
+
   const recorded = await recordAdEvent({
     adId,
     eventType: "view",
-    sessionKey,
-    fallbackFingerprint: getFallbackFingerprint(request),
+    sessionKey: guarded.normalizedSessionKey,
+    fallbackFingerprint: buildTrackingFallbackFingerprint(request, ip, userAgent),
   });
 
   if (!recorded.ok) {

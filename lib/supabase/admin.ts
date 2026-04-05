@@ -1,19 +1,25 @@
+import "server-only";
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { isSupabaseWriteConfigured, supabaseEnv } from "@/lib/supabase/env";
+import {
+  isSupabaseAdminConfigured,
+  supabaseAdminEnv,
+} from "@/lib/supabase/admin-env";
 
 let cachedAdminClient: SupabaseClient | null | undefined;
 
 export const getSupabaseAdminClient = (): SupabaseClient | null => {
+  // Service-role client is server-only by design.
   if (cachedAdminClient !== undefined) {
     return cachedAdminClient;
   }
 
-  if (!isSupabaseWriteConfigured) {
+  if (!isSupabaseAdminConfigured) {
     cachedAdminClient = null;
     return cachedAdminClient;
   }
 
-  cachedAdminClient = createClient(supabaseEnv.url!, supabaseEnv.serviceRoleKey!, {
+  cachedAdminClient = createClient(supabaseAdminEnv.url!, supabaseAdminEnv.serviceRoleKey!, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
