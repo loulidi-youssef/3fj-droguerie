@@ -31,6 +31,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
   const availabilityStatus = getProductAvailabilityStatus(product);
   const availability = getProductAvailabilityMeta(product);
   const isOutOfStock = availabilityStatus === "out-of-stock";
+  const requiresVariantSelection = (product.variants?.length ?? 0) > 0;
   const isHomepageVariant = variant === "homepage";
   const reviewCount = Math.max(12, Math.round(product.rating * 8));
   const previousPrice =
@@ -89,13 +90,22 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
           </p>
 
           <div className="mt-3">
-            <AddToCartButton
-              productId={product.id}
-              disabled={isOutOfStock}
-              compact
-              className="inline-flex h-9 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-[11px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange"
-              controlsClassName="inline-flex h-9 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2"
-            />
+            {requiresVariantSelection ? (
+              <Link
+                href={`/produits/${product.slug}`}
+                className="inline-flex h-9 w-full items-center justify-center rounded-md border border-brand-orange bg-white px-2 text-[11px] font-semibold text-brand-orange transition hover:bg-orange-50"
+              >
+                Choisir une variante
+              </Link>
+            ) : (
+              <AddToCartButton
+                productId={product.id}
+                disabled={isOutOfStock}
+                compact
+                className="inline-flex h-9 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-[11px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange"
+                controlsClassName="inline-flex h-9 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2"
+              />
+            )}
           </div>
         </div>
       </article>
@@ -164,13 +174,22 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
         </p>
 
         <div className="mt-4">
-          <AddToCartButton
-            productId={product.id}
-            disabled={isOutOfStock}
-            compact
-            className="btn-primary h-10 w-full px-2 text-center text-[11px] sm:h-11 sm:text-sm"
-            controlsClassName="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-2 sm:h-11"
-          />
+          {requiresVariantSelection ? (
+            <Link
+              href={`/produits/${product.slug}`}
+              className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-brand-blue px-2 text-center text-[11px] font-semibold text-brand-blue transition hover:bg-slate-50 sm:h-11 sm:text-sm"
+            >
+              Choisir une variante
+            </Link>
+          ) : (
+            <AddToCartButton
+              productId={product.id}
+              disabled={isOutOfStock}
+              compact
+              className="btn-primary h-10 w-full px-2 text-center text-[11px] sm:h-11 sm:text-sm"
+              controlsClassName="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-2 sm:h-11"
+            />
+          )}
         </div>
       </div>
     </article>

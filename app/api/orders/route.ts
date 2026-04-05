@@ -297,14 +297,28 @@ export async function POST(request: NextRequest) {
 
   for (const item of normalizedItems) {
     const product = productById.get(item.productId)!;
+    const productVariants = Array.isArray(product.variants) ? product.variants : [];
+
+    if (productVariants.length > 0 && !item.variantId) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error: `Le produit "${product.name}" exige le choix d'une variante (couleur/taille).`,
+        },
+        { status: 400 },
+      );
+    }
+
     const selectedVariant =
-      item.variantId && Array.isArray(product.variants)
-        ? product.variants.find((variant) => variant.id === item.variantId)
+      item.variantId && productVariants.length > 0
+        ? productVariants.find((variant) => variant.id === item.variantId)
         : null;
 
     if (item.variantId && !selectedVariant) {
       return NextResponse.json<OrderErrorResponse>(
-        { error: "Une variante selectionnee n'est plus disponible. Merci d'actualiser votre panier." },
+        {
+          error:
+            "La variante selectionnee est invalide ou indisponible. Merci d'actualiser votre panier.",
+        },
         { status: 400 },
       );
     }

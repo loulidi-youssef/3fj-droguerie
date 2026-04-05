@@ -119,26 +119,35 @@ const replaceAdminProductVariants = async (
   productId: string,
   variants: UpsertAdminProductVariantInput[],
 ): Promise<AdminActionResult> => {
-  const { error: deleteError } = await supabaseAdmin
+  const { data: existingVariants, error: existingVariantsError } = await supabaseAdmin
     .from("product_variants")
-    .delete()
+    .select("id")
     .eq("product_id", productId);
 
-  if (deleteError) {
+  if (existingVariantsError) {
     return {
       ok: false,
       error: normalizeDatabaseError(
-        deleteError.message,
+        existingVariantsError.message,
         "Impossible de mettre a jour les variantes.",
       ),
     };
   }
 
-  if (variants.length === 0) {
-    return { ok: true };
-  }
+  const existingVariantIds = new Set(
+    (existingVariants ?? []).map((variant) => String((variant as { id: string }).id)),
+  );
+  const usedVariantIds = new Set<string>();
 
   const payload = variants.map((variant) => {
+    const requestedId = toNullableTrimmed(variant.id);
+    const safeVariantId =
+      requestedId && existingVariantIds.has(requestedId) && !usedVariantIds.has(requestedId)
+        ? requestedId
+        : crypto.randomUUID();
+
+    usedVariantIds.add(safeVariantId);
+
     const normalizedPrice = Math.round(variant.price);
     const normalizedPreviousPrice =
       typeof variant.previousPrice === "number" && variant.previousPrice > normalizedPrice
@@ -146,7 +155,7 @@ const replaceAdminProductVariants = async (
         : null;
 
     return {
-      id: toNullableTrimmed(variant.id) ?? crypto.randomUUID(),
+      id: safeVariantId,
       product_id: productId,
       color: toNullableTrimmed(variant.color ?? null),
       size: toNullableTrimmed(variant.size ?? null),
@@ -159,16 +168,41 @@ const replaceAdminProductVariants = async (
     };
   });
 
-  const { error: insertError } = await supabaseAdmin.from("product_variants").insert(payload);
+  if (payload.length > 0) {
+    const { error: upsertError } = await supabaseAdmin
+      .from("product_variants")
+      .upsert(payload, { onConflict: "id" });
 
-  if (insertError) {
-    return {
-      ok: false,
-      error: normalizeDatabaseError(
-        insertError.message,
-        "Impossible d'enregistrer les variantes du produit.",
-      ),
-    };
+    if (upsertError) {
+      return {
+        ok: false,
+        error: normalizeDatabaseError(
+          upsertError.message,
+          "Impossible d'enregistrer les variantes du produit.",
+        ),
+      };
+    }
+  }
+
+  const submittedIds = new Set(payload.map((variant) => variant.id));
+  const staleVariantIds = [...existingVariantIds].filter((variantId) => !submittedIds.has(variantId));
+
+  if (staleVariantIds.length > 0) {
+    const { error: deleteStaleError } = await supabaseAdmin
+      .from("product_variants")
+      .delete()
+      .eq("product_id", productId)
+      .in("id", staleVariantIds);
+
+    if (deleteStaleError) {
+      return {
+        ok: false,
+        error: normalizeDatabaseError(
+          deleteStaleError.message,
+          "Impossible de finaliser la mise a jour des variantes.",
+        ),
+      };
+    }
   }
 
   return { ok: true };
