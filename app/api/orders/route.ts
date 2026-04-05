@@ -9,8 +9,6 @@ type IncomingOrderItem = {
   productId?: string;
   quantity?: number;
   variantId?: string;
-  selectedColor?: string;
-  selectedSize?: string;
 };
 
 type IncomingOrderBody = {
@@ -37,8 +35,6 @@ type NormalizedOrderItem = {
   productId: string;
   quantity: number;
   variantId: string | null;
-  selectedColor: string | null;
-  selectedSize: string | null;
 };
 
 type ParseOrderItemsResult =
@@ -85,20 +81,13 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
     }
 
     const variantId = toNullableString(item.variantId);
-    const selectedColor = toNullableString(item.selectedColor);
-    const selectedSize = toNullableString(item.selectedSize);
 
     const quantity = Number(item.quantity ?? 0);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       return { ok: false, error: "Quantite invalide. Merci de corriger votre panier." };
     }
 
-    const compositeKey = [
-      productId,
-      variantId ?? "base",
-      selectedColor ?? "",
-      selectedSize ?? "",
-    ].join("::");
+    const compositeKey = [productId, variantId ?? "base"].join("::");
 
     const existing = quantityByCompositeKey.get(compositeKey);
     const nextQuantity = (existing?.quantity ?? 0) + quantity;
@@ -113,8 +102,6 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
     quantityByCompositeKey.set(compositeKey, {
       productId,
       variantId,
-      selectedColor,
-      selectedSize,
       quantity: nextQuantity,
     });
 
@@ -289,6 +276,9 @@ export async function POST(request: NextRequest) {
 
   const lineItems: Array<{
     productId: string;
+    variantId: string | null;
+    selectedColor: string | null;
+    selectedSize: string | null;
     productName: string;
     quantity: number;
     unitPrice: number;
@@ -333,8 +323,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const color = selectedVariant?.color ?? item.selectedColor;
-    const size = selectedVariant?.size ?? item.selectedSize;
+    const color = selectedVariant?.color ?? null;
+    const size = selectedVariant?.size ?? null;
     const variantLabelParts = [
       color ? `Couleur: ${color}` : null,
       size ? `Taille: ${size}` : null,
@@ -346,6 +336,9 @@ export async function POST(request: NextRequest) {
 
     lineItems.push({
       productId: product.id,
+      variantId: selectedVariant?.id ?? null,
+      selectedColor: color,
+      selectedSize: size,
       productName,
       quantity: item.quantity,
       unitPrice,
@@ -370,69 +363,46 @@ export async function POST(request: NextRequest) {
 
   const authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
 
-  const baseOrderPayload = {
-    customer_name: name,
-    customer_phone: phone,
-    customer_address: address,
-    customer_location: location,
-    subtotal,
-    delivery_fee: deliveryFee,
-    total,
-  };
-
-  const payloadWithUser = authenticatedCustomer
-    ? { ...baseOrderPayload, user_id: authenticatedCustomer.id }
-    : baseOrderPayload;
-
-  let insertedOrder: { id: string } | null = null;
-  let orderError: { message?: string } | null = null;
-
-  const firstInsertAttempt = await supabaseAdmin
-    .from("orders")
-    .insert(payloadWithUser)
-    .select("id")
-    .single();
-
-  insertedOrder = firstInsertAttempt.data as { id: string } | null;
-  orderError = firstInsertAttempt.error;
-
-  const shouldRetryWithoutUser =
-    Boolean(authenticatedCustomer) &&
-    Boolean(orderError?.message?.includes("column \"user_id\" of relation \"orders\" does not exist"));
-
-  if (shouldRetryWithoutUser) {
-    const fallbackInsert = await supabaseAdmin
-      .from("orders")
-      .insert(baseOrderPayload)
-      .select("id")
-      .single();
-
-    insertedOrder = fallbackInsert.data as { id: string } | null;
-    orderError = fallbackInsert.error;
-  }
-
-  if (orderError || !insertedOrder) {
-    return NextResponse.json<OrderErrorResponse>(
-      { error: "Impossible d'enregistrer la commande pour le moment." },
-      { status: 500 },
-    );
-  }
-
   const orderItemsPayload = lineItems.map((item) => ({
-    order_id: insertedOrder.id,
     product_id: item.productId,
+    variant_id: item.variantId,
+    selected_color: item.selectedColor,
+    selected_size: item.selectedSize,
     product_name: item.productName,
     quantity: item.quantity,
     unit_price: item.unitPrice,
     line_total: item.lineTotal,
   }));
 
-  const { error: orderItemsError } = await supabaseAdmin
-    .from("order_items")
-    .insert(orderItemsPayload);
+  const { data: createdOrderId, error: createOrderError } = await supabaseAdmin.rpc(
+    "create_order_with_items_atomic",
+    {
+      p_customer_name: name,
+      p_customer_phone: phone,
+      p_customer_address: address,
+      p_customer_location: location,
+      p_subtotal: subtotal,
+      p_delivery_fee: deliveryFee,
+      p_total: total,
+      p_user_id: authenticatedCustomer?.id ?? null,
+      p_items: orderItemsPayload,
+    },
+  );
 
-  if (orderItemsError) {
-    await supabaseAdmin.from("orders").delete().eq("id", insertedOrder.id);
+  if (createOrderError || !createdOrderId) {
+    const normalizedMessage = (createOrderError?.message ?? "").toUpperCase();
+    if (
+      normalizedMessage.includes("INSUFFICIENT_STOCK") ||
+      normalizedMessage.includes("INSUFFICIENT_VARIANT_STOCK")
+    ) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error:
+            "Stock insuffisant pour finaliser la commande. Merci d'actualiser votre panier.",
+        },
+        { status: 400 },
+      );
+    }
 
     return NextResponse.json<OrderErrorResponse>(
       { error: "La commande n'a pas pu etre finalisee. Merci de reessayer." },
@@ -441,7 +411,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    orderId: insertedOrder.id,
+    orderId: createdOrderId,
     subtotal,
     deliveryFee,
     total,

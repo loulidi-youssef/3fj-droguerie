@@ -745,7 +745,10 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
-            <AdminProductVariantsInput inputName="variantsJson" />
+            <AdminProductVariantsInput
+              inputName="variantsJson"
+              productIdForValidation="__new__"
+            />
             <label className="inline-flex items-center gap-2 md:col-span-2">
               <input type="checkbox" name="isActive" defaultChecked />
               <span className="text-sm text-slate-700">Produit actif</span>
@@ -947,6 +950,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                     </label>
                     <AdminProductVariantsInput
                       inputName="variantsJson"
+                      productIdForValidation={product.id}
                       initialVariants={product.variants.map((variant) => ({
                         id: variant.id,
                         color: variant.color,

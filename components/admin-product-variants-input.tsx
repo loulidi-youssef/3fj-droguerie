@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type AdminProductVariantsInputVariant = {
   id?: string | null;
@@ -30,6 +30,7 @@ type VariantRow = {
 type AdminProductVariantsInputProps = {
   inputName: string;
   initialVariants?: AdminProductVariantsInputVariant[];
+  productIdForValidation?: string;
 };
 
 const createRowKey = (): string => {
@@ -81,9 +82,19 @@ const isRowCompletelyEmpty = (row: VariantRow): boolean => {
   );
 };
 
+const toNormalizedVariantDimension = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.toLowerCase();
+};
+
 export const AdminProductVariantsInput = ({
   inputName,
   initialVariants = [],
+  productIdForValidation,
 }: AdminProductVariantsInputProps) => {
   const [rows, setRows] = useState<VariantRow[]>(() => {
     if (initialVariants.length === 0) {
@@ -103,6 +114,7 @@ export const AdminProductVariantsInput = ({
       isActive: variant.isActive !== false,
     }));
   });
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const serializedVariants = useMemo(() => {
     const payload = rows
@@ -122,6 +134,125 @@ export const AdminProductVariantsInput = ({
     return JSON.stringify(payload);
   }, [rows]);
 
+  const rowErrorsByKey = useMemo(() => {
+    const rowErrors = new Map<string, string[]>();
+    const variantKeysByRow = new Map<string, string>();
+    const duplicateBuckets = new Map<string, string[]>();
+    const validationProductId = (productIdForValidation ?? "__new__").trim() || "__new__";
+
+    for (const row of rows) {
+      const errors: string[] = [];
+      const isEmpty = isRowCompletelyEmpty(row);
+
+      if (isEmpty) {
+        rowErrors.set(row.key, errors);
+        continue;
+      }
+
+      const color = row.color.trim();
+      const size = row.size.trim();
+      const price = row.price.trim();
+      const stock = row.stock.trim();
+
+      const hasColorOrSize = Boolean(color) || Boolean(size);
+      if (!hasColorOrSize) {
+        errors.push("Ajoutez au moins une couleur ou une taille.");
+      }
+
+      if (!price) {
+        errors.push("Le prix est obligatoire.");
+      } else {
+        const numericPrice = Number(price);
+        if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+          errors.push("Le prix doit etre un nombre superieur a 0.");
+        }
+      }
+
+      if (!stock) {
+        errors.push("Le stock est obligatoire.");
+      } else {
+        const numericStock = Number(stock);
+        if (!Number.isFinite(numericStock) || numericStock < 0) {
+          errors.push("Le stock doit etre un nombre superieur ou egal a 0.");
+        }
+      }
+
+      if (hasColorOrSize) {
+        const duplicateKey = [
+          validationProductId,
+          toNormalizedVariantDimension(color) ?? "__none__",
+          toNormalizedVariantDimension(size) ?? "__none__",
+        ].join("::");
+        variantKeysByRow.set(row.key, duplicateKey);
+      }
+
+      rowErrors.set(row.key, errors);
+    }
+
+    for (const [rowKey, duplicateKey] of variantKeysByRow.entries()) {
+      const bucket = duplicateBuckets.get(duplicateKey) ?? [];
+      duplicateBuckets.set(duplicateKey, [...bucket, rowKey]);
+    }
+
+    for (const rowKeys of duplicateBuckets.values()) {
+      if (rowKeys.length < 2) {
+        continue;
+      }
+
+      for (const rowKey of rowKeys) {
+        const errors = rowErrors.get(rowKey) ?? [];
+        rowErrors.set(rowKey, [
+          ...errors,
+          "Combinaison couleur/taille dupliquee pour ce produit.",
+        ]);
+      }
+    }
+
+    return rowErrors;
+  }, [rows, productIdForValidation]);
+
+  const hasBlockingErrors = useMemo(() => {
+    for (const row of rows) {
+      if (isRowCompletelyEmpty(row)) {
+        continue;
+      }
+
+      const errors = rowErrorsByKey.get(row.key) ?? [];
+      if (errors.length > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [rowErrorsByKey, rows]);
+  const hasBlockingErrorsRef = useRef<boolean>(hasBlockingErrors);
+
+  useEffect(() => {
+    hasBlockingErrorsRef.current = hasBlockingErrors;
+  }, [hasBlockingErrors]);
+
+  useEffect(() => {
+    const form = rootRef.current?.closest("form");
+    if (!form) {
+      return;
+    }
+
+    const onSubmit = (event: Event) => {
+      if (!hasBlockingErrorsRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
+    form.addEventListener("submit", onSubmit);
+    return () => {
+      form.removeEventListener("submit", onSubmit);
+    };
+  }, []);
+
   const addVariantRow = () => {
     setRows((current) => [...current, createEmptyRow()]);
   };
@@ -137,7 +268,7 @@ export const AdminProductVariantsInput = ({
   };
 
   return (
-    <div className="md:col-span-2">
+    <div ref={rootRef} className="md:col-span-2">
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
@@ -156,6 +287,11 @@ export const AdminProductVariantsInput = ({
             Ajouter une variante
           </button>
         </div>
+        {hasBlockingErrors ? (
+          <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs font-medium text-rose-700">
+            Corrigez les erreurs des variantes avant d&apos;enregistrer le produit.
+          </p>
+        ) : null}
 
         {rows.length === 0 ? (
           <p className="rounded-lg bg-white p-3 text-xs text-slate-500">
@@ -164,6 +300,7 @@ export const AdminProductVariantsInput = ({
         ) : (
           <div className="space-y-3">
             {rows.map((row, index) => {
+              const rowErrors = rowErrorsByKey.get(row.key) ?? [];
               const priceInvalid = row.price.trim() !== "" && !isNumericFieldValid(row.price);
               const stockInvalid = row.stock.trim() !== "" && !isNumericFieldValid(row.stock);
               const previousPriceInvalid =
@@ -298,6 +435,18 @@ export const AdminProductVariantsInput = ({
                     <p className="mt-2 text-xs font-medium text-rose-700">
                       Verifiez les nombres: prix et stock doivent etre numeriques. Ancien prix est optionnel.
                     </p>
+                  ) : null}
+                  {rowErrors.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      {rowErrors.map((error, errorIndex) => (
+                        <p
+                          key={`${row.key}-error-${errorIndex}`}
+                          className="text-xs font-medium text-rose-700"
+                        >
+                          {error}
+                        </p>
+                      ))}
+                    </div>
                   ) : null}
                 </article>
               );
