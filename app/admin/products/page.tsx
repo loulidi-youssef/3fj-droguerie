@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
+import { AdminProductActionNotifications } from "@/components/admin-product-action-notifications";
 import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
 import { categories, getCategoryNameBySlug } from "@/data/categories";
 import { uploadAdminProductImages } from "@/lib/admin-product-images";
@@ -515,6 +516,10 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
   return (
     <section className="bg-brand-light py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+        <AdminProductActionNotifications
+          successMessage={successMessage}
+          errorMessage={errorMessage}
+        />
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-extrabold text-brand-blue">Admin produits</h1>

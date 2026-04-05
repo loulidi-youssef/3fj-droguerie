@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { getCategoryNameBySlug } from "@/data/categories";
@@ -54,6 +54,7 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
       activeVariants.find((variant) => variant.id === selectedVariantId) ?? defaultVariant
     );
   }, [activeVariants, defaultVariant, selectedVariantId]);
+  const selectedColor = normalizeVariantLabel(selectedVariant?.color);
 
   const hasVariants = activeVariants.length > 0;
   const hasColorOptions = activeVariants.some((variant) => Boolean(normalizeVariantLabel(variant.color)));
@@ -76,7 +77,7 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
     return values;
   }, [activeVariants]);
 
-  const sizeOptions = useMemo(() => {
+  const allSizeOptions = useMemo(() => {
     const seen = new Set<string>();
     const values: string[] = [];
 
@@ -92,6 +93,44 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
 
     return values;
   }, [activeVariants]);
+  const sizeOptions = useMemo(() => {
+    if (!selectedColor) {
+      return allSizeOptions;
+    }
+
+    const seen = new Set<string>();
+    const values: string[] = [];
+
+    for (const variant of activeVariants) {
+      const variantColor = normalizeVariantLabel(variant.color);
+      const size = normalizeVariantLabel(variant.size);
+      if (variantColor !== selectedColor || !size || seen.has(size)) {
+        continue;
+      }
+
+      seen.add(size);
+      values.push(size);
+    }
+
+    return values;
+  }, [activeVariants, allSizeOptions, selectedColor]);
+
+  useEffect(() => {
+    if (activeVariants.length === 0) {
+      if (selectedVariantId !== null) {
+        setSelectedVariantId(null);
+      }
+      return;
+    }
+
+    const stillExists =
+      selectedVariantId !== null &&
+      activeVariants.some((variant) => variant.id === selectedVariantId);
+
+    if (!stillExists && defaultVariant) {
+      setSelectedVariantId(defaultVariant.id);
+    }
+  }, [activeVariants, defaultVariant, selectedVariantId]);
 
   const pickVariantForColor = (color: string): ProductVariant | null => {
     if (activeVariants.length === 0) {
@@ -116,13 +155,13 @@ export const ProductDetailPurchasePanel = ({ product }: ProductDetailPurchasePan
       return null;
     }
 
-    const selectedColor = normalizeVariantLabel(selectedVariant?.color);
+    const currentSelectedColor = normalizeVariantLabel(selectedVariant?.color);
 
     return (
       activeVariants.find((variant) => {
         const variantColor = normalizeVariantLabel(variant.color);
         const variantSize = normalizeVariantLabel(variant.size);
-        return variantSize === size && (!selectedColor || variantColor === selectedColor);
+        return variantSize === size && (!currentSelectedColor || variantColor === currentSelectedColor);
       }) ??
       activeVariants.find((variant) => normalizeVariantLabel(variant.size) === size) ??
       null
