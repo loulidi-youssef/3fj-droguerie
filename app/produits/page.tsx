@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MobileProductsFilters } from "@/components/mobile-products-filters";
 import { ProductCard } from "@/components/product-card";
 import { categories, getCategoryBySlug } from "@/data/categories";
 import { getAllProducts } from "@/lib/products";
@@ -141,16 +142,20 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
   };
 
   return (
-    <section className="bg-[#f1f3f5] py-5 sm:py-10">
+    <section className="bg-[#f1f3f5] py-3 md:py-10">
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-[0_10px_24px_rgba(15,42,77,0.08)] sm:rounded-2xl sm:px-6 sm:py-5">
-          <h1 className="text-[1.35rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2.35rem]">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_10px_24px_rgba(15,42,77,0.08)] sm:rounded-2xl sm:px-6 sm:py-5">
+          <h1 className="text-[1.02rem] font-extrabold uppercase tracking-tight text-brand-blue md:text-[2.35rem]">
             Materiaux de construction a Fes
           </h1>
-          <p className="mt-0.5 text-sm text-slate-600 sm:mt-1 sm:text-base">
+          <p className="mt-0.5 text-[11px] text-slate-600 md:hidden">
+            Catalogue rapide pour trouver vos produits plus vite.
+          </p>
+          <p className="mt-0.5 hidden text-sm text-slate-600 md:mt-1 md:block md:text-base">
             Vente en gros et detail de materiaux de construction, peinture et outillage.
           </p>
-          <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 sm:mt-2 sm:rounded-xl sm:px-3 sm:text-sm">
+
+          <div className="mt-1.5 hidden rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 md:mt-2 md:block md:rounded-xl md:px-3 md:text-sm">
             <h2 className="text-xs font-bold text-brand-blue sm:text-base">
               Materiaux de construction, outillage et peinture a Fes
             </h2>
@@ -163,110 +168,13 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
             <a href="/produits?categorie=bricolage" className="font-semibold text-brand-blue hover:underline">bricolage</a>.
           </div>
 
-          <details className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-[#f7f8fa] md:hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-brand-blue">
-                Filtres
-              </span>
-              <span className="text-xs font-semibold text-slate-600">
-                {hasActiveFilters ? "Actifs" : "Afficher"}
-              </span>
-            </summary>
-            <div className="border-t border-slate-200 px-3 pb-3 pt-2.5">
-              <form action="/produits" method="get">
-                <div className="grid gap-2.5">
-                  <label className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                      Recherche
-                    </span>
-                    <input
-                      type="search"
-                      name="q"
-                      defaultValue={rawQuery}
-                      placeholder="Ex: perceuse, marteau..."
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
-                    />
-                  </label>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                        Categorie
-                      </span>
-                      <select
-                        name="categorie"
-                        defaultValue={selectedCategory}
-                        className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
-                      >
-                        <option value="">Toutes</option>
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.slug}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                        Tri
-                      </span>
-                      <select
-                        name="tri"
-                        defaultValue={sort}
-                        className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
-                      >
-                        <option value="defaut">Defaut</option>
-                        <option value="nouveaux">Recents</option>
-                        <option value="prix-asc">Prix +</option>
-                        <option value="prix-desc">Prix -</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <button
-                      type="submit"
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-brand-blue px-3 text-[11px] font-semibold text-white transition hover:bg-slate-900"
-                    >
-                      Appliquer
-                    </button>
-                    <a
-                      href="/produits"
-                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
-                    >
-                      Reset
-                    </a>
-                  </div>
-                </div>
-              </form>
-
-              <div className="mt-3 -mx-1 overflow-x-auto pb-1">
-                <div className="flex min-w-max gap-2 px-1">
-                  <a
-                    href={buildCategoryUrl(null)}
-                    className={`inline-flex h-7 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold transition ${
-                      !selectedCategory
-                        ? "border-brand-blue bg-brand-blue text-white"
-                        : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
-                    }`}
-                  >
-                    Toutes
-                  </a>
-                  {categories.map((category) => (
-                    <a
-                      key={category.id}
-                      href={buildCategoryUrl(category.slug)}
-                      className={`inline-flex h-7 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold transition ${
-                        selectedCategory === category.slug
-                          ? "border-brand-orange bg-brand-orange text-white"
-                          : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
-                      }`}
-                    >
-                      {category.name}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </details>
+          <MobileProductsFilters
+            categories={categories}
+            rawQuery={rawQuery}
+            selectedCategory={selectedCategory}
+            sort={sort}
+            hasActiveFilters={hasActiveFilters}
+          />
 
           <div className="mt-5 hidden md:block">
             <form
@@ -371,15 +279,15 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:mt-4 sm:text-sm">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] md:mt-4 md:gap-x-4 md:gap-y-1.5 md:text-sm">
             {activeCategoryName ? (
-              <p className="text-slate-700">
+              <p className="hidden text-slate-700 md:block">
                 Categorie selectionnee: <span className="font-semibold text-brand-blue">{activeCategoryName}</span>
               </p>
             ) : null}
 
             {query ? (
-              <p className="text-slate-700">
+              <p className="hidden text-slate-700 md:block">
                 Resultat de recherche pour: <span className="font-semibold text-brand-blue">{rawQuery}</span>
               </p>
             ) : null}
@@ -388,7 +296,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           </div>
         </div>
 
-        <div className="mt-3.5 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-4 xl:grid-cols-4">
+        <div className="mt-2 grid grid-cols-2 gap-1.5 md:mt-6 md:gap-4 xl:grid-cols-4">
           {sortedProducts.map((product) => (
             <ProductCard key={product.id} product={product} variant="listing" />
           ))}
