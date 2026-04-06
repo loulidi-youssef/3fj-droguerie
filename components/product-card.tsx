@@ -131,59 +131,64 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
 
   if (isHomepageVariant) {
     return (
-      <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_26px_rgba(15,42,77,0.12)]">
-        <Link href={`/produits/${product.slug}`} className="block p-3">
-          <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-slate-50">
+      <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_7px_15px_rgba(15,42,77,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_26px_rgba(15,42,77,0.12)] sm:rounded-xl sm:shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
+        <Link href={`/produits/${product.slug}`} className="block p-2 sm:p-3">
+          <div className="relative flex h-28 w-full items-center justify-center overflow-hidden rounded-md bg-slate-50 sm:h-40 sm:rounded-lg">
             <Image
               src={product.images[0]}
               alt={product.name}
               fill
               sizes="(max-width: 768px) 50vw, 25vw"
-              className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+              className="object-contain p-2 transition-transform duration-300 group-hover:scale-105 sm:p-3"
             />
           </div>
         </Link>
-        <div className="flex flex-1 flex-col px-3 pb-3">
+        <div className="flex flex-1 flex-col px-2 pb-2 sm:px-3 sm:pb-3">
           <Link
             href={`/produits/${product.slug}`}
-            className="min-h-[46px] text-[1.12rem] font-semibold leading-tight text-brand-blue transition hover:text-brand-orange"
+            className="min-h-[2.35rem] overflow-hidden text-[0.9rem] font-semibold leading-tight text-brand-blue transition hover:text-brand-orange sm:min-h-[46px] sm:text-[1.12rem]"
+            style={{
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+            }}
           >
             {product.name}
           </Link>
-          <div className="mt-1">
-            <p className="text-[1.65rem] font-extrabold leading-none text-brand-orange">
+          <div className="mt-1 sm:mt-1">
+            <p className="text-[1.2rem] font-extrabold leading-none text-brand-orange sm:text-[1.65rem]">
               {formatDh(product.price)}
             </p>
             {previousPrice !== null ? (
-              <p className="mt-1 text-xs font-semibold text-slate-400 line-through">
+              <p className="mt-0.5 text-[10px] font-semibold text-slate-400 line-through sm:mt-1 sm:text-xs">
                 {formatDh(previousPrice)}
               </p>
             ) : null}
           </div>
-          <div className="mt-2 flex items-center gap-0.5 text-amber-500">
+          <div className="mt-1.5 flex items-center gap-0.5 text-amber-500 sm:mt-2">
             {Array.from({ length: 5 }).map((_, index) => (
               <svg
                 key={index}
                 viewBox="0 0 20 20"
-                className={`h-4 w-4 ${index < Math.round(product.rating) ? "fill-current" : "fill-transparent"} stroke-current`}
+                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${index < Math.round(product.rating) ? "fill-current" : "fill-transparent"} stroke-current`}
                 aria-hidden
               >
                 <path d="M10 1.5 12.9 7.4l6.5.9-4.7 4.6 1.1 6.5L10 16.6l-5.8 2.8 1.1-6.5L.6 8.3l6.5-.9L10 1.5Z" />
               </svg>
             ))}
-            <span className="ml-1 text-xs text-slate-500">({reviewCount})</span>
+            <span className="ml-1 text-[10px] text-slate-500 sm:text-xs">({reviewCount})</span>
           </div>
           <p
-            className={`mt-2 inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${availability.className}`}
+            className={`mt-1.5 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold sm:mt-2 sm:px-2.5 sm:py-1 sm:text-[11px] ${availability.className}`}
           >
             {availability.label}
           </p>
 
-          <div className="mt-3">
+          <div className="mt-2 sm:mt-3">
             {requiresVariantSelection ? (
               <Link
                 href={`/produits/${product.slug}`}
-                className="inline-flex h-9 w-full items-center justify-center rounded-md border border-brand-orange bg-white px-2 text-[11px] font-semibold text-brand-orange transition hover:bg-orange-50"
+                className="inline-flex h-8 w-full items-center justify-center rounded-md border border-brand-orange bg-white px-2 text-[10px] font-semibold text-brand-orange transition hover:bg-orange-50 sm:h-9 sm:text-[11px]"
               >
                 Choisir une variante
               </Link>
@@ -192,8 +197,8 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
                 productId={product.id}
                 disabled={isOutOfStock}
                 compact
-                className="inline-flex h-9 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-[11px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange"
-                controlsClassName="inline-flex h-9 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2"
+                className="inline-flex h-8 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-[10px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-9 sm:text-[11px]"
+                controlsClassName="inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 sm:h-9"
               />
             )}
           </div>

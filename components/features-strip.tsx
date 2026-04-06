@@ -31,32 +31,32 @@ const trustItems = [
 
 export const FeaturesStrip = () => {
   return (
-    <section className="bg-[#f1f3f5] pb-7">
+    <section className="bg-[#f1f3f5] pb-5 sm:pb-7">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <h2 className="text-xl font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-1.5 sm:mb-3 sm:gap-2">
+          <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
             Achats en toute confiance
           </h2>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:text-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-sm">
             Service rapide, clair et fiable
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
           {trustItems.map((feature) => (
             <article
               key={feature.title}
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(15,42,77,0.08)]"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_7px_16px_rgba(15,42,77,0.08)] sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3 sm:shadow-[0_8px_20px_rgba(15,42,77,0.08)]"
             >
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-brand-orange">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-brand-orange sm:h-11 sm:w-11 sm:rounded-xl">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-6 sm:w-6" fill="currentColor" aria-hidden>
                   {feature.icon}
                 </svg>
               </span>
               <div>
-                <p className="text-[1.01rem] font-extrabold leading-tight text-brand-blue">
+                <p className="text-sm font-extrabold leading-tight text-brand-blue sm:text-[1.01rem]">
                   {feature.title}
                 </p>
-                <p className="mt-0.5 text-sm text-slate-600">{feature.subtitle}</p>
+                <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">{feature.subtitle}</p>
               </div>
             </article>
           ))}

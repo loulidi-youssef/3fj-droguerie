@@ -17,12 +17,12 @@ export const HomepageSocialSection = async () => {
   const visiblePosts = blogPosts.slice(0, 2);
 
   return (
-    <section className="bg-[#f1f3f5] pb-8">
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:px-5 lg:grid-cols-2 lg:px-6">
+    <section className="bg-[#f1f3f5] pb-6 sm:pb-8">
+      <div className="mx-auto grid max-w-7xl gap-3 px-4 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-            <h2 className="text-[2rem] font-extrabold uppercase tracking-tight text-brand-blue">Avis clients</h2>
-            <Link href="/contact" className="text-lg font-bold text-brand-blue transition hover:text-brand-orange">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 sm:px-5 sm:py-3">
+            <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>
+            <Link href="/contact" className="text-xs font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
               Voir tous &rarr;
             </Link>
           </div>
@@ -32,14 +32,24 @@ export const HomepageSocialSection = async () => {
           ) : (
             <div className="grid gap-px bg-slate-200 sm:grid-cols-3">
               {visibleReviews.map((review) => (
-                <div key={review.id} className="flex flex-col bg-white p-4">
+                <div key={review.id} className="flex flex-col bg-white p-3 sm:p-4">
                   <StarRating value={review.rating} />
-                  <p className="mt-2 flex-1 text-[1.02rem] leading-snug text-slate-700">"{review.text}"</p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-brand-orange">
+                  <p
+                    className="mt-1.5 flex-1 text-sm leading-snug text-slate-700 sm:mt-2 sm:text-[1.02rem]"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    "{review.text}"
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2 sm:mt-3">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-brand-orange sm:h-7 sm:w-7 sm:text-xs">
                       {review.name.charAt(0).toUpperCase()}
                     </span>
-                    <p className="text-[1rem] font-bold text-brand-blue">{formatReviewName(review.name)}</p>
+                    <p className="text-sm font-bold text-brand-blue sm:text-[1rem]">{formatReviewName(review.name)}</p>
                   </div>
                 </div>
               ))}
@@ -48,11 +58,11 @@ export const HomepageSocialSection = async () => {
         </article>
 
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-            <h2 className="text-[2rem] font-extrabold uppercase tracking-tight text-brand-blue">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 sm:px-5 sm:py-3">
+            <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">
               Derniers articles (blog)
             </h2>
-            <Link href="/blog" className="text-lg font-bold text-brand-blue transition hover:text-brand-orange">
+            <Link href="/blog" className="text-xs font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
               Voir tout &rarr;
             </Link>
           </div>
@@ -62,7 +72,7 @@ export const HomepageSocialSection = async () => {
           ) : (
             <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
               {visiblePosts.map((post) => (
-                <article key={post.id} className="bg-white p-3">
+                <article key={post.id} className="bg-white p-2.5 sm:p-3">
                   <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
                     <Image
                       src={post.image}
@@ -74,11 +84,17 @@ export const HomepageSocialSection = async () => {
                   </Link>
                   <Link
                     href={`/blog/${post.slug}`}
-                    className="mt-2 block text-[1.17rem] font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange"
+                    className="mt-1.5 block text-base font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange sm:mt-2 sm:text-[1.17rem]"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 2,
+                      overflow: "hidden",
+                    }}
                   >
                     {post.title}
                   </Link>
-                  <p className="mt-1 text-sm text-slate-500">{post.publishedAt}</p>
+                  <p className="mt-1 text-xs text-slate-500 sm:text-sm">{post.publishedAt}</p>
                 </article>
               ))}
             </div>

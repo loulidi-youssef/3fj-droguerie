@@ -49,50 +49,50 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
 
   if (variant === "homepage") {
     return (
-      <section id="offres-actives" className="bg-[#f1f3f5] pb-7">
+      <section id="offres-actives" className="bg-[#f1f3f5] pb-5 sm:pb-7">
         <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.08em] text-brand-orange">
+              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-orange sm:text-xs">
                 Offres actives du moment
               </p>
-              <h2 className="text-xl font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+              <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
                 Promotions a ne pas manquer
               </h2>
             </div>
             <Link
               href="/offres"
-              className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+              className="inline-flex rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[10px] font-bold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:px-3 sm:py-1 sm:text-xs"
             >
               Voir toutes les offres
             </Link>
           </div>
-          <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#ff8d1a] via-brand-orange to-[#e1560c] px-6 py-5 text-white shadow-[0_12px_28px_rgba(249,115,22,0.28)] sm:px-7">
-            <div className="absolute -left-6 -top-6 h-28 w-28 rounded-full bg-yellow-300/30 blur-sm" />
-            <div className="absolute -right-14 -bottom-14 h-40 w-40 rounded-full bg-black/10" />
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-4">
-                <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-yellow-300/80 text-orange-700 shadow-inner">
-                  <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor" aria-hidden>
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#ff8d1a] via-brand-orange to-[#e1560c] px-4 py-4 text-white shadow-[0_12px_28px_rgba(249,115,22,0.28)] sm:px-7 sm:py-5">
+            <div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-yellow-300/30 blur-sm sm:h-28 sm:w-28" />
+            <div className="absolute -right-14 -bottom-14 h-32 w-32 rounded-full bg-black/10 sm:h-40 sm:w-40" />
+            <div className="relative flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-yellow-300/80 text-orange-700 shadow-inner sm:h-14 sm:w-14">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-8 sm:w-8" fill="currentColor" aria-hidden>
                     <path d="M7.25 6.5A2.25 2.25 0 1 1 5 8.75 2.25 2.25 0 0 1 7.25 6.5Zm9.5 8.75A2.25 2.25 0 1 1 14.5 17.5a2.25 2.25 0 0 1 2.25-2.25ZM6.47 18.94 17.94 5.47l1.52 1.06L8 20Z" />
                   </svg>
                 </span>
                 <div>
-                  <p className="text-4xl font-extrabold uppercase tracking-tight">Offre speciale</p>
-                  <p className="text-3xl font-extrabold uppercase leading-tight">
+                  <p className="text-2xl font-extrabold uppercase tracking-tight sm:text-4xl">Offre speciale</p>
+                  <p className="text-xl font-extrabold uppercase leading-tight sm:text-3xl">
                     -{savingsPercent}% sur certains produits
                   </p>
                   <Link
                     href={`/produits/${product.slug}`}
-                    className="mt-1 inline-flex text-sm font-semibold text-orange-50/95 underline underline-offset-4 hover:text-white"
+                    className="mt-1 inline-flex text-xs font-semibold text-orange-50/95 underline underline-offset-4 hover:text-white sm:text-sm"
                   >
                     Voir le produit concerne
                   </Link>
                 </div>
               </div>
 
-              <div className="min-w-[260px]">
-                <p className="mb-1 text-right text-[1.18rem] font-extrabold">Offre limitee !</p>
+              <div className="w-full sm:min-w-[260px]">
+                <p className="mb-1 text-right text-sm font-extrabold sm:text-[1.18rem]">Offre limitee !</p>
                 {offer.endAt ? (
                   <CountdownTimer expiresAt={offer.endAt} variant="homepage-offer" />
                 ) : (
@@ -100,9 +100,9 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
                     {["00", "12", "30", "45"].map((value) => (
                       <div
                         key={value}
-                        className="rounded-lg bg-brand-blue px-3 py-2 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                        className="rounded-lg bg-brand-blue px-2 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] sm:px-3 sm:py-2"
                       >
-                        <p className="text-3xl font-extrabold leading-none">{value}</p>
+                        <p className="text-xl font-extrabold leading-none sm:text-3xl">{value}</p>
                         <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-200">Timer</p>
                       </div>
                     ))}

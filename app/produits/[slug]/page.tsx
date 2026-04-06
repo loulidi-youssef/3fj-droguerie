@@ -65,16 +65,16 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
   return (
     <section className="section-padding">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-5 sm:gap-8 lg:grid-cols-2">
           <div>
             <Image
               src={product.images[0]}
               alt={product.name}
               width={900}
               height={680}
-              className="aspect-[4/3] w-full rounded-2xl border border-slate-200 object-cover"
+              className="aspect-square w-full rounded-xl border border-slate-200 object-cover sm:aspect-[4/3] sm:rounded-2xl"
             />
-            <div className="mt-3 grid grid-cols-3 gap-3">
+            <div className="mt-2 grid grid-cols-4 gap-2 sm:mt-3 sm:grid-cols-3 sm:gap-3">
               {product.images.map((image, index) => (
                 <Image
                   key={image}
@@ -82,7 +82,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
                   alt={`${product.name} vue ${index + 1}`}
                   width={280}
                   height={200}
-                  className="aspect-[4/3] rounded-xl border border-slate-200 object-cover"
+                  className="aspect-square rounded-lg border border-slate-200 object-cover sm:aspect-[4/3] sm:rounded-xl"
                 />
               ))}
             </div>
@@ -94,7 +94,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         </div>
 
         {relatedProducts.length > 0 ? (
-          <div className="mt-12">
+          <div className="mt-8 sm:mt-12">
             <h2 className="section-title">Produits similaires</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {relatedProducts.map((related) => (

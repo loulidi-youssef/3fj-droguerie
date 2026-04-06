@@ -60,55 +60,55 @@ export const CategoriesProductsSection = async () => {
     .slice(0, 6);
 
   return (
-    <section id="decouvrir-produits" className="bg-[#f1f3f5] pb-8">
+    <section id="decouvrir-produits" className="bg-[#f1f3f5] pb-6 sm:pb-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:px-5">
+        <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mb-4 sm:rounded-2xl sm:px-5 sm:py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+            <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
               Decouvrez rapidement les bons produits
             </h2>
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/offres"
-                className="inline-flex rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-brand-orange transition hover:border-brand-orange"
+                className="inline-flex rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[10px] font-bold text-brand-orange transition hover:border-brand-orange sm:px-3 sm:py-1 sm:text-xs"
               >
                 Offres actives
               </Link>
               <Link
                 href="/produits"
-                className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange"
+                className="inline-flex rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[10px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:px-3 sm:py-1 sm:text-xs"
               >
                 Catalogue complet
               </Link>
             </div>
           </div>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-1.5 text-xs text-slate-600 sm:mt-2 sm:text-sm">
             Top ventes recommandees + categories les plus demandees pour commander plus vite.
           </p>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-12">
+        <div className="grid gap-3 sm:gap-5 lg:grid-cols-12">
           <aside className="lg:col-span-3">
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_22px_rgba(15,42,77,0.08)]">
-              <h3 className="bg-brand-blue px-5 py-3 text-xl font-extrabold uppercase tracking-wide text-white">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_10px_22px_rgba(15,42,77,0.08)] sm:rounded-2xl">
+              <h3 className="bg-brand-blue px-4 py-2.5 text-base font-extrabold uppercase tracking-wide text-white sm:px-5 sm:py-3 sm:text-xl">
                 Categories phares
               </h3>
-              <ul className="space-y-1 p-4">
+              <ul className="space-y-1 p-3 sm:p-4">
                 {visibleCategories.map((category) => (
                   <li key={category.id}>
                     <Link
                       href={`/produits?categorie=${category.slug}`}
-                      className="flex items-center justify-between gap-3 rounded-xl px-2.5 py-2.5 text-[1.02rem] font-semibold text-slate-700 transition hover:bg-orange-50 hover:text-brand-orange"
+                      className="flex items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-slate-700 transition hover:bg-orange-50 hover:text-brand-orange sm:gap-3 sm:rounded-xl sm:px-2.5 sm:py-2.5 sm:text-[1.02rem]"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-brand-orange">
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-orange-50 text-brand-orange sm:h-7 sm:w-7 sm:rounded-lg">
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" aria-hidden>
                             <path d={categoryIconPathBySlug[category.slug] ?? categoryIconPathBySlug.bricolage} />
                           </svg>
                         </span>
                         {category.name}
                       </span>
-                      <span className="text-xs font-bold text-slate-500">
+                      <span className="text-[10px] font-bold text-slate-500 sm:text-xs">
                         {categoryCountMap.get(category.slug) ?? 0}
                       </span>
                     </Link>
@@ -117,7 +117,7 @@ export const CategoriesProductsSection = async () => {
               </ul>
               <Link
                 href="/produits"
-                className="block border-t border-slate-200 px-5 py-4 text-base font-bold text-brand-blue transition hover:text-brand-orange"
+                className="block border-t border-slate-200 px-4 py-3 text-sm font-bold text-brand-blue transition hover:text-brand-orange sm:px-5 sm:py-4 sm:text-base"
               >
                 Voir toutes les categories
               </Link>
@@ -125,19 +125,19 @@ export const CategoriesProductsSection = async () => {
           </aside>
 
           <div className="lg:col-span-9">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-[1.85rem] font-extrabold uppercase tracking-tight text-brand-blue">
+            <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3">
+              <h3 className="text-[1.15rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[1.85rem]">
                 Top ventes recommandees
               </h3>
               <Link
                 href="/produits"
-                className="inline-flex items-center gap-1 text-lg font-bold text-brand-blue transition hover:text-brand-orange sm:text-xl"
+                className="inline-flex items-center gap-1 text-sm font-bold text-brand-blue transition hover:text-brand-orange sm:text-xl"
               >
                 Voir tout
                 <span aria-hidden>&rarr;</span>
               </Link>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
               {featuredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} variant="homepage" />
               ))}
