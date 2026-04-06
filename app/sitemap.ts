@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { categories } from "@/data/categories";
 import { getPublishedBlogPosts } from "@/lib/blog";
 import { getAllProducts } from "@/lib/products";
 import { getSiteUrl } from "@/lib/site-url";
@@ -45,6 +46,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: product.createdAt ? new Date(product.createdAt) : undefined,
   }));
 
+  const categoryPages: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: `${siteUrl}/produits?categorie=${encodeURIComponent(category.slug)}`,
+    changeFrequency: "weekly",
+    priority: 0.75,
+  }));
+
   const blogPages: MetadataRoute.Sitemap = blogPosts.map((post) => ({
     url: `${siteUrl}/blog/${post.slug}`,
     changeFrequency: "monthly",
@@ -52,5 +59,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: post.publishedAt ? new Date(post.publishedAt) : undefined,
   }));
 
-  return [...staticPages, ...productPages, ...blogPages];
+  return [...staticPages, ...categoryPages, ...productPages, ...blogPages];
 }

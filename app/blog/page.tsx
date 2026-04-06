@@ -3,9 +3,12 @@ import { BlogCard } from "@/components/blog-card";
 import { getPublishedBlogPosts } from "@/lib/blog";
 
 export const metadata: Metadata = {
-  title: "Blog",
+  title: "Blog materiaux de construction a Fes",
   description:
     "Articles pratiques sur la droguerie a Fes, les materiaux de construction et l'outillage.",
+  alternates: {
+    canonical: "/blog",
+  },
 };
 
 export default async function BlogPage() {

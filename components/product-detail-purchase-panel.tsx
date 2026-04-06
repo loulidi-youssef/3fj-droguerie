@@ -243,9 +243,12 @@ export const ProductDetailPurchasePanel = ({
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange sm:text-sm">
+      <Link
+        href={`/produits?categorie=${encodeURIComponent(product.categorySlug)}`}
+        className="text-xs font-semibold uppercase tracking-wide text-brand-orange hover:underline sm:text-sm"
+      >
         {getCategoryNameBySlug(product.categorySlug)}
-      </p>
+      </Link>
       <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
         {product.name}
       </h1>

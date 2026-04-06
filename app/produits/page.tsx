@@ -13,12 +13,6 @@ type ProductsPageProps = {
   };
 };
 
-export const metadata: Metadata = {
-  title: "Produits",
-  description:
-    "Decouvrez nos produits de droguerie a Fes: peinture, outillage et materiaux de construction.",
-};
-
 const getSingleSearchParam = (value: string | string[] | undefined): string => {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value[0] ?? "";
@@ -38,6 +32,43 @@ const normalizeSort = (value: string): ProductSortOption => {
 
   return "defaut";
 };
+
+export async function generateMetadata({
+  searchParams,
+}: ProductsPageProps): Promise<Metadata> {
+  const selectedCategory = getSingleSearchParam(searchParams.categorie).trim().toLowerCase();
+  const rawQuery = getSingleSearchParam(searchParams.q).trim();
+  const sort = normalizeSort(getSingleSearchParam(searchParams.tri));
+  const category = selectedCategory ? getCategoryBySlug(selectedCategory) : null;
+  const shouldIndex = rawQuery.length === 0 && sort === "defaut";
+
+  if (category) {
+    return {
+      title: `${category.name} a Fes | Materiaux de construction`,
+      description: `Decouvrez notre selection ${category.name.toLowerCase()} a Fes: prix competitifs, paiement a la livraison et livraison rapide.`,
+      alternates: {
+        canonical: `/produits?categorie=${encodeURIComponent(category.slug)}`,
+      },
+      robots: {
+        index: shouldIndex,
+        follow: true,
+      },
+    };
+  }
+
+  return {
+    title: "Materiaux de construction a Fes | Produits et prix",
+    description:
+      "Catalogue des materiaux de construction a Fes: peinture, outillage, quincaillerie et produits de droguerie avec livraison rapide.",
+    alternates: {
+      canonical: "/produits",
+    },
+    robots: {
+      index: shouldIndex,
+      follow: true,
+    },
+  };
+}
 
 export default async function ProduitsPage({ searchParams }: ProductsPageProps) {
   const products = await getAllProducts();
@@ -102,11 +133,23 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-[0_10px_24px_rgba(15,42,77,0.08)] sm:px-6">
           <h1 className="text-[2rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2.35rem]">
-            Produits
+            Materiaux de construction a Fes
           </h1>
           <p className="mt-1 text-base text-slate-600">
             Vente en gros et detail de materiaux de construction, peinture et outillage.
           </p>
+          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 sm:text-sm">
+            <h2 className="text-sm font-bold text-brand-blue sm:text-base">
+              Materiaux de construction, outillage et peinture a Fes
+            </h2>
+            <p className="mt-1">
+              Comparez les prix et trouvez rapidement les meilleurs produits pour vos travaux.
+            </p>
+            Explorez aussi nos <a href="/offres" className="font-semibold text-brand-orange hover:underline">offres actives</a> et nos categories phares:{" "}
+            <a href="/produits?categorie=peinture" className="font-semibold text-brand-blue hover:underline">peinture</a>,{" "}
+            <a href="/produits?categorie=outillage" className="font-semibold text-brand-blue hover:underline">outillage</a> et{" "}
+            <a href="/produits?categorie=bricolage" className="font-semibold text-brand-blue hover:underline">bricolage</a>.
+          </div>
 
           <details className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-[#f7f8fa] md:hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">

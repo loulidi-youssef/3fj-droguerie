@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import { OfferSection } from "@/components/offer-section";
 
 export const metadata: Metadata = {
-  title: "Offres",
+  title: "Offres materiaux de construction a Fes",
   description:
     "Offres speciales sur les produits de droguerie et materiaux de construction a Fes.",
+  alternates: {
+    canonical: "/offres",
+  },
 };
 
 export default async function OffresPage() {

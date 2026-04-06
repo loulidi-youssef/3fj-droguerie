@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import { businessInfo } from "@/data/business";
 
 export const metadata: Metadata = {
-  title: "Contact",
+  title: "Contact droguerie a Fes",
   description: "Contactez 3FJ Droguerie a Fes pour vos besoins en materiaux de construction et outillage.",
+  alternates: {
+    canonical: "/contact",
+  },
 };
 
 export default function ContactPage() {

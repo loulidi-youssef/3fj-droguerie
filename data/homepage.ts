@@ -17,7 +17,7 @@ export const homepageContent = {
   },
   hero: {
     badge: "Materiaux & outillage a Fes",
-    title: "Votre droguerie de confiance a Fes",
+    title: "Droguerie materiaux de construction a Fes",
     subtitle:
       "Vente en gros et detail de materiaux de construction • Livraison rapide a Fes",
     whatsappCta: "Commander sur WhatsApp",
