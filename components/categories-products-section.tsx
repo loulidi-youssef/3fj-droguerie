@@ -88,8 +88,8 @@ export const CategoriesProductsSection = async () => {
         </div>
 
         <div className="grid gap-3 sm:gap-5 lg:grid-cols-12">
-          <aside className="lg:col-span-3">
-            <div className="lg:hidden">
+          <aside className="min-w-0 lg:col-span-3">
+            <div className="w-full max-w-full overflow-hidden lg:hidden">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-base font-extrabold uppercase tracking-wide text-brand-blue">
                   Categories phares
@@ -101,7 +101,7 @@ export const CategoriesProductsSection = async () => {
                   Voir tout
                 </Link>
               </div>
-              <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <ul className="flex w-full max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {visibleCategories.map((category) => (
                   <li key={category.id} className="shrink-0">
                     <Link
@@ -160,7 +160,7 @@ export const CategoriesProductsSection = async () => {
             </div>
           </aside>
 
-          <div className="lg:col-span-9">
+          <div className="min-w-0 lg:col-span-9">
             <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3">
               <h3 className="text-[1.15rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[1.85rem]">
                 Top ventes recommandees

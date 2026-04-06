@@ -165,7 +165,7 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
 
       <div
         id="customer-account-menu"
-        className={`fixed inset-0 z-[130] md:hidden ${isOpen ? "" : "pointer-events-none"}`}
+        className={`fixed inset-0 z-[130] overflow-hidden md:hidden ${isOpen ? "" : "pointer-events-none"}`}
         aria-hidden={!isOpen}
       >
         <button

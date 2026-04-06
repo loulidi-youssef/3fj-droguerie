@@ -119,7 +119,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const articleLabel = itemCount > 1 ? "articles" : "article";
 
   return (
-    <div className={`fixed inset-0 z-[120] ${isOpen ? "" : "pointer-events-none"}`}>
+    <div className={`fixed inset-0 z-[120] overflow-hidden ${isOpen ? "" : "pointer-events-none"}`}>
       <button
         type="button"
         onClick={onClose}
