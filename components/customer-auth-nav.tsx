@@ -181,7 +181,7 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
           role="dialog"
           aria-modal="true"
           aria-label="Mon compte"
-          className={`fixed inset-y-0 right-0 flex h-[100dvh] w-full flex-col overflow-y-auto border-l border-slate-200 bg-white p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[-14px_0_42px_rgba(15,23,42,0.2)] transition-transform duration-300 will-change-transform ${
+          className={`fixed inset-y-0 right-0 flex h-[100dvh] w-full max-w-sm flex-col overflow-y-auto border-l border-slate-200 bg-white p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[-14px_0_42px_rgba(15,23,42,0.2)] transition-transform duration-300 will-change-transform ${
             isOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
@@ -192,7 +192,7 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
             <button
               type="button"
               onClick={closePanel}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
               aria-label="Fermer"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">

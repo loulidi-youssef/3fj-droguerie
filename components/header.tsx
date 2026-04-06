@@ -10,6 +10,9 @@ import { useCart } from "@/components/cart-provider";
 import { CartDrawer } from "@/components/cart-drawer";
 import { CustomerAuthNav } from "@/components/customer-auth-nav";
 
+const MOBILE_RECENT_SEARCHES_KEY = "3fj-recent-searches";
+const MAX_RECENT_SEARCHES = 5;
+
 export const Header = () => {
   type ProductSuggestion = {
     id: string;
@@ -27,9 +30,12 @@ export const Header = () => {
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const categoriesDropdownRef = useRef<HTMLDivElement | null>(null);
   const searchDropdownRef = useRef<HTMLFormElement | null>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const computeSuggestions = (input: string, products: ProductSuggestion[]) => {
     const normalizedInput = input.trim().toLowerCase();
@@ -146,6 +152,9 @@ export const Header = () => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsCategoriesOpen(false);
+        setIsMobileSearchOpen(false);
+        setIsSuggestionsOpen(false);
+        setHighlightedSuggestionIndex(-1);
       }
     };
 
@@ -161,8 +170,63 @@ export const Header = () => {
   useEffect(() => {
     setIsCategoriesOpen(false);
     setIsSuggestionsOpen(false);
+    setIsMobileSearchOpen(false);
     setIsCartDrawerOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(MOBILE_RECENT_SEARCHES_KEY);
+      if (!stored) {
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as unknown;
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+
+      const normalized = parsed
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(normalized);
+    } catch {
+      setRecentSearches([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileSearchOpen) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isMobileSearchOpen]);
+
+  useEffect(() => {
+    if (!isMobileSearchOpen) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      mobileSearchInputRef.current?.focus();
+    }, 20);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isMobileSearchOpen]);
 
   const activeCategoryName = selectedCategory
     ? getCategoryBySlug(selectedCategory)?.name
@@ -173,6 +237,40 @@ export const Header = () => {
   );
   const isHomeActive = pathname === "/";
 
+  const isMobileViewport = () =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+  const persistRecentSearches = (nextSearches: string[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        MOBILE_RECENT_SEARCHES_KEY,
+        JSON.stringify(nextSearches.slice(0, MAX_RECENT_SEARCHES)),
+      );
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const rememberRecentSearch = (rawValue: string) => {
+    const normalized = rawValue.trim();
+    if (!normalized) {
+      return;
+    }
+
+    setRecentSearches((current) => {
+      const withoutDuplicate = current.filter(
+        (item) => item.toLocaleLowerCase("fr") !== normalized.toLocaleLowerCase("fr"),
+      );
+      const next = [normalized, ...withoutDuplicate].slice(0, MAX_RECENT_SEARCHES);
+      persistRecentSearches(next);
+      return next;
+    });
+  };
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = query.trim();
@@ -180,38 +278,64 @@ export const Header = () => {
       router.push("/produits");
       return;
     }
+    rememberRecentSearch(value);
     router.push(`/produits?q=${encodeURIComponent(value)}`);
     setIsSuggestionsOpen(false);
     setHighlightedSuggestionIndex(-1);
+    setIsMobileSearchOpen(false);
   };
 
   const openSuggestion = (suggestion: ProductSuggestion) => {
     setQuery(suggestion.name);
+    rememberRecentSearch(suggestion.name);
     setIsSuggestionsOpen(false);
     setHighlightedSuggestionIndex(-1);
+    setIsMobileSearchOpen(false);
     router.push(`/produits/${suggestion.slug}`);
+  };
+
+  const openMobileSearch = () => {
+    if (!isMobileViewport()) {
+      return;
+    }
+    setIsCategoriesOpen(false);
+    setIsMobileSearchOpen(true);
+    setIsSuggestionsOpen(true);
+  };
+
+  const openSearchQuery = (value: string) => {
+    const next = value.trim();
+    if (!next) {
+      return;
+    }
+    setQuery(next);
+    rememberRecentSearch(next);
+    setIsMobileSearchOpen(false);
+    setIsSuggestionsOpen(false);
+    setHighlightedSuggestionIndex(-1);
+    router.push(`/produits?q=${encodeURIComponent(next)}`);
   };
 
   return (
     <>
       <header className="relative z-40 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-6 lg:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-3 py-2 sm:px-5 lg:flex-row lg:items-center lg:gap-6 lg:px-6 lg:py-3">
         <Link href="/" className="leading-none">
-          <span className="block text-[2.35rem] font-black tracking-tight text-brand-orange">3FJ</span>
-          <span className="-mt-1 block text-[1.75rem] font-black uppercase tracking-tight text-brand-blue">
+          <span className="block text-[1.95rem] font-black tracking-tight text-brand-orange sm:text-[2.35rem]">3FJ</span>
+          <span className="-mt-0.5 block text-[1.28rem] font-black uppercase tracking-tight text-brand-blue sm:-mt-1 sm:text-[1.75rem]">
             DROGUERIE
           </span>
-          <span className="-mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.07em] text-brand-orange">
+          <span className="-mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.07em] text-brand-orange sm:text-[10px]">
             Materiaux de construction
           </span>
         </Link>
 
-        <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-700 lg:flex-1 lg:justify-center">
+        <nav className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-700 lg:flex-1 lg:justify-center lg:gap-x-5 lg:gap-y-2 lg:text-sm">
           {homeNavItem ? (
             <Link
               href={homeNavItem.href}
-              className={`transition hover:text-brand-orange ${
-                isHomeActive ? "text-brand-orange" : ""
+              className={`rounded-full border border-slate-300 px-2.5 py-1 transition hover:border-brand-orange hover:text-brand-orange lg:border-0 lg:px-0 lg:py-0 ${
+                isHomeActive ? "border-orange-200 text-brand-orange lg:text-brand-orange" : ""
               }`}
             >
               {homeNavItem.label}
@@ -224,8 +348,8 @@ export const Header = () => {
               onClick={() => setIsCategoriesOpen((current) => !current)}
               aria-expanded={isCategoriesOpen}
               aria-haspopup="menu"
-              className={`inline-flex items-center gap-1 transition hover:text-brand-orange ${
-                pathname === "/produits" && selectedCategory ? "text-brand-orange" : ""
+              className={`inline-flex items-center gap-1 rounded-full border border-slate-300 px-2.5 py-1 transition hover:border-brand-orange hover:text-brand-orange lg:border-0 lg:px-0 lg:py-0 ${
+                pathname === "/produits" && selectedCategory ? "border-orange-200 text-brand-orange lg:text-brand-orange" : ""
               }`}
             >
               {homepageContent.header.categoriesLabel}
@@ -235,7 +359,7 @@ export const Header = () => {
               {activeCategoryName ? `: ${activeCategoryName}` : ""}
             </button>
             <div
-              className={`absolute left-0 top-full z-[80] mt-2 min-w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${
+              className={`absolute left-0 top-full z-[80] mt-2 max-h-[65vh] w-[min(19rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl sm:min-w-56 sm:w-auto ${
                 isCategoriesOpen ? "block" : "hidden"
               }`}
             >
@@ -277,8 +401,8 @@ export const Header = () => {
             <Link
               key={item.href}
               href={item.href}
-              className={`transition hover:text-brand-orange ${
-                pathname === item.href ? "text-brand-orange" : ""
+              className={`rounded-full border border-slate-300 px-2.5 py-1 transition hover:border-brand-orange hover:text-brand-orange lg:border-0 lg:px-0 lg:py-0 ${
+                pathname === item.href ? "border-orange-200 text-brand-orange lg:text-brand-orange" : ""
               }`}
             >
               {item.label}
@@ -287,7 +411,7 @@ export const Header = () => {
         </nav>
 
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-          <form onSubmit={onSubmit} className="relative w-full sm:w-[17rem] lg:w-[20rem]" ref={searchDropdownRef}>
+          <form onSubmit={onSubmit} className="relative order-2 w-full sm:order-1 sm:w-[17rem] lg:w-[20rem]" ref={searchDropdownRef}>
             <input
               type="search"
               value={query}
@@ -301,6 +425,10 @@ export const Header = () => {
                 }
               }}
               onFocus={() => {
+                if (isMobileViewport()) {
+                  openMobileSearch();
+                  return;
+                }
                 if (query.trim() && suggestions.length > 0) {
                   setIsSuggestionsOpen(true);
                 }
@@ -330,12 +458,12 @@ export const Header = () => {
                 }
               }}
               placeholder={homepageContent.header.searchPlaceholder}
-              className="h-11 w-full rounded-full border border-slate-300 bg-slate-50 pl-4 pr-11 text-sm outline-none transition focus:border-brand-orange focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="h-10 w-full rounded-full border border-slate-300 bg-slate-50 pl-3.5 pr-10 text-[13px] outline-none transition focus:border-brand-orange focus:bg-white focus:ring-2 focus:ring-orange-100 sm:h-11 sm:pl-4 sm:pr-11 sm:text-sm"
             />
             <button
               type="submit"
               aria-label="Lancer la recherche"
-              className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-brand-blue"
+              className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-brand-blue sm:h-9 sm:w-9"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="6.5" />
@@ -344,7 +472,7 @@ export const Header = () => {
             </button>
 
             {isSuggestionsOpen && suggestions.length > 0 ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[85] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[85] hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl md:block">
                 <ul className="max-h-72 overflow-y-auto py-1">
                   {suggestions.map((suggestion, index) => (
                     <li key={suggestion.id}>
@@ -367,13 +495,13 @@ export const Header = () => {
             ) : null}
           </form>
 
-          <div className="flex items-center gap-2">
+          <div className="order-1 flex items-center gap-2.5 sm:order-2">
             <CustomerAuthNav iconOnly />
 
             <button
               type="button"
               onClick={() => setIsCartDrawerOpen(true)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange ${itemCount > 0 ? "ring-2 ring-orange-100" : ""}`}
               aria-label={homepageContent.header.cartAriaLabel}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -382,7 +510,7 @@ export const Header = () => {
                 <circle cx="17" cy="19" r="1.5" />
               </svg>
               {itemCount > 0 ? (
-                <span className="absolute -right-1 -top-1 rounded-full bg-brand-orange px-1.5 py-0.5 text-[10px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 rounded-full bg-brand-orange px-1.5 py-0.5 text-[10px] font-bold text-white animate-[pulse_1.8s_ease-in-out_infinite]">
                   {itemCount}
                 </span>
               ) : null}
@@ -403,6 +531,126 @@ export const Header = () => {
         </div>
         </div>
       </header>
+
+      <div
+        className={`fixed inset-0 z-[125] overflow-hidden md:hidden ${isMobileSearchOpen ? "" : "pointer-events-none"}`}
+        aria-hidden={!isMobileSearchOpen}
+      >
+        <button
+          type="button"
+          onClick={() => setIsMobileSearchOpen(false)}
+          aria-label="Fermer la recherche"
+          className={`absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] transition-opacity duration-300 ${
+            isMobileSearchOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+
+        <div
+          className={`absolute inset-0 flex flex-col bg-white transition-transform duration-300 ${
+            isMobileSearchOpen ? "translate-y-0" : "translate-y-full"
+          }`}
+        >
+          <div className="border-b border-slate-200 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-bold text-brand-blue">Recherche</p>
+              <button
+                type="button"
+                onClick={() => setIsMobileSearchOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
+                aria-label="Fermer la recherche mobile"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={onSubmit} className="relative">
+              <input
+                ref={mobileSearchInputRef}
+                type="search"
+                value={query}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setQuery(value);
+                  setIsSuggestionsOpen(value.trim().length > 0);
+                }}
+                placeholder={homepageContent.header.searchPlaceholder}
+                className="h-11 w-full rounded-full border border-slate-300 bg-slate-50 pl-4 pr-11 text-sm outline-none transition focus:border-brand-orange focus:bg-white focus:ring-2 focus:ring-orange-100"
+              />
+              <button
+                type="submit"
+                aria-label="Lancer la recherche mobile"
+                className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-brand-blue"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </button>
+            </form>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            {query.trim() && suggestions.length > 0 ? (
+              <ul className="space-y-1">
+                {suggestions.map((suggestion, index) => (
+                  <li key={suggestion.id}>
+                    <button
+                      type="button"
+                      onClick={() => openSuggestion(suggestion)}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                        index === highlightedSuggestionIndex
+                          ? "bg-slate-100 text-brand-blue"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="truncate pr-2">{suggestion.name}</span>
+                      <span className="text-xs text-slate-400">Produit</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recherches recentes</p>
+                  {recentSearches.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecentSearches([]);
+                        persistRecentSearches([]);
+                      }}
+                      className="text-xs font-semibold text-slate-500 hover:text-brand-orange"
+                    >
+                      Effacer
+                    </button>
+                  ) : null}
+                </div>
+                {recentSearches.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {recentSearches.map((recent) => (
+                      <button
+                        key={recent}
+                        type="button"
+                        onClick={() => openSearchQuery(recent)}
+                        className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                      >
+                        {recent}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                    Recherchez un produit pour voir vos suggestions ici.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       <CartDrawer isOpen={isCartDrawerOpen} onClose={() => setIsCartDrawerOpen(false)} />
     </>
   );
