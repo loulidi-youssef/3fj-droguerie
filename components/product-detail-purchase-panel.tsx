@@ -234,6 +234,12 @@ export const ProductDetailPurchasePanel = ({
     availabilityStatus === "out-of-stock"
       ? "Retrait magasin des reception du stock."
       : "Retrait en magasin disponible en environ 2h.";
+  const availabilityTextClass =
+    availabilityStatus === "out-of-stock"
+      ? "text-rose-700"
+      : availabilityStatus === "limited"
+        ? "text-amber-700"
+        : "text-emerald-700";
 
   return (
     <div>
@@ -416,6 +422,44 @@ export const ProductDetailPurchasePanel = ({
       >
         Aller au panier
       </Link>
+
+      <div className="h-24 md:hidden" aria-hidden />
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-5">
+          <div className="min-w-0 flex-1">
+            {offerPricing && effectiveOfferPricing ? (
+              <p className="truncate text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+                {offerPricing.discountLabel} - Economie {formatDh(effectiveOfferPricing.savingsAmount)}
+              </p>
+            ) : (
+              <p className={`text-[11px] font-bold uppercase tracking-wide ${availabilityTextClass}`}>
+                {availability.label}
+              </p>
+            )}
+            <p className="text-xl font-extrabold leading-tight text-brand-blue">
+              {formatDh(displayedPrice)}
+            </p>
+          </div>
+
+          <AddToCartButton
+            productId={product.id}
+            variantId={selectedVariant?.id}
+            selectedColor={normalizeVariantLabel(selectedVariant?.color) ?? undefined}
+            selectedSize={normalizeVariantLabel(selectedVariant?.size) ?? undefined}
+            selectedPrice={displayedPrice}
+            selectedPreviousPrice={displayedPreviousPrice ?? undefined}
+            selectedImage={selectedVariant?.image ?? undefined}
+            disabled={availabilityStatus === "out-of-stock"}
+            label="Commander maintenant"
+            className="inline-flex h-12 min-w-[11.25rem] items-center justify-center rounded-xl bg-brand-orange px-5 text-sm font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.3)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange"
+            controlsClassName="inline-flex h-12 min-w-[11.25rem] items-center rounded-xl border border-slate-300 bg-white px-2"
+          />
+        </div>
+      </div>
     </div>
   );
 };
