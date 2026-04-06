@@ -16,13 +16,15 @@ export const HomepageSocialSection = async () => {
   const [reviews, blogPosts] = await Promise.all([getActiveReviews(), getPublishedBlogPosts()]);
   const visibleReviews = reviews.slice(0, 3);
   const visiblePosts = blogPosts.slice(0, 2);
+  const mobileReviews = visibleReviews.slice(0, 2);
+  const mobilePosts = visiblePosts.slice(0, 1);
 
   return (
     <section className="bg-[#f1f3f5] pb-20 sm:pb-8">
       <div className="mx-auto grid max-w-7xl gap-2.5 px-3 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3">
-            <h2 className="text-base font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>
+            <h2 className="text-[15px] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>
             <Link href="/contact" className="text-[11px] font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
               Voir tous &rarr;
             </Link>
@@ -32,16 +34,16 @@ export const HomepageSocialSection = async () => {
             <p className="p-5 text-sm text-slate-600">Aucun avis disponible pour le moment.</p>
           ) : (
             <div>
-              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:hidden">
-                {visibleReviews.map((review) => (
-                  <div key={review.id} className="flex min-w-[220px] shrink-0 flex-col rounded-lg bg-white p-2.5">
+              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:hidden">
+                {mobileReviews.map((review) => (
+                  <div key={review.id} className="flex min-w-[204px] shrink-0 flex-col rounded-lg bg-white p-2">
                     <StarRating value={review.rating} />
                     <p
-                      className="mt-1.5 flex-1 text-xs leading-snug text-slate-700"
+                      className="mt-1.5 flex-1 text-[11px] leading-snug text-slate-700"
                       style={{
                         display: "-webkit-box",
                         WebkitBoxOrient: "vertical",
-                        WebkitLineClamp: 4,
+                        WebkitLineClamp: 3,
                         overflow: "hidden",
                       }}
                     >
@@ -57,7 +59,7 @@ export const HomepageSocialSection = async () => {
                 ))}
               </div>
 
-              <div className="hidden bg-slate-200 sm:grid sm:grid-cols-3 sm:gap-px">
+              <div className="hidden bg-slate-200 md:grid md:grid-cols-3 md:gap-px">
                 {visibleReviews.map((review) => (
                   <div key={review.id} className="flex flex-col bg-white p-4">
                     <StarRating value={review.rating} />
@@ -99,13 +101,13 @@ export const HomepageSocialSection = async () => {
             <p className="p-5 text-sm text-slate-600">Aucun article disponible pour le moment.</p>
           ) : (
             <div>
-              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:hidden">
-                {visiblePosts.map((post) => {
+              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:hidden">
+                {mobilePosts.map((post) => {
                   const image = getSafeNextImageProps(post.image);
                   return (
                     <article
                       key={post.id}
-                      className="min-w-[250px] shrink-0 rounded-lg border border-slate-200 bg-white p-2"
+                      className="min-w-[238px] shrink-0 rounded-lg border border-slate-200 bg-white p-2"
                     >
                       <Link href={`/blog/${post.slug}`} className="flex items-start gap-2.5">
                         <Image
@@ -152,7 +154,7 @@ export const HomepageSocialSection = async () => {
                 })}
               </div>
 
-              <div className="hidden bg-slate-200 sm:grid sm:grid-cols-2 sm:gap-px">
+              <div className="hidden bg-slate-200 md:grid md:grid-cols-2 md:gap-px">
                 {visiblePosts.map((post) => {
                   const image = getSafeNextImageProps(post.image);
                   return (

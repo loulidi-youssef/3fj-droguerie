@@ -34,28 +34,13 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
       />
-      <HomepageAdBanner ad={activeAds.top} slot="top" />
+      <div className="hidden md:block">
+        <HomepageAdBanner ad={activeAds.top} slot="top" />
+      </div>
       <HeroSection />
-      <section className="bg-[#f1f3f5] pb-3">
+      <section className="hidden bg-[#f1f3f5] pb-3 md:block">
         <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
-          <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-slate-700 shadow-[0_6px_14px_rgba(15,42,77,0.08)] sm:hidden">
-            <p className="text-[11px] font-extrabold uppercase tracking-tight text-brand-blue">
-              Droguerie materiaux de construction a Fes
-            </p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                Livraison rapide
-              </span>
-              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                Paiement a la livraison
-              </span>
-              <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                Retrait magasin
-              </span>
-            </div>
-          </div>
-
-          <div className="hidden rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 shadow-[0_6px_14px_rgba(15,42,77,0.08)] sm:block sm:rounded-xl sm:px-5 sm:py-4 sm:text-sm">
+          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 shadow-[0_6px_14px_rgba(15,42,77,0.08)] sm:rounded-xl sm:px-5 sm:py-4 sm:text-sm">
             <h2 className="text-sm font-extrabold uppercase tracking-tight text-brand-blue sm:text-lg">
               Droguerie materiaux de construction a Fes
             </h2>
@@ -94,7 +79,7 @@ export default async function Home() {
       <FeaturesStrip />
       <CategoriesProductsSection />
       <HomepageAdBanner ad={activeAds.middle} slot="middle" />
-      <OfferSection variant="homepage" maxOffers={4} />
+      <OfferSection variant="homepage" maxOffers={2} />
       <HomepageSocialSection />
       <FloatingWhatsAppButton />
     </>

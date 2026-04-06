@@ -239,6 +239,7 @@ export const Header = () => {
   const isHomeActive = pathname === "/";
   const isProductDetailPage = pathname.startsWith("/produits/") && pathname !== "/produits";
   const shouldShowMobileBottomNav = !pathname.startsWith("/admin") && !isProductDetailPage;
+  const shouldHideMobileHeaderActions = shouldShowMobileBottomNav;
   const isCategoriesTabActive = pathname === "/produits" || pathname.startsWith("/produits/");
   const isAccountTabActive =
     pathname.startsWith("/compte") || pathname === "/login" || pathname === "/register";
@@ -342,10 +343,10 @@ export const Header = () => {
   return (
     <>
       <header className="relative z-40 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-1.5 px-2.5 py-1.5 sm:px-5 sm:py-2 lg:flex-row lg:items-center lg:gap-6 lg:px-6 lg:py-3">
+        <div className="mx-auto flex max-w-7xl flex-col gap-1 px-2.5 py-1.5 sm:px-5 sm:py-2 lg:flex-row lg:items-center lg:gap-6 lg:px-6 lg:py-3">
         <Link href="/" className="leading-none">
-          <span className="block text-[1.55rem] font-black tracking-tight text-brand-orange sm:text-[2.35rem]">3FJ</span>
-          <span className="-mt-0.5 block text-[1.02rem] font-black uppercase tracking-tight text-brand-blue sm:-mt-1 sm:text-[1.75rem]">
+          <span className="block text-[1.45rem] font-black tracking-tight text-brand-orange sm:text-[2.35rem]">3FJ</span>
+          <span className="-mt-0.5 block text-[0.96rem] font-black uppercase tracking-tight text-brand-blue sm:-mt-1 sm:text-[1.75rem]">
             DROGUERIE
           </span>
           <span className="-mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.06em] text-brand-orange sm:text-[10px]">
@@ -353,7 +354,7 @@ export const Header = () => {
           </span>
         </Link>
 
-        <nav className="flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 text-[10px] font-semibold text-slate-700 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:flex-1 lg:flex-wrap lg:justify-center lg:gap-x-5 lg:gap-y-2 lg:overflow-visible lg:pb-0 lg:text-sm">
+        <nav className="hidden max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 text-[10px] font-semibold text-slate-700 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:flex lg:flex-1 lg:flex-wrap lg:justify-center lg:gap-x-5 lg:gap-y-2 lg:overflow-visible lg:pb-0 lg:text-sm">
           {homeNavItem ? (
             <Link
               href={homeNavItem.href}
@@ -518,7 +519,11 @@ export const Header = () => {
             ) : null}
           </form>
 
-          <div className="order-1 flex items-center gap-1.5 sm:order-2 sm:gap-2.5">
+          <div
+            className={`order-1 items-center gap-1.5 sm:order-2 sm:gap-2.5 ${
+              shouldHideMobileHeaderActions ? "hidden md:flex" : "flex"
+            }`}
+          >
             <CustomerAuthNav iconOnly openRequestNonce={accountOpenRequestNonce} />
 
             <button

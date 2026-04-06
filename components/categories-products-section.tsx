@@ -58,11 +58,24 @@ export const CategoriesProductsSection = async () => {
       return first.name.localeCompare(second.name, "fr");
     })
     .slice(0, 6);
+  const mobileVisibleCategories = visibleCategories.slice(0, 5);
 
   return (
     <section id="decouvrir-produits" className="bg-[#f1f3f5] pb-4 sm:pb-8">
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
-        <div className="mb-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mb-4 sm:rounded-2xl sm:px-5 sm:py-4">
+        <div className="mb-2 flex items-center justify-between gap-2 md:hidden">
+          <h2 className="text-sm font-extrabold uppercase tracking-tight text-brand-blue">
+            Categories et top ventes
+          </h2>
+          <Link
+            href="/produits"
+            className="inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange"
+          >
+            Voir tout
+          </Link>
+        </div>
+
+        <div className="mb-2 hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-[0_8px_18px_rgba(15,42,77,0.08)] md:mb-4 md:block md:rounded-2xl md:px-5 md:py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[1rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
               Decouvrez rapidement les bons produits
@@ -102,11 +115,11 @@ export const CategoriesProductsSection = async () => {
                 </Link>
               </div>
               <ul className="flex w-full max-w-full gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                {visibleCategories.map((category) => (
+                {mobileVisibleCategories.map((category) => (
                   <li key={category.id} className="shrink-0">
                     <Link
                       href={`/produits?categorie=${category.slug}`}
-                      className="flex min-w-[138px] items-center justify-between gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 shadow-[0_8px_18px_rgba(15,42,77,0.08)] transition hover:border-orange-200 hover:bg-orange-50 hover:text-brand-orange"
+                      className="flex min-w-[126px] items-center justify-between gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 shadow-[0_8px_18px_rgba(15,42,77,0.08)] transition hover:border-orange-200 hover:bg-orange-50 hover:text-brand-orange"
                     >
                       <span className="flex items-center gap-2">
                         <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-orange-50 text-brand-orange">
@@ -116,7 +129,7 @@ export const CategoriesProductsSection = async () => {
                         </span>
                         <span className="line-clamp-1">{category.name}</span>
                       </span>
-                      <span className="text-[9px] font-bold text-slate-500">
+                      <span className="text-[8px] font-bold text-slate-500">
                         {categoryCountMap.get(category.slug) ?? 0}
                       </span>
                     </Link>
@@ -162,7 +175,7 @@ export const CategoriesProductsSection = async () => {
 
           <div className="min-w-0 lg:col-span-9">
             <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-3">
-              <h3 className="text-[1rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[1.85rem]">
+              <h3 className="text-[0.98rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[1.85rem]">
                 Top ventes recommandees
               </h3>
               <Link
