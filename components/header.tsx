@@ -33,6 +33,7 @@ export const Header = () => {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [accountOpenRequestNonce, setAccountOpenRequestNonce] = useState(0);
   const categoriesDropdownRef = useRef<HTMLDivElement | null>(null);
   const searchDropdownRef = useRef<HTMLFormElement | null>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -236,6 +237,19 @@ export const Header = () => {
     (item) => item.href !== "/",
   );
   const isHomeActive = pathname === "/";
+  const isProductDetailPage = pathname.startsWith("/produits/") && pathname !== "/produits";
+  const shouldShowMobileBottomNav = !pathname.startsWith("/admin") && !isProductDetailPage;
+  const isCategoriesTabActive = pathname === "/produits" || pathname.startsWith("/produits/");
+  const isAccountTabActive =
+    pathname.startsWith("/compte") || pathname === "/login" || pathname === "/register";
+
+  useEffect(() => {
+    document.body.dataset.mobileBottomNav = shouldShowMobileBottomNav ? "true" : "false";
+
+    return () => {
+      delete document.body.dataset.mobileBottomNav;
+    };
+  }, [shouldShowMobileBottomNav]);
 
   const isMobileViewport = () =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
@@ -301,6 +315,15 @@ export const Header = () => {
     setIsCategoriesOpen(false);
     setIsMobileSearchOpen(true);
     setIsSuggestionsOpen(true);
+  };
+
+  const openAccountPanel = () => {
+    if (!isMobileViewport()) {
+      return;
+    }
+    setIsCategoriesOpen(false);
+    setIsMobileSearchOpen(false);
+    setAccountOpenRequestNonce((current) => current + 1);
   };
 
   const openSearchQuery = (value: string) => {
@@ -496,7 +519,7 @@ export const Header = () => {
           </form>
 
           <div className="order-1 flex items-center gap-1.5 sm:order-2 sm:gap-2.5">
-            <CustomerAuthNav iconOnly />
+            <CustomerAuthNav iconOnly openRequestNonce={accountOpenRequestNonce} />
 
             <button
               type="button"
@@ -531,6 +554,101 @@ export const Header = () => {
         </div>
         </div>
       </header>
+
+      {shouldShowMobileBottomNav ? (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-[115] border-t border-slate-200/90 bg-white/95 shadow-[0_-8px_20px_rgba(15,42,77,0.1)] backdrop-blur md:hidden"
+          style={{ paddingBottom: "max(0.3rem, env(safe-area-inset-bottom))" }}
+          aria-label="Navigation principale mobile"
+        >
+          <div className="grid grid-cols-5 gap-0.5 px-1.5 pt-1.5">
+            <Link
+              href="/"
+              className={`inline-flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-semibold transition active:scale-[0.97] ${
+                isHomeActive
+                  ? "bg-orange-50 text-brand-orange"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-brand-blue"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M3.5 10.2 12 3l8.5 7.2V21h-5.2v-6.1H8.7V21H3.5v-10.8Z" />
+              </svg>
+              <span>Accueil</span>
+            </Link>
+
+            <Link
+              href="/produits"
+              className={`inline-flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-semibold transition active:scale-[0.97] ${
+                isCategoriesTabActive
+                  ? "bg-orange-50 text-brand-orange"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-brand-blue"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M4.2 5.2h6.8V12H4.2zM13 5.2h6.8V9.6H13zM13 11.4h6.8v7.4H13zM4.2 13.8h6.8v4.9H4.2z" />
+              </svg>
+              <span>Categories</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={openMobileSearch}
+              className={`inline-flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-semibold transition active:scale-[0.97] ${
+                isMobileSearchOpen
+                  ? "bg-orange-50 text-brand-orange"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-brand-blue"
+              }`}
+              aria-label="Ouvrir la recherche"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4.5 4.5" />
+              </svg>
+              <span>Recherche</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCartDrawerOpen(true)}
+              className={`relative inline-flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-semibold transition active:scale-[0.97] ${
+                pathname === "/panier" || isCartDrawerOpen
+                  ? "bg-orange-50 text-brand-orange"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-brand-blue"
+              }`}
+              aria-label="Ouvrir le panier"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M2 3h3l2.5 11h10L20 6H6" />
+                <circle cx="10" cy="19" r="1.5" />
+                <circle cx="17" cy="19" r="1.5" />
+              </svg>
+              <span>Panier</span>
+              {itemCount > 0 ? (
+                <span className="absolute right-2 top-1 inline-flex min-w-[1rem] items-center justify-center rounded-full bg-brand-orange px-1 text-[9px] font-bold text-white">
+                  {itemCount}
+                </span>
+              ) : null}
+            </button>
+
+            <button
+              type="button"
+              onClick={openAccountPanel}
+              className={`inline-flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-semibold transition active:scale-[0.97] ${
+                isAccountTabActive
+                  ? "bg-orange-50 text-brand-orange"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-brand-blue"
+              }`}
+              aria-label="Ouvrir le compte"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <circle cx="12" cy="8" r="3.2" />
+                <path d="M5.5 19.5c1.8-3.1 4.1-4.6 6.5-4.6s4.7 1.5 6.5 4.6" />
+              </svg>
+              <span>Compte</span>
+            </button>
+          </div>
+        </nav>
+      ) : null}
 
       <div
         className={`fixed inset-0 z-[125] overflow-hidden md:hidden ${isMobileSearchOpen ? "" : "pointer-events-none"}`}

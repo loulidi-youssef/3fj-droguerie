@@ -18,7 +18,7 @@ export const HomepageSocialSection = async () => {
   const visiblePosts = blogPosts.slice(0, 2);
 
   return (
-    <section className="bg-[#f1f3f5] pb-4 sm:pb-8">
+    <section className="bg-[#f1f3f5] pb-20 sm:pb-8">
       <div className="mx-auto grid max-w-7xl gap-2.5 px-3 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3">
@@ -103,30 +103,50 @@ export const HomepageSocialSection = async () => {
                 {visiblePosts.map((post) => {
                   const image = getSafeNextImageProps(post.image);
                   return (
-                    <article key={post.id} className="min-w-[228px] shrink-0 rounded-lg bg-white p-2">
-                      <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
+                    <article
+                      key={post.id}
+                      className="min-w-[250px] shrink-0 rounded-lg border border-slate-200 bg-white p-2"
+                    >
+                      <Link href={`/blog/${post.slug}`} className="flex items-start gap-2.5">
                         <Image
                           src={image.src}
                           alt={post.title}
-                          width={480}
-                          height={270}
+                          width={176}
+                          height={99}
                           unoptimized={image.unoptimized}
-                          className="aspect-[16/9] w-full object-cover"
+                          className="aspect-video h-[72px] w-[124px] shrink-0 rounded-md object-cover"
                         />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            {post.publishedAt}
+                          </p>
+                          <p
+                            className="mt-0.5 text-[12px] font-extrabold leading-snug text-brand-blue"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            {post.title}
+                          </p>
+                          <p
+                            className="mt-1 text-[11px] leading-snug text-slate-600"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            {post.excerpt}
+                          </p>
+                          <span className="mt-1 inline-flex text-[11px] font-bold text-brand-orange">
+                            Lire &rarr;
+                          </span>
+                        </div>
                       </Link>
-                      <Link
-                        href={`/blog/${post.slug}`}
-                        className="mt-1.5 block text-sm font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange"
-                        style={{
-                          display: "-webkit-box",
-                          WebkitBoxOrient: "vertical",
-                          WebkitLineClamp: 2,
-                          overflow: "hidden",
-                        }}
-                      >
-                        {post.title}
-                      </Link>
-                      <p className="mt-0.5 text-[11px] text-slate-500">{post.publishedAt}</p>
                     </article>
                   );
                 })}

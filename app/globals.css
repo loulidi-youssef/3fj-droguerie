@@ -30,6 +30,12 @@ html {
   overflow-x: clip;
 }
 
+@media (max-width: 767px) {
+  body[data-mobile-bottom-nav="true"] main {
+    padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
+  }
+}
+
 @layer components {
   .section-padding {
     @apply py-12 sm:py-14;

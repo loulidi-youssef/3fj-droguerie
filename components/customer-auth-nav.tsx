@@ -11,9 +11,13 @@ type CustomerAuthNavState = {
 
 type CustomerAuthNavProps = {
   iconOnly?: boolean;
+  openRequestNonce?: number;
 };
 
-export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
+export const CustomerAuthNav = ({
+  iconOnly = false,
+  openRequestNonce,
+}: CustomerAuthNavProps) => {
   const [state, setState] = useState<CustomerAuthNavState>({
     isReady: false,
     isAuthenticated: false,
@@ -126,6 +130,18 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
   const closePanel = () => {
     setIsOpen(false);
   };
+
+  useEffect(() => {
+    if (typeof openRequestNonce !== "number") {
+      return;
+    }
+
+    if (openRequestNonce <= 0) {
+      return;
+    }
+
+    setIsOpen(true);
+  }, [openRequestNonce]);
 
   if (!state.isReady) {
     return iconOnly ? (
