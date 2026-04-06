@@ -8,7 +8,7 @@ import { RecentlyViewedProducts } from "@/components/recently-viewed-products";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { getActiveOffersWithProducts } from "@/lib/offers";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
-import { buildProductJsonLd } from "@/lib/seo";
+import { buildProductJsonLd, buildSocialMetadata } from "@/lib/seo";
 import { getSiteUrl } from "@/lib/site-url";
 import type { Product } from "@/types";
 
@@ -125,12 +125,18 @@ export const generateMetadata = async ({ params }: ProductDetailProps): Promise<
     };
   }
 
+  const title = `${product.name} a Fes | Prix Maroc | Livraison rapide`;
+  const description = `${product.shortDescription} Achetez ${product.name} au meilleur prix au Maroc avec livraison rapide a Fes et paiement a la livraison.`;
+
   return {
-    title: `${product.name} a Fes | Prix Maroc | Livraison rapide`,
-    description: `${product.shortDescription} Achetez ${product.name} au meilleur prix au Maroc avec livraison rapide a Fes et paiement a la livraison.`,
-    alternates: {
-      canonical: `/produits/${product.slug}`,
-    },
+    title,
+    description,
+    ...buildSocialMetadata({
+      title,
+      description,
+      canonicalPath: `/produits/${product.slug}`,
+      imagePath: product.images[0],
+    }),
   };
 };
 
@@ -208,9 +214,9 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <section className="py-5 sm:py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-          <div className="grid gap-3 sm:gap-8 lg:grid-cols-2">
+      <section className="py-4 sm:py-14">
+        <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
+          <div className="grid gap-2.5 sm:gap-8 lg:grid-cols-2">
             <div className="min-w-0">
               <Image
                 src={primaryImage.src}
@@ -218,9 +224,9 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
                 width={900}
                 height={680}
                 unoptimized={primaryImage.unoptimized}
-                className="aspect-[4/3] w-full rounded-xl border border-slate-200 bg-white object-contain p-2 sm:aspect-[4/3] sm:rounded-2xl sm:object-cover sm:p-0"
+                className="aspect-[4/3] max-h-[260px] w-full rounded-lg border border-slate-200 bg-white object-contain p-1.5 sm:aspect-[4/3] sm:max-h-none sm:rounded-2xl sm:object-cover sm:p-0"
               />
-              <div className="mt-2 sm:mt-3">
+              <div className="mt-1.5 sm:mt-3">
                 <div className="flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                   {product.images.map((imageSrc, index) => {
                     const image = getSafeNextImageProps(imageSrc);
@@ -232,7 +238,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
                         width={96}
                         height={96}
                         unoptimized={image.unoptimized}
-                        className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover p-1"
+                        className="h-12 w-12 shrink-0 rounded-md border border-slate-200 bg-white object-cover p-0.5"
                       />
                     );
                   })}
@@ -262,19 +268,19 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
           </div>
 
           {relatedProducts.length > 0 ? (
-            <div className="mt-6 sm:mt-12">
+            <div className="mt-4 sm:mt-12">
               <div className="flex flex-wrap items-end justify-between gap-2">
-                <h2 className="text-[1.2rem] font-extrabold tracking-tight text-brand-blue sm:text-[2rem]">
+                <h2 className="text-[1rem] font-extrabold tracking-tight text-brand-blue sm:text-[2rem]">
                   Produits recommandes
                 </h2>
-                <p className="text-xs font-medium text-slate-500 sm:text-sm">
+                <p className="text-[11px] font-medium text-slate-500 sm:text-sm">
                   Selectionnes selon la categorie, le prix et les notes clients.
                 </p>
               </div>
 
-              <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {relatedProducts.map((related) => (
-                  <div key={related.id} className="w-[170px] shrink-0">
+                  <div key={related.id} className="w-[154px] shrink-0">
                     <ProductCard product={related} variant="listing" />
                   </div>
                 ))}

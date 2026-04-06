@@ -4,7 +4,7 @@ import Script from "next/script";
 import { notFound } from "next/navigation";
 import { getBlogPostBySlug, getPublishedBlogPosts } from "@/lib/blog";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
-import { buildArticleJsonLd } from "@/lib/seo";
+import { buildArticleJsonLd, buildSocialMetadata } from "@/lib/seo";
 import { getSiteUrl } from "@/lib/site-url";
 
 type BlogDetailProps = {
@@ -30,12 +30,19 @@ export const generateMetadata = async ({ params }: BlogDetailProps): Promise<Met
     };
   }
 
+  const title = post.seoTitle ?? post.title;
+  const description = post.seoDescription;
+
   return {
-    title: post.seoTitle ?? post.title,
-    description: post.seoDescription,
-    alternates: {
-      canonical: `/blog/${post.slug}`,
-    },
+    title,
+    description,
+    ...buildSocialMetadata({
+      title,
+      description,
+      canonicalPath: `/blog/${post.slug}`,
+      imagePath: post.image,
+      openGraphType: "article",
+    }),
   };
 };
 

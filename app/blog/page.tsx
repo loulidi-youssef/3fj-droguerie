@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
 import { BlogCard } from "@/components/blog-card";
 import { getPublishedBlogPosts } from "@/lib/blog";
+import { buildSocialMetadata } from "@/lib/seo";
+
+const blogIndexTitle = "Blog materiaux de construction a Fes";
+const blogIndexDescription =
+  "Articles pratiques sur la droguerie a Fes, les materiaux de construction et l'outillage.";
 
 export const metadata: Metadata = {
-  title: "Blog materiaux de construction a Fes",
-  description:
-    "Articles pratiques sur la droguerie a Fes, les materiaux de construction et l'outillage.",
-  alternates: {
-    canonical: "/blog",
-  },
+  title: blogIndexTitle,
+  description: blogIndexDescription,
+  ...buildSocialMetadata({
+    title: blogIndexTitle,
+    description: blogIndexDescription,
+    canonicalPath: "/blog",
+  }),
 };
 
 export default async function BlogPage() {

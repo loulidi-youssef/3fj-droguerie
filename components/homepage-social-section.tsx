@@ -18,12 +18,12 @@ export const HomepageSocialSection = async () => {
   const visiblePosts = blogPosts.slice(0, 2);
 
   return (
-    <section className="bg-[#f1f3f5] pb-6 sm:pb-8">
-      <div className="mx-auto grid max-w-7xl gap-3 px-4 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
+    <section className="bg-[#f1f3f5] pb-4 sm:pb-8">
+      <div className="mx-auto grid max-w-7xl gap-2.5 px-3 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 sm:px-5 sm:py-3">
-            <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>
-            <Link href="/contact" className="text-xs font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3">
+            <h2 className="text-base font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>
+            <Link href="/contact" className="text-[11px] font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
               Voir tous &rarr;
             </Link>
           </div>
@@ -31,39 +31,66 @@ export const HomepageSocialSection = async () => {
           {visibleReviews.length === 0 ? (
             <p className="p-5 text-sm text-slate-600">Aucun avis disponible pour le moment.</p>
           ) : (
-            <div className="grid gap-px bg-slate-200 sm:grid-cols-3">
-              {visibleReviews.map((review) => (
-                <div key={review.id} className="flex flex-col bg-white p-3 sm:p-4">
-                  <StarRating value={review.rating} />
-                  <p
-                    className="mt-1.5 flex-1 text-sm leading-snug text-slate-700 sm:mt-2 sm:text-[1.02rem]"
-                    style={{
-                      display: "-webkit-box",
-                      WebkitBoxOrient: "vertical",
-                      WebkitLineClamp: 4,
-                      overflow: "hidden",
-                    }}
-                  >
-                    "{review.text}"
-                  </p>
-                  <div className="mt-2.5 flex items-center gap-2 sm:mt-3">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-brand-orange sm:h-7 sm:w-7 sm:text-xs">
-                      {review.name.charAt(0).toUpperCase()}
-                    </span>
-                    <p className="text-sm font-bold text-brand-blue sm:text-[1rem]">{formatReviewName(review.name)}</p>
+            <div>
+              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:hidden">
+                {visibleReviews.map((review) => (
+                  <div key={review.id} className="flex min-w-[220px] shrink-0 flex-col rounded-lg bg-white p-2.5">
+                    <StarRating value={review.rating} />
+                    <p
+                      className="mt-1.5 flex-1 text-xs leading-snug text-slate-700"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 4,
+                        overflow: "hidden",
+                      }}
+                    >
+                      "{review.text}"
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 text-[9px] font-bold text-brand-orange">
+                        {review.name.charAt(0).toUpperCase()}
+                      </span>
+                      <p className="text-xs font-bold text-brand-blue">{formatReviewName(review.name)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              <div className="hidden bg-slate-200 sm:grid sm:grid-cols-3 sm:gap-px">
+                {visibleReviews.map((review) => (
+                  <div key={review.id} className="flex flex-col bg-white p-4">
+                    <StarRating value={review.rating} />
+                    <p
+                      className="mt-2 flex-1 text-[1.02rem] leading-snug text-slate-700"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 4,
+                        overflow: "hidden",
+                      }}
+                    >
+                      "{review.text}"
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-brand-orange">
+                        {review.name.charAt(0).toUpperCase()}
+                      </span>
+                      <p className="text-[1rem] font-bold text-brand-blue">{formatReviewName(review.name)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </article>
 
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 sm:px-5 sm:py-3">
-            <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3">
+            <h2 className="text-base font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">
               Derniers articles (blog)
             </h2>
-            <Link href="/blog" className="text-xs font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
+            <Link href="/blog" className="text-[11px] font-bold text-brand-blue transition hover:text-brand-orange sm:text-lg">
               Voir tout &rarr;
             </Link>
           </div>
@@ -71,37 +98,72 @@ export const HomepageSocialSection = async () => {
           {visiblePosts.length === 0 ? (
             <p className="p-5 text-sm text-slate-600">Aucun article disponible pour le moment.</p>
           ) : (
-            <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
-              {visiblePosts.map((post) => {
-                const image = getSafeNextImageProps(post.image);
-                return (
-                <article key={post.id} className="bg-white p-2.5 sm:p-3">
-                  <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
-                    <Image
-                      src={image.src}
-                      alt={post.title}
-                      width={480}
-                      height={270}
-                      unoptimized={image.unoptimized}
-                      className="aspect-[16/9] w-full object-cover"
-                    />
-                  </Link>
-                  <Link
-                    href={`/blog/${post.slug}`}
-                    className="mt-1.5 block text-base font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange sm:mt-2 sm:text-[1.17rem]"
-                    style={{
-                      display: "-webkit-box",
-                      WebkitBoxOrient: "vertical",
-                      WebkitLineClamp: 2,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {post.title}
-                  </Link>
-                  <p className="mt-1 text-xs text-slate-500 sm:text-sm">{post.publishedAt}</p>
-                </article>
-                );
-              })}
+            <div>
+              <div className="flex gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:hidden">
+                {visiblePosts.map((post) => {
+                  const image = getSafeNextImageProps(post.image);
+                  return (
+                    <article key={post.id} className="min-w-[228px] shrink-0 rounded-lg bg-white p-2">
+                      <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
+                        <Image
+                          src={image.src}
+                          alt={post.title}
+                          width={480}
+                          height={270}
+                          unoptimized={image.unoptimized}
+                          className="aspect-[16/9] w-full object-cover"
+                        />
+                      </Link>
+                      <Link
+                        href={`/blog/${post.slug}`}
+                        className="mt-1.5 block text-sm font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange"
+                        style={{
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {post.title}
+                      </Link>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{post.publishedAt}</p>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="hidden bg-slate-200 sm:grid sm:grid-cols-2 sm:gap-px">
+                {visiblePosts.map((post) => {
+                  const image = getSafeNextImageProps(post.image);
+                  return (
+                    <article key={post.id} className="bg-white p-3">
+                      <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
+                        <Image
+                          src={image.src}
+                          alt={post.title}
+                          width={480}
+                          height={270}
+                          unoptimized={image.unoptimized}
+                          className="aspect-[16/9] w-full object-cover"
+                        />
+                      </Link>
+                      <Link
+                        href={`/blog/${post.slug}`}
+                        className="mt-2 block text-[1.17rem] font-extrabold leading-snug text-brand-blue transition hover:text-brand-orange"
+                        style={{
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {post.title}
+                      </Link>
+                      <p className="mt-1 text-sm text-slate-500">{post.publishedAt}</p>
+                    </article>
+                  );
+                })}
+              </div>
             </div>
           )}
         </article>

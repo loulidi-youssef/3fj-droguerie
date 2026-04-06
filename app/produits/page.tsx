@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ProductCard } from "@/components/product-card";
 import { categories, getCategoryBySlug } from "@/data/categories";
 import { getAllProducts } from "@/lib/products";
+import { buildSocialMetadata } from "@/lib/seo";
 
 type ProductSortOption = "defaut" | "prix-asc" | "prix-desc" | "nouveaux";
 
@@ -43,12 +44,18 @@ export async function generateMetadata({
   const shouldIndex = rawQuery.length === 0 && sort === "defaut";
 
   if (category) {
+    const title = `${category.name} a Fes | Materiaux de construction`;
+    const description = `Decouvrez notre selection ${category.name.toLowerCase()} a Fes: prix competitifs, paiement a la livraison et livraison rapide.`;
+    const canonicalPath = `/produits?categorie=${encodeURIComponent(category.slug)}`;
+
     return {
-      title: `${category.name} a Fes | Materiaux de construction`,
-      description: `Decouvrez notre selection ${category.name.toLowerCase()} a Fes: prix competitifs, paiement a la livraison et livraison rapide.`,
-      alternates: {
-        canonical: `/produits?categorie=${encodeURIComponent(category.slug)}`,
-      },
+      title,
+      description,
+      ...buildSocialMetadata({
+        title,
+        description,
+        canonicalPath,
+      }),
       robots: {
         index: shouldIndex,
         follow: true,
@@ -56,13 +63,18 @@ export async function generateMetadata({
     };
   }
 
+  const title = "Materiaux de construction a Fes | Produits et prix";
+  const description =
+    "Catalogue des materiaux de construction a Fes: peinture, outillage, quincaillerie et produits de droguerie avec livraison rapide.";
+
   return {
-    title: "Materiaux de construction a Fes | Produits et prix",
-    description:
-      "Catalogue des materiaux de construction a Fes: peinture, outillage, quincaillerie et produits de droguerie avec livraison rapide.",
-    alternates: {
-      canonical: "/produits",
-    },
+    title,
+    description,
+    ...buildSocialMetadata({
+      title,
+      description,
+      canonicalPath: "/produits",
+    }),
     robots: {
       index: shouldIndex,
       follow: true,
@@ -129,17 +141,17 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
   };
 
   return (
-    <section className="bg-[#f1f3f5] py-8 sm:py-10">
-      <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-[0_10px_24px_rgba(15,42,77,0.08)] sm:px-6">
-          <h1 className="text-[2rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2.35rem]">
+    <section className="bg-[#f1f3f5] py-5 sm:py-10">
+      <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-[0_10px_24px_rgba(15,42,77,0.08)] sm:rounded-2xl sm:px-6 sm:py-5">
+          <h1 className="text-[1.35rem] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2.35rem]">
             Materiaux de construction a Fes
           </h1>
-          <p className="mt-1 text-base text-slate-600">
+          <p className="mt-0.5 text-sm text-slate-600 sm:mt-1 sm:text-base">
             Vente en gros et detail de materiaux de construction, peinture et outillage.
           </p>
-          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 sm:text-sm">
-            <h2 className="text-sm font-bold text-brand-blue sm:text-base">
+          <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 sm:mt-2 sm:rounded-xl sm:px-3 sm:text-sm">
+            <h2 className="text-xs font-bold text-brand-blue sm:text-base">
               Materiaux de construction, outillage et peinture a Fes
             </h2>
             <p className="mt-1">
@@ -151,16 +163,16 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
             <a href="/produits?categorie=bricolage" className="font-semibold text-brand-blue hover:underline">bricolage</a>.
           </div>
 
-          <details className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-[#f7f8fa] md:hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
-              <span className="text-sm font-bold uppercase tracking-wide text-brand-blue">
+          <details className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-[#f7f8fa] md:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-brand-blue">
                 Filtres
               </span>
               <span className="text-xs font-semibold text-slate-600">
                 {hasActiveFilters ? "Actifs" : "Afficher"}
               </span>
             </summary>
-            <div className="border-t border-slate-200 px-4 pb-4 pt-3">
+            <div className="border-t border-slate-200 px-3 pb-3 pt-2.5">
               <form action="/produits" method="get">
                 <div className="grid gap-2.5">
                   <label className="block">
@@ -172,7 +184,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                       name="q"
                       defaultValue={rawQuery}
                       placeholder="Ex: perceuse, marteau..."
-                      className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
                     />
                   </label>
                   <div className="grid grid-cols-2 gap-2.5">
@@ -183,7 +195,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                       <select
                         name="categorie"
                         defaultValue={selectedCategory}
-                        className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
+                        className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="">Toutes</option>
                         {categories.map((category) => (
@@ -200,7 +212,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                       <select
                         name="tri"
                         defaultValue={sort}
-                        className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
+                        className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="defaut">Defaut</option>
                         <option value="nouveaux">Recents</option>
@@ -212,13 +224,13 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                   <div className="mt-1 flex items-center gap-2">
                     <button
                       type="submit"
-                      className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-brand-blue px-3 text-xs font-semibold text-white transition hover:bg-slate-900"
+                      className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-brand-blue px-3 text-[11px] font-semibold text-white transition hover:bg-slate-900"
                     >
                       Appliquer
                     </button>
                     <a
                       href="/produits"
-                      className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
                     >
                       Reset
                     </a>
@@ -230,7 +242,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                 <div className="flex min-w-max gap-2 px-1">
                   <a
                     href={buildCategoryUrl(null)}
-                    className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition ${
+                    className={`inline-flex h-7 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold transition ${
                       !selectedCategory
                         ? "border-brand-blue bg-brand-blue text-white"
                         : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -242,7 +254,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
                     <a
                       key={category.id}
                       href={buildCategoryUrl(category.slug)}
-                      className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition ${
+                      className={`inline-flex h-7 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold transition ${
                         selectedCategory === category.slug
                           ? "border-brand-orange bg-brand-orange text-white"
                           : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -359,7 +371,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:mt-4 sm:text-sm">
             {activeCategoryName ? (
               <p className="text-slate-700">
                 Categorie selectionnee: <span className="font-semibold text-brand-blue">{activeCategoryName}</span>
@@ -376,7 +388,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <div className="mt-3.5 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-4 xl:grid-cols-4">
           {sortedProducts.map((product) => (
             <ProductCard key={product.id} product={product} variant="listing" />
           ))}

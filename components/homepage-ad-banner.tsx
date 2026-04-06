@@ -120,12 +120,12 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
   const hasOverlayContent = Boolean(ad.title?.trim() || ad.description?.trim());
   const containerHeightClass =
     slot === "top"
-      ? "h-[132px] sm:h-[170px] lg:h-[220px]"
-      : "h-[116px] sm:h-[142px] lg:h-[170px]";
+      ? "h-[104px] sm:h-[170px] lg:h-[220px]"
+      : "h-[92px] sm:h-[142px] lg:h-[170px]";
 
   return (
-    <section className={slot === "top" ? "bg-[#f1f3f5] pt-2" : "bg-[#f1f3f5] py-3"}>
-      <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+    <section className={slot === "top" ? "bg-[#f1f3f5] pt-1.5" : "bg-[#f1f3f5] py-2"}>
+      <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
         <a
           ref={anchorRef}
           href={ad.link}
@@ -137,7 +137,7 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
             }
             postAdEvent(ad.id, "click", sessionKey);
           }}
-          className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card"
+          className="group block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card sm:rounded-2xl"
         >
           <div className={`relative ${containerHeightClass}`}>
             <img
@@ -149,21 +149,21 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/55 via-slate-950/25 to-transparent" />
 
             {hasOverlayContent ? (
-              <div className="absolute inset-0 flex items-end p-3 sm:p-5">
+              <div className="absolute inset-0 flex items-end p-2 sm:p-5">
                 <div className="max-w-3xl text-white">
                   {ad.title ? (
-                    <p className="text-sm font-bold uppercase tracking-wide sm:text-base">
+                    <p className="text-xs font-bold uppercase tracking-wide sm:text-base">
                       {ad.title}
                     </p>
                   ) : null}
                   {ad.description ? (
-                    <p className="mt-1 text-xs text-slate-100 sm:text-sm">{ad.description}</p>
+                    <p className="mt-0.5 text-[10px] text-slate-100 sm:mt-1 sm:text-sm">{ad.description}</p>
                   ) : null}
                 </div>
               </div>
             ) : null}
 
-            <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+            <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white sm:right-2 sm:top-2 sm:px-2 sm:py-1 sm:text-[10px]">
               Publicite
             </span>
           </div>

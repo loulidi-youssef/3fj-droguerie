@@ -49,42 +49,42 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
 
   if (variant === "homepage") {
     return (
-      <section id="offres-actives" className="bg-[#f1f3f5] pb-5 sm:pb-7">
-        <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-          <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
+      <section id="offres-actives" className="bg-[#f1f3f5] pb-4 sm:pb-7">
+        <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
+          <div className="mb-1.5 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-orange sm:text-xs">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-brand-orange sm:text-xs">
                 Offres actives du moment
               </p>
-              <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+              <h2 className="text-base font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
                 Promotions a ne pas manquer
               </h2>
             </div>
             <Link
               href="/offres"
-              className="inline-flex rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[10px] font-bold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:px-3 sm:py-1 sm:text-xs"
+              className="inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:px-3 sm:py-1 sm:text-xs"
             >
               Voir toutes les offres
             </Link>
           </div>
-          <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#ff8d1a] via-brand-orange to-[#e1560c] px-4 py-4 text-white shadow-[0_12px_28px_rgba(249,115,22,0.28)] sm:px-7 sm:py-5">
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#ff8d1a] via-brand-orange to-[#e1560c] px-3 py-3 text-white shadow-[0_12px_28px_rgba(249,115,22,0.28)] sm:px-7 sm:py-5">
             <div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-yellow-300/30 blur-sm sm:h-28 sm:w-28" />
             <div className="absolute -right-14 -bottom-14 h-32 w-32 rounded-full bg-black/10 sm:h-40 sm:w-40" />
-            <div className="relative flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-yellow-300/80 text-orange-700 shadow-inner sm:h-14 sm:w-14">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-8 sm:w-8" fill="currentColor" aria-hidden>
+            <div className="relative flex flex-col gap-2.5 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2.5 sm:gap-4">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-yellow-300/80 text-orange-700 shadow-inner sm:h-14 sm:w-14">
+                  <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 sm:h-8 sm:w-8" fill="currentColor" aria-hidden>
                     <path d="M7.25 6.5A2.25 2.25 0 1 1 5 8.75 2.25 2.25 0 0 1 7.25 6.5Zm9.5 8.75A2.25 2.25 0 1 1 14.5 17.5a2.25 2.25 0 0 1 2.25-2.25ZM6.47 18.94 17.94 5.47l1.52 1.06L8 20Z" />
                   </svg>
                 </span>
                 <div>
-                  <p className="text-2xl font-extrabold uppercase tracking-tight sm:text-4xl">Offre speciale</p>
-                  <p className="text-xl font-extrabold uppercase leading-tight sm:text-3xl">
+                  <p className="text-lg font-extrabold uppercase tracking-tight sm:text-4xl">Offre speciale</p>
+                  <p className="text-base font-extrabold uppercase leading-tight sm:text-3xl">
                     -{savingsPercent}% sur certains produits
                   </p>
                   <Link
                     href={`/produits/${product.slug}`}
-                    className="mt-1 inline-flex text-xs font-semibold text-orange-50/95 underline underline-offset-4 hover:text-white sm:text-sm"
+                    className="mt-0.5 inline-flex text-[11px] font-semibold text-orange-50/95 underline underline-offset-4 hover:text-white sm:mt-1 sm:text-sm"
                   >
                     Voir le produit concerne
                   </Link>
@@ -92,7 +92,7 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
               </div>
 
               <div className="w-full sm:min-w-[260px]">
-                <p className="mb-1 text-right text-sm font-extrabold sm:text-[1.18rem]">Offre limitee !</p>
+                <p className="mb-1 text-right text-xs font-extrabold sm:text-[1.18rem]">Offre limitee !</p>
                 {offer.endAt ? (
                   <CountdownTimer expiresAt={offer.endAt} variant="homepage-offer" />
                 ) : (
@@ -111,6 +111,24 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
               </div>
             </div>
           </div>
+
+          {visibleOtherOffers.length > 0 ? (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {visibleOtherOffers.map((entry) => (
+                <Link
+                  key={entry.offer.id}
+                  href={`/produits/${entry.product.slug}`}
+                  className="min-w-[178px] shrink-0 rounded-lg border border-slate-200 bg-white p-2 shadow-[0_6px_14px_rgba(15,42,77,0.08)]"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-brand-orange">
+                    {entry.offer.discountLabel}
+                  </p>
+                  <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-brand-blue">{entry.product.name}</p>
+                  <p className="mt-1 text-sm font-extrabold text-brand-orange">{formatDh(entry.discountedPrice)}</p>
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
     );

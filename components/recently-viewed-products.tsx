@@ -86,19 +86,19 @@ export const RecentlyViewedProducts = ({
   }
 
   return (
-    <section className="mt-7 sm:mt-12">
+    <section className="mt-5 sm:mt-12">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-[1.2rem] font-extrabold tracking-tight text-brand-blue sm:text-[2rem]">
+        <h2 className="text-[1rem] font-extrabold tracking-tight text-brand-blue sm:text-[2rem]">
           Recemment consultes
         </h2>
-        <p className="text-xs font-medium text-slate-500 sm:text-sm">
+        <p className="text-[11px] font-medium text-slate-500 sm:text-sm">
           Reprenez la ou vous vous etiez arrete.
         </p>
       </div>
 
-      <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {recentlyViewedProducts.map((recentProduct) => (
-          <div key={recentProduct.id} className="w-[170px] shrink-0">
+          <div key={recentProduct.id} className="w-[154px] shrink-0">
             <ProductCard product={recentProduct} variant="listing" />
           </div>
         ))}

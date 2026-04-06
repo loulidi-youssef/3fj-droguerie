@@ -151,11 +151,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         role="dialog"
         aria-modal="true"
       >
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6 sm:py-5">
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2.5 sm:px-6 sm:py-5">
           <div className="flex items-center gap-2">
             <svg
               viewBox="0 0 24 24"
-              className="h-6 w-6 text-[#ef4444] sm:h-7 sm:w-7"
+              className="h-5 w-5 text-[#ef4444] sm:h-7 sm:w-7"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.8"
@@ -166,7 +166,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               <circle cx="17" cy="19" r="1.5" />
             </svg>
             <div className="flex items-baseline gap-2">
-              <h2 className="text-[1.2rem] font-extrabold leading-none text-slate-900 sm:text-[2rem]">Mon Panier</h2>
+              <h2 className="text-[1.05rem] font-extrabold leading-none text-slate-900 sm:text-[2rem]">Mon Panier</h2>
               <span className="text-xs text-slate-500 sm:text-lg">
                 ({itemCount} {articleLabel})
               </span>
@@ -175,7 +175,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
             aria-label="Fermer"
           >
             <svg viewBox="0 0 24 24" className="h-6 w-6 sm:h-7 sm:w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -184,7 +184,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5 sm:px-5 sm:py-5">
           {itemCount === 0 ? (
             <div className="flex h-full min-h-[280px] flex-col items-center justify-center text-center sm:min-h-[380px]">
               <svg viewBox="0 0 24 24" className="h-12 w-12 text-slate-300 sm:h-16 sm:w-16" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -196,7 +196,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               <p className="mt-1 text-sm text-slate-500 sm:text-[1.5rem]">Ajoutez des produits pour commencer</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {isLoadingProducts && detailedItems.length === 0 ? (
                 <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
                   Chargement du panier...
@@ -217,10 +217,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 return (
                 <article
                   key={item.lineKey}
-                  className="rounded-xl border border-slate-300/80 bg-[#f8f8f8] p-2.5 shadow-[0_3px_10px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:p-3"
+                  className="rounded-xl border border-slate-300/80 bg-[#f8f8f8] p-2 shadow-[0_3px_10px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:p-3"
                 >
-                  <div className="flex items-start gap-2.5 sm:gap-3">
-                    <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-white sm:h-20 sm:w-20 sm:rounded-xl">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white sm:h-20 sm:w-20 sm:rounded-xl">
                       <Image
                         src={image.src}
                         alt={item.product.name}
@@ -232,13 +232,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold leading-snug text-slate-800 sm:text-[1.55rem]">
+                      <h3 className="truncate text-[13px] font-semibold leading-snug text-slate-800 sm:text-[1.55rem]">
                         {item.product.name}
                       </h3>
                       {item.variantLabel ? (
                         <p className="mt-0.5 text-xs font-medium text-slate-500">{item.variantLabel}</p>
                       ) : null}
-                      <p className="mt-0.5 text-lg font-extrabold leading-none text-[#ef4444] sm:text-[1.7rem]">
+                      <p className="mt-0.5 text-base font-extrabold leading-none text-[#ef4444] sm:text-[1.7rem]">
                         {formatDh(item.unitPrice)}
                       </p>
                       {item.originalUnitPrice ? (
@@ -246,22 +246,22 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                           {formatDh(item.originalUnitPrice)}
                         </p>
                       ) : null}
-                      <div className="mt-2 flex items-center gap-2 sm:mt-3">
+                      <div className="mt-1.5 flex items-center gap-1.5 sm:mt-3 sm:gap-2">
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 sm:h-8 sm:w-8 sm:rounded-lg"
                           aria-label={`Diminuer la quantite de ${item.product.name}`}
                         >
                           -
                         </button>
-                        <span className="inline-flex min-w-7 items-center justify-center text-base font-bold text-slate-800 sm:text-[1.3rem]">
+                        <span className="inline-flex min-w-6 items-center justify-center text-sm font-bold text-slate-800 sm:text-[1.3rem]">
                           {item.quantity}
                         </span>
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 sm:h-8 sm:w-8 sm:rounded-lg"
                           aria-label={`Augmenter la quantite de ${item.product.name}`}
                         >
                           +
@@ -272,7 +272,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     <button
                       type="button"
                       onClick={() => removeItem(item.productId, item.variantId)}
-                      className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#ef4444] transition hover:bg-red-50"
+                      className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-[#ef4444] transition hover:bg-red-50 sm:h-8 sm:w-8 sm:rounded-lg"
                       aria-label={`Retirer ${item.product.name} du panier`}
                     >
                       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -287,16 +287,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           )}
         </div>
 
-        <footer className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 sm:px-6 sm:py-5">
-          <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <p className="text-base font-semibold text-slate-600 sm:text-[2rem]">Total</p>
-            <p className="text-xl font-extrabold leading-none text-slate-900 sm:text-[2.4rem]">{formatDh(subtotal)}</p>
+        <footer className="sticky bottom-0 border-t border-slate-200 bg-white px-3 py-2.5 sm:px-6 sm:py-5">
+          <div className="mb-2.5 flex items-center justify-between sm:mb-4">
+            <p className="text-sm font-semibold text-slate-600 sm:text-[2rem]">Total</p>
+            <p className="text-lg font-extrabold leading-none text-slate-900 sm:text-[2.4rem]">{formatDh(subtotal)}</p>
           </div>
 
           <Link
             href="/panier"
             onClick={onClose}
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#f43b2f] to-[#ff7a00] text-base font-bold text-white shadow-[0_10px_18px_rgba(249,115,22,0.26)] transition hover:brightness-95 sm:h-14 sm:rounded-2xl sm:text-[1.6rem]"
+            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#f43b2f] to-[#ff7a00] text-sm font-bold text-white shadow-[0_10px_18px_rgba(249,115,22,0.26)] transition hover:brightness-95 sm:h-14 sm:rounded-2xl sm:text-[1.6rem]"
           >
             Commander maintenant
           </Link>
@@ -308,7 +308,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               href={directWhatsAppLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:h-11 sm:rounded-2xl"
+              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:h-11 sm:rounded-2xl sm:text-sm"
             >
               Finaliser sur WhatsApp
             </a>

@@ -97,13 +97,15 @@ export const AddToCartButton = ({
           type="button"
           onClick={handleDecrease}
           className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange ${
-            compact ? "h-8 w-8 text-base" : "h-9 w-9 text-lg"
+            compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
           }`}
           aria-label="Diminuer la quantite"
         >
           -
         </button>
-        <span className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-sm" : "text-base"}`}>
+        <span
+          className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-xs sm:text-sm" : "text-base"}`}
+        >
           {currentQuantity}
         </span>
         <button
@@ -111,7 +113,7 @@ export const AddToCartButton = ({
           onClick={handleIncrease}
           disabled={!canIncrement}
           className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
-            compact ? "h-8 w-8 text-base" : "h-9 w-9 text-lg"
+            compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
           }`}
           aria-label="Augmenter la quantite"
         >

@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import { OfferSection } from "@/components/offer-section";
+import { buildSocialMetadata } from "@/lib/seo";
+
+const offersTitle = "Offres materiaux de construction a Fes";
+const offersDescription =
+  "Offres speciales sur les produits de droguerie et materiaux de construction a Fes.";
 
 export const metadata: Metadata = {
-  title: "Offres materiaux de construction a Fes",
-  description:
-    "Offres speciales sur les produits de droguerie et materiaux de construction a Fes.",
-  alternates: {
-    canonical: "/offres",
-  },
+  title: offersTitle,
+  description: offersDescription,
+  ...buildSocialMetadata({
+    title: offersTitle,
+    description: offersDescription,
+    canonicalPath: "/offres",
+  }),
 };
 
 export default async function OffresPage() {

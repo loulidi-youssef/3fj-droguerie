@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { businessInfo } from "@/data/business";
+import { siteImages } from "@/data/images";
 import { getSiteUrl } from "@/lib/site-url";
 import type { BlogPost, Product } from "@/types";
 
@@ -16,6 +18,69 @@ export const localBusinessJsonLd = {
   },
   areaServed: "Fes",
   url: getSiteUrl(),
+};
+
+const toAbsoluteUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return getSiteUrl();
+  }
+
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    return `${getSiteUrl()}${normalizedPath}`;
+  }
+};
+
+export const resolveSocialImageUrl = (imagePath?: string | null): string => {
+  return toAbsoluteUrl(imagePath?.trim() || siteImages.hero);
+};
+
+type BuildSocialMetadataInput = {
+  title: string;
+  description: string;
+  canonicalPath: string;
+  imagePath?: string | null;
+  openGraphType?: "website" | "article";
+};
+
+export const buildSocialMetadata = ({
+  title,
+  description,
+  canonicalPath,
+  imagePath,
+  openGraphType = "website",
+}: BuildSocialMetadataInput): Pick<Metadata, "alternates" | "openGraph" | "twitter"> => {
+  const imageUrl = resolveSocialImageUrl(imagePath);
+  const canonicalUrl = toAbsoluteUrl(canonicalPath);
+
+  return {
+    alternates: {
+      canonical: canonicalPath,
+    },
+    openGraph: {
+      type: openGraphType,
+      url: canonicalUrl,
+      title,
+      description,
+      siteName: businessInfo.brandName,
+      locale: "fr_MA",
+      images: [
+        {
+          url: imageUrl,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
 };
 
 type BuildProductJsonLdInput = {

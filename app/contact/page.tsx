@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
 import { businessInfo } from "@/data/business";
+import { buildSocialMetadata } from "@/lib/seo";
+
+const contactTitle = "Contact droguerie a Fes";
+const contactDescription =
+  "Contactez 3FJ Droguerie a Fes pour vos besoins en materiaux de construction et outillage.";
 
 export const metadata: Metadata = {
-  title: "Contact droguerie a Fes",
-  description: "Contactez 3FJ Droguerie a Fes pour vos besoins en materiaux de construction et outillage.",
-  alternates: {
-    canonical: "/contact",
-  },
+  title: contactTitle,
+  description: contactDescription,
+  ...buildSocialMetadata({
+    title: contactTitle,
+    description: contactDescription,
+    canonicalPath: "/contact",
+  }),
 };
 
 export default function ContactPage() {

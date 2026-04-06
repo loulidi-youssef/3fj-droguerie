@@ -6,16 +6,42 @@ import { Footer } from "@/components/footer";
 import { CartProvider } from "@/components/cart-provider";
 import { FavoritesProvider } from "@/components/favorites-provider";
 import { ToastProvider } from "@/components/toast-provider";
+import { businessInfo } from "@/data/business";
+import { resolveSocialImageUrl } from "@/lib/seo";
 import { getSiteUrl } from "@/lib/site-url";
+
+const defaultTitle = "3FJ Droguerie | Materiaux de construction a Fes";
+const defaultDescription =
+  "3FJ Droguerie a Fes: vente en gros et detail de materiaux de construction, outillage, peinture et quincaillerie.";
+const defaultSocialImage = resolveSocialImageUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: "3FJ Droguerie | Materiaux de construction a Fes",
+    default: defaultTitle,
     template: "%s | 3FJ Droguerie",
   },
-  description:
-    "3FJ Droguerie a Fes: vente en gros et detail de materiaux de construction, outillage, peinture et quincaillerie.",
+  description: defaultDescription,
+  openGraph: {
+    type: "website",
+    locale: "fr_MA",
+    url: getSiteUrl(),
+    siteName: businessInfo.brandName,
+    title: defaultTitle,
+    description: defaultDescription,
+    images: [
+      {
+        url: defaultSocialImage,
+        alt: businessInfo.brandName,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: defaultTitle,
+    description: defaultDescription,
+    images: [defaultSocialImage],
+  },
 };
 
 export const viewport: Viewport = {
