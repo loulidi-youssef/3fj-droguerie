@@ -20,8 +20,8 @@ export const HomepageSocialSection = async () => {
   const mobilePosts = visiblePosts.slice(0, 1);
 
   return (
-    <section className="bg-[#f1f3f5] pb-20 sm:pb-8">
-      <div className="mx-auto grid max-w-7xl gap-2.5 px-3 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
+    <section className="bg-[#f1f3f5] pb-16 sm:pb-8">
+      <div className="mx-auto grid max-w-7xl gap-2 px-3 sm:gap-4 sm:px-5 lg:grid-cols-2 lg:px-6">
         <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-3">
             <h2 className="text-[15px] font-extrabold uppercase tracking-tight text-brand-blue sm:text-[2rem]">Avis clients</h2>

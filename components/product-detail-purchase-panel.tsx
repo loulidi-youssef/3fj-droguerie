@@ -272,7 +272,7 @@ export const ProductDetailPurchasePanel = ({
       >
         {getCategoryNameBySlug(product.categorySlug)}
       </Link>
-      <h1 className="mt-1 text-[1.2rem] font-extrabold leading-tight tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
+      <h1 className="mt-1 text-[1.1rem] font-extrabold leading-tight tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
         {product.name}
       </h1>
 
@@ -294,10 +294,10 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
       </div>
 
-      <div className="mt-2.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mt-5 sm:rounded-2xl sm:p-5 sm:shadow-[0_10px_24px_rgba(15,42,77,0.08)]">
+      <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mt-5 sm:rounded-2xl sm:p-5 sm:shadow-[0_10px_24px_rgba(15,42,77,0.08)]">
         <div className="flex items-end justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 flex-wrap items-end gap-1.5 sm:gap-3">
-            <p className="text-[1.5rem] font-extrabold tracking-tight text-brand-blue sm:text-4xl">
+            <p className="text-[1.35rem] font-extrabold tracking-tight text-brand-blue sm:text-4xl">
               {formatDh(displayedPrice)}
             </p>
             {displayedPreviousPrice !== null ? (
@@ -314,15 +314,15 @@ export const ProductDetailPurchasePanel = ({
         </div>
 
         {offerPricing && effectiveOfferPricing ? (
-          <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 sm:mt-3 sm:rounded-xl sm:p-3">
+          <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
             <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-700 sm:text-xs">
               Offre active {offerPricing.discountLabel}
             </p>
-            <p className="mt-0.5 text-[10px] font-semibold text-slate-700 sm:mt-1 sm:text-sm">
+            <p className="mt-0.5 text-[9px] font-semibold text-slate-700 sm:mt-1 sm:text-sm">
               Vous economisez {formatDh(effectiveOfferPricing.savingsAmount)} ({effectiveOfferPricing.savingsPercent}%)
             </p>
             {offerEndLabel ? (
-              <p className="mt-0.5 text-[10px] text-slate-600 sm:mt-1 sm:text-xs">Valable jusqu'au {offerEndLabel}</p>
+              <p className="mt-0.5 text-[9px] text-slate-600 sm:mt-1 sm:text-xs">Valable jusqu'au {offerEndLabel}</p>
             ) : null}
           </div>
         ) : null}
@@ -340,7 +340,7 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
 
         {offerPricing && hasOfferCountdown && offerCountdownTarget ? (
-          <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50/80 p-2 sm:mt-3 sm:rounded-xl sm:p-3">
+          <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50/80 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
             <p className="text-[9px] font-bold uppercase tracking-wide text-brand-orange sm:text-xs">
               {offerEndsSoon ? "Offre bientot terminee" : "Temps restant sur cette offre"}
             </p>
@@ -348,7 +348,7 @@ export const ProductDetailPurchasePanel = ({
           </div>
         ) : null}
 
-        <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 sm:hidden">
+        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5 sm:hidden">
           <div className="grid grid-cols-3 gap-1">
             <p className="rounded-md bg-white px-1.5 py-1 text-center text-[9px] font-semibold text-brand-blue">
               Paiement livraison
@@ -360,10 +360,10 @@ export const ProductDetailPurchasePanel = ({
               Livraison rapide
             </p>
           </div>
-          <p className="mt-2 text-[10px] text-slate-700">
+          <p className="mt-1.5 text-[9px] text-slate-700">
             Domicile: <span className="font-semibold">{deliveryEstimate}</span>
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-700">
+          <p className="mt-0.5 text-[9px] text-slate-700">
             Retrait: <span className="font-semibold">{pickupEstimate}</span>
           </p>
         </div>
@@ -424,7 +424,7 @@ export const ProductDetailPurchasePanel = ({
           </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2.5 sm:mt-6 sm:gap-3 sm:border-0 sm:pt-0">
+        <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2 sm:mt-6 sm:gap-3 sm:border-0 sm:pt-0">
           <AddToCartButton
             productId={product.id}
             variantId={selectedVariant?.id}
@@ -444,7 +444,7 @@ export const ProductDetailPurchasePanel = ({
           />
         </div>
 
-        <p className="mt-1 text-[9px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
+        <p className="mt-0.5 text-[9px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
           Aucun paiement en ligne requis. Confirmation de commande rapide par telephone.
         </p>
 
@@ -452,7 +452,7 @@ export const ProductDetailPurchasePanel = ({
           href={productWhatsAppLink}
           target="_blank"
           rel="noreferrer"
-          className="mt-1.5 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+          className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
         >
           Commander via WhatsApp
         </a>
@@ -494,11 +494,11 @@ export const ProductDetailPurchasePanel = ({
         </p>
       </div>
 
-      <p className="mt-2.5 text-[11px] leading-5 text-slate-700 sm:mt-4 sm:text-[0.95rem] sm:leading-7">{product.description}</p>
+      <p className="mt-2 text-[11px] leading-5 text-slate-700 line-clamp-5 sm:mt-4 sm:text-[0.95rem] sm:leading-7 sm:line-clamp-none">{product.description}</p>
 
       <Link
         href="/panier"
-        className="mt-3 inline-flex text-xs font-semibold text-brand-orange hover:underline sm:mt-4 sm:text-sm"
+        className="mt-2.5 inline-flex text-xs font-semibold text-brand-orange hover:underline sm:mt-4 sm:text-sm"
       >
         Aller au panier
       </Link>

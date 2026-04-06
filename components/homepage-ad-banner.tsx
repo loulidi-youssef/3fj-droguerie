@@ -121,10 +121,10 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
   const containerHeightClass =
     slot === "top"
       ? "h-[104px] sm:h-[170px] lg:h-[220px]"
-      : "h-[92px] sm:h-[142px] lg:h-[170px]";
+      : "h-[76px] sm:h-[142px] lg:h-[170px]";
 
   return (
-    <section className={slot === "top" ? "bg-[#f1f3f5] pt-1.5" : "bg-[#f1f3f5] py-2"}>
+    <section className={slot === "top" ? "bg-[#f1f3f5] pt-1.5" : "bg-[#f1f3f5] py-1.5 sm:py-2"}>
       <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
         <a
           ref={anchorRef}
@@ -149,15 +149,15 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/55 via-slate-950/25 to-transparent" />
 
             {hasOverlayContent ? (
-              <div className="absolute inset-0 flex items-end p-2 sm:p-5">
+              <div className="absolute inset-0 flex items-end p-1.5 sm:p-5">
                 <div className="max-w-3xl text-white">
                   {ad.title ? (
-                    <p className="text-xs font-bold uppercase tracking-wide sm:text-base">
+                    <p className="line-clamp-1 text-[10px] font-bold uppercase tracking-wide sm:text-base">
                       {ad.title}
                     </p>
                   ) : null}
                   {ad.description ? (
-                    <p className="mt-0.5 text-[10px] text-slate-100 sm:mt-1 sm:text-sm">{ad.description}</p>
+                    <p className="mt-0.5 line-clamp-1 text-[9px] text-slate-100 sm:mt-1 sm:text-sm">{ad.description}</p>
                   ) : null}
                 </div>
               </div>
