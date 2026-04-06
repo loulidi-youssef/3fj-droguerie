@@ -212,6 +212,18 @@ export default function PanierPage() {
   const total = subtotal + deliveryCost;
   const amountForFreeDelivery =
     fulfillmentMethod === "pickup" ? 0 : getAmountForFreeDelivery(subtotal);
+  const freeDeliveryTarget = subtotal + amountForFreeDelivery;
+  const freeDeliveryProgress =
+    fulfillmentMethod === "pickup" || freeDeliveryTarget <= 0
+      ? 0
+      : Math.min(100, Math.round((subtotal / freeDeliveryTarget) * 100));
+  const checkoutName = checkoutForm.name.trim();
+  const checkoutPhone = checkoutForm.phone.trim();
+  const checkoutAddress = checkoutForm.address.trim();
+  const checkoutLocation = checkoutForm.location.trim();
+  const hasWhatsAppCustomerDetails = Boolean(
+    checkoutName || checkoutPhone || checkoutAddress || checkoutLocation,
+  );
 
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
@@ -221,6 +233,17 @@ export default function PanierPage() {
     })),
     subtotal,
     deliveryCost,
+    hasWhatsAppCustomerDetails
+      ? {
+          name: checkoutName || undefined,
+          phone: checkoutPhone || undefined,
+          address: checkoutAddress || undefined,
+          location: checkoutLocation || undefined,
+        }
+      : undefined,
+    {
+      fulfillmentMethod,
+    },
   );
 
   const validateAndSetErrors = (
@@ -670,6 +693,19 @@ export default function PanierPage() {
                   Livraison gratuite activee.
                 </p>
               )}
+              {fulfillmentMethod === "delivery" ? (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2.5">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-brand-orange transition-all"
+                      style={{ width: `${freeDeliveryProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Progression livraison gratuite: {freeDeliveryProgress}%
+                  </p>
+                </div>
+              ) : null}
 
               {missingProductsCount > 0 ? (
                 <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-700">
@@ -729,7 +765,7 @@ export default function PanierPage() {
               </button>
 
               <p className="mt-2 text-center text-[11px] text-slate-500">
-                Apres confirmation, vous serez redirige vers le suivi de commande.
+                Aucun paiement en ligne maintenant. Apres confirmation, vous serez redirige vers le suivi de commande.
               </p>
 
               <a
@@ -738,7 +774,7 @@ export default function PanierPage() {
                 rel="noreferrer"
                 className="mt-3 block rounded-xl border border-brand-blue px-4 py-3 text-center text-sm font-semibold text-brand-blue"
               >
-                WhatsApp direct (sans enregistrement)
+                Commander via WhatsApp (message pre-rempli)
               </a>
 
               <button

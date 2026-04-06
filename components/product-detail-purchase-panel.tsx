@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AddToCartButton } from "@/components/add-to-cart-button";
+import { CountdownTimer } from "@/components/countdown-timer";
 import { FavoriteButton } from "@/components/favorite-button";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
@@ -11,6 +12,7 @@ import {
   getProductAvailabilityMeta,
   getProductAvailabilityStatus,
 } from "@/lib/product-availability";
+import { buildProductWhatsAppLink } from "@/lib/whatsapp";
 import type { OfferDiscountType, Product, ProductVariant } from "@/types";
 
 type ProductDetailPurchasePanelProps = {
@@ -209,15 +211,36 @@ export const ProductDetailPurchasePanel = ({
   };
   const availabilityStatus = getProductAvailabilityStatus(availabilityInput);
   const availability = getProductAvailabilityMeta(availabilityInput);
+  const selectedStock = selectedVariant?.stock ?? product.stock;
+  const lowStockCount =
+    typeof selectedStock === "number" && selectedStock > 0 && selectedStock <= 5
+      ? selectedStock
+      : null;
+  const selectedVariantLabelParts = [
+    normalizeVariantLabel(selectedVariant?.color),
+    normalizeVariantLabel(selectedVariant?.size),
+  ].filter((value): value is string => Boolean(value));
+  const selectedVariantLabel =
+    selectedVariantLabelParts.length > 0 ? selectedVariantLabelParts.join(" / ") : undefined;
+  const productWhatsAppLink = buildProductWhatsAppLink(product.name, {
+    quantity: 1,
+    unitPrice: displayedPrice,
+    variantLabel: selectedVariantLabel,
+  });
 
   const offerEndDate =
     offerPricing?.endAt && !Number.isNaN(new Date(offerPricing.endAt).getTime())
       ? new Date(offerPricing.endAt)
       : null;
+  const now = Date.now();
   const offerEndsSoon =
     offerEndDate !== null &&
-    offerEndDate.getTime() > Date.now() &&
-    offerEndDate.getTime() - Date.now() <= 72 * 60 * 60 * 1000;
+    offerEndDate.getTime() > now &&
+    offerEndDate.getTime() - now <= 72 * 60 * 60 * 1000;
+  const hasOfferCountdown =
+    offerEndDate !== null && offerEndDate.getTime() > now;
+  const offerCountdownTarget =
+    offerEndDate !== null && offerEndDate.getTime() > now ? offerEndDate.toISOString() : null;
   const offerEndLabel =
     offerEndDate !== null
       ? new Intl.DateTimeFormat("fr-MA", {
@@ -309,6 +332,21 @@ export const ProductDetailPurchasePanel = ({
         >
           {availability.label}
         </p>
+
+        {lowStockCount !== null ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 sm:mt-3 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs">
+            Plus que {lowStockCount} en stock pour cette option.
+          </p>
+        ) : null}
+
+        {offerPricing && hasOfferCountdown && offerCountdownTarget ? (
+          <div className="mt-2.5 rounded-xl border border-orange-200 bg-orange-50/80 p-2.5 sm:mt-3 sm:p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-brand-orange sm:text-xs">
+              {offerEndsSoon ? "Offre bientot terminee" : "Temps restant sur cette offre"}
+            </p>
+            <CountdownTimer expiresAt={offerCountdownTarget} compact />
+          </div>
+        ) : null}
 
         <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:hidden">
           <div className="grid grid-cols-3 gap-1.5">
@@ -407,7 +445,19 @@ export const ProductDetailPurchasePanel = ({
         </div>
 
         <p className="mt-1 text-[10px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
-          Paiement a la livraison disponible. Confirmation rapide par telephone.
+          Aucun paiement en ligne requis. Confirmation de commande rapide par telephone.
+        </p>
+
+        <a
+          href={productWhatsAppLink}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+        >
+          Commander via WhatsApp
+        </a>
+        <p className="mt-1 text-[10px] text-slate-500 sm:text-xs">
+          Message pre-rempli avec le produit pour un traitement plus rapide.
         </p>
       </div>
 
@@ -496,6 +546,9 @@ export const ProductDetailPurchasePanel = ({
             controlsClassName="inline-flex h-9 min-w-[8.5rem] items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"
           />
         </div>
+        <p className="px-3 pb-2 text-[10px] text-slate-500 sm:px-5 sm:pb-3 sm:text-xs">
+          Paiement a la livraison et confirmation avant expedition.
+        </p>
       </div>
     </div>
   );

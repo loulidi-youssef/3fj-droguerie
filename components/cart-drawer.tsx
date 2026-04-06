@@ -10,6 +10,8 @@ import {
   type CartProductsLookup,
 } from "@/lib/cart-display";
 import { formatDh } from "@/lib/currency";
+import { getDeliveryCost } from "@/lib/delivery";
+import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
   isOpen: boolean;
@@ -114,6 +116,17 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const subtotal = useMemo(
     () => detailedItems.reduce((sum, item) => sum + item.lineTotal, 0),
     [detailedItems],
+  );
+  const estimatedDeliveryCost = getDeliveryCost(subtotal);
+  const directWhatsAppLink = buildCartWhatsAppLink(
+    detailedItems.map((item) => ({
+      name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })),
+    subtotal,
+    estimatedDeliveryCost,
+    undefined,
   );
 
   const articleLabel = itemCount > 1 ? "articles" : "article";
@@ -279,6 +292,19 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           >
             Commander maintenant
           </Link>
+          <p className="mt-2 text-center text-[11px] text-slate-500 sm:text-xs">
+            Paiement a la livraison apres confirmation.
+          </p>
+          {detailedItems.length > 0 ? (
+            <a
+              href={directWhatsAppLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:h-11 sm:rounded-2xl"
+            >
+              Finaliser sur WhatsApp
+            </a>
+          ) : null}
         </footer>
       </aside>
     </div>
