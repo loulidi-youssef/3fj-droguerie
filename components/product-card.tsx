@@ -15,7 +15,7 @@ import type { Product } from "@/types";
 
 type ProductCardProps = {
   product: Product;
-  variant?: "default" | "homepage";
+  variant?: "default" | "homepage" | "listing";
 };
 
 export const ProductCard = ({ product, variant = "default" }: ProductCardProps) => {
@@ -33,11 +33,101 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
   const isOutOfStock = availabilityStatus === "out-of-stock";
   const requiresVariantSelection = (product.variants?.length ?? 0) > 0;
   const isHomepageVariant = variant === "homepage";
+  const isListingVariant = variant === "listing";
   const reviewCount = Math.max(12, Math.round(product.rating * 8));
   const previousPrice =
     typeof product.previousPrice === "number" && product.previousPrice > product.price
       ? product.previousPrice
       : null;
+
+  if (isListingVariant) {
+    return (
+      <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_6px_14px_rgba(15,42,77,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(15,42,77,0.11)]">
+        <Link href={`/produits/${product.slug}`} className="block p-2">
+          <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-slate-50">
+            {hasBadge ? (
+              <span
+                className={`pointer-events-none absolute left-1.5 top-1.5 z-10 inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                  isPromoBadge ? "bg-brand-orange text-white" : "bg-brand-blue/90 text-white"
+                }`}
+              >
+                {badgeLabel}
+              </span>
+            ) : null}
+            <FavoriteButton
+              productId={product.id}
+              className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-500 shadow-sm transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+            />
+            <Image
+              src={product.images[0]}
+              alt={product.name}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
+            />
+          </div>
+        </Link>
+
+        <div className="flex flex-1 flex-col px-2 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-orange">
+            {getCategoryNameBySlug(product.categorySlug)}
+          </p>
+          <Link
+            href={`/produits/${product.slug}`}
+            className="mt-1 min-h-[2.4rem] overflow-hidden text-[0.86rem] font-bold leading-tight text-brand-blue transition-colors duration-200 hover:text-brand-orange sm:text-sm"
+            style={{
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+            }}
+          >
+            {product.name}
+          </Link>
+
+          <div className="mt-1.5 flex items-start justify-between">
+            <div>
+              <p className="text-base font-extrabold leading-none tracking-tight text-brand-blue sm:text-lg">
+                {formatDh(product.price)}
+              </p>
+              {previousPrice !== null ? (
+                <p className="mt-0.5 text-[10px] font-semibold text-slate-400 line-through">
+                  {formatDh(previousPrice)}
+                </p>
+              ) : null}
+            </div>
+            <div className="scale-[0.86] origin-top-right">
+              <StarRating value={product.rating} />
+            </div>
+          </div>
+
+          <p
+            className={`mt-1.5 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${availability.className}`}
+          >
+            {availability.label}
+          </p>
+
+          <div className="mt-2">
+            {requiresVariantSelection ? (
+              <Link
+                href={`/produits/${product.slug}`}
+                className="inline-flex h-8 w-full items-center justify-center rounded-md border border-brand-blue px-2 text-center text-[10px] font-semibold text-brand-blue transition hover:bg-slate-50 sm:h-9 sm:text-[11px]"
+              >
+                Choisir variante
+              </Link>
+            ) : (
+              <AddToCartButton
+                productId={product.id}
+                disabled={isOutOfStock}
+                compact
+                className="inline-flex h-8 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-center text-[10px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-9 sm:text-[11px]"
+                controlsClassName="inline-flex h-8 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 sm:h-9"
+              />
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   if (isHomepageVariant) {
     return (
