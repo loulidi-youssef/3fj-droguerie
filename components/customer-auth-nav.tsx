@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type CustomerAuthNavState = {
@@ -12,16 +12,19 @@ type CustomerAuthNavState = {
 type CustomerAuthNavProps = {
   iconOnly?: boolean;
   openRequestNonce?: number;
+  renderTrigger?: boolean;
 };
 
 export const CustomerAuthNav = ({
   iconOnly = false,
   openRequestNonce,
+  renderTrigger = true,
 }: CustomerAuthNavProps) => {
   const [state, setState] = useState<CustomerAuthNavState>({
     isReady: false,
     isAuthenticated: false,
   });
+  const menuId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -153,34 +156,36 @@ export const CustomerAuthNav = ({
 
   return (
     <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-        aria-controls="customer-account-menu"
-        className={
-          iconOnly
-            ? "inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:h-10 sm:w-10"
-            : "inline-flex h-11 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
-        }
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className={iconOnly ? "h-5 w-5" : "h-4 w-4"}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden
+      {renderTrigger ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          aria-controls={menuId}
+          className={
+            iconOnly
+              ? "inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:h-10 sm:w-10"
+              : "inline-flex h-11 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+          }
         >
-          <circle cx="12" cy="8" r="3.2" />
-          <path d="M5.5 19.5c1.8-3.1 4.1-4.6 6.5-4.6s4.7 1.5 6.5 4.6" />
-        </svg>
-        {iconOnly ? null : state.isAuthenticated ? "Mon compte" : "Se connecter"}
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            className={iconOnly ? "h-5 w-5" : "h-4 w-4"}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden
+          >
+            <circle cx="12" cy="8" r="3.2" />
+            <path d="M5.5 19.5c1.8-3.1 4.1-4.6 6.5-4.6s4.7 1.5 6.5 4.6" />
+          </svg>
+          {iconOnly ? null : state.isAuthenticated ? "Mon compte" : "Se connecter"}
+        </button>
+      ) : null}
 
       <div
-        id="customer-account-menu"
+        id={menuId}
         className={`fixed inset-0 z-[130] overflow-hidden md:hidden ${isOpen ? "" : "pointer-events-none"}`}
         aria-hidden={!isOpen}
       >

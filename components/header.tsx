@@ -524,7 +524,7 @@ export const Header = () => {
               shouldHideMobileHeaderActions ? "hidden md:flex" : "flex"
             }`}
           >
-            <CustomerAuthNav iconOnly openRequestNonce={accountOpenRequestNonce} />
+            <CustomerAuthNav iconOnly />
 
             <button
               type="button"
@@ -556,6 +556,14 @@ export const Header = () => {
               </svg>
             </a>
           </div>
+        </div>
+
+        <div className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden md:hidden" aria-hidden>
+          <CustomerAuthNav
+            iconOnly
+            renderTrigger={false}
+            openRequestNonce={accountOpenRequestNonce}
+          />
         </div>
         </div>
       </header>
