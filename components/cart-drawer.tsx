@@ -4,26 +4,24 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
+import {
+  buildDetailedCartItems,
+  fetchCartProductsLookup,
+  type CartProductsLookup,
+} from "@/lib/cart-display";
 import { formatDh } from "@/lib/currency";
-import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
-import type { Product } from "@/types";
 
 type CartDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
 };
 
-type ProductsApiResponse = {
-  products?: Product[];
-  activeOfferRulesByProductId?: Record<string, OfferUnitPricingRule>;
-};
-
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const { items, itemCount, updateQuantity, removeItem } = useCart();
-  const [productsById, setProductsById] = useState<Record<string, Product>>({});
-  const [activeOfferRulesByProductId, setActiveOfferRulesByProductId] = useState<
-    Record<string, OfferUnitPricingRule>
-  >({});
+  const [cartLookup, setCartLookup] = useState<CartProductsLookup>({
+    productsById: {},
+    activeOfferRulesByProductId: {},
+  });
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   const uniqueProductIds = useMemo(
@@ -67,99 +65,50 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     }
 
     if (uniqueProductIds.length === 0) {
-      setProductsById({});
-      setActiveOfferRulesByProductId({});
+      setCartLookup({
+        productsById: {},
+        activeOfferRulesByProductId: {},
+      });
       setIsLoadingProducts(false);
       return;
     }
 
-    const controller = new AbortController();
+    let isActive = true;
 
     const fetchProducts = async () => {
       setIsLoadingProducts(true);
 
       try {
-        const searchParams = new URLSearchParams({
-          ids: uniqueProductIds.join(","),
-        });
-
-        const response = await fetch(`/api/products?${searchParams.toString()}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          throw new Error("Erreur API produits");
-        }
-
-        const payload = (await response.json()) as ProductsApiResponse;
-        const nextProductsById = (payload.products ?? []).reduce<Record<string, Product>>(
-          (accumulator, product) => {
-            accumulator[product.id] = product;
-            return accumulator;
-          },
-          {},
-        );
-
-        setProductsById(nextProductsById);
-        setActiveOfferRulesByProductId(payload.activeOfferRulesByProductId ?? {});
-      } catch (error) {
-        if ((error as { name?: string }).name === "AbortError") {
+        const nextLookup = await fetchCartProductsLookup(uniqueProductIds);
+        if (!isActive) {
           return;
         }
-        setProductsById({});
-        setActiveOfferRulesByProductId({});
+        setCartLookup(nextLookup);
+      } catch {
+        if (!isActive) {
+          return;
+        }
+        setCartLookup({
+          productsById: {},
+          activeOfferRulesByProductId: {},
+        });
       } finally {
-        setIsLoadingProducts(false);
+        if (isActive) {
+          setIsLoadingProducts(false);
+        }
       }
     };
 
     void fetchProducts();
 
     return () => {
-      controller.abort();
+      isActive = false;
     };
   }, [isOpen, uniqueProductIds]);
 
   const detailedItems = useMemo(
-    () =>
-      items
-        .map((item) => {
-          const product = productsById[item.productId];
-          if (!product) {
-            return null;
-          }
-
-          const selectedVariant =
-            item.variantId && Array.isArray(product.variants)
-              ? product.variants.find((variant) => variant.id === item.variantId)
-              : undefined;
-          const baseUnitPrice = selectedVariant?.price ?? product.price;
-          const offerRule = activeOfferRulesByProductId[item.productId];
-          const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
-          const unitPrice = effectivePricing.discountedPrice;
-          const originalUnitPrice =
-            effectivePricing.originalPrice > effectivePricing.discountedPrice
-              ? effectivePricing.originalPrice
-              : null;
-
-          const variantLabelParts = [
-            item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
-            item.selectedSize ? `Taille: ${item.selectedSize}` : null,
-          ].filter((value): value is string => Boolean(value));
-
-          return {
-            ...item,
-            product,
-            originalUnitPrice,
-            unitPrice,
-            lineTotal: unitPrice * item.quantity,
-            variantLabel: variantLabelParts.join(" | "),
-            lineKey: `${item.productId}::${item.variantId ?? "base"}`,
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null),
-    [items, productsById, activeOfferRulesByProductId],
+    () => buildDetailedCartItems(items, cartLookup),
+    [items, cartLookup],
   );
 
   const subtotal = useMemo(

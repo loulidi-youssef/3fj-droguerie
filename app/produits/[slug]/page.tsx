@@ -88,7 +88,9 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
             </div>
           </div>
 
-          <ProductDetailPurchasePanel product={product} offerPricing={activeOfferPricing} />
+          <div className="lg:sticky lg:top-24 lg:self-start">
+            <ProductDetailPurchasePanel product={product} offerPricing={activeOfferPricing} />
+          </div>
         </div>
 
         {relatedProducts.length > 0 ? (

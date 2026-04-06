@@ -78,7 +78,10 @@ export const Header = () => {
 
     const fetchProducts = async () => {
       try {
-        const response = await fetch("/api/products", { cache: "no-store" });
+        const response = await fetch(
+          "/api/products?minimal=1&includeOffers=0",
+          { cache: "no-store" },
+        );
         if (!response.ok) {
           return;
         }

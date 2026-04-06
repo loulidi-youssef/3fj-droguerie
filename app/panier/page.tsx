@@ -6,6 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
 import {
+  buildDetailedCartItems,
+  fetchCartProductsLookup,
+  type CartProductsLookup,
+} from "@/lib/cart-display";
+import {
   type CheckoutCustomerInput,
   type CheckoutField,
   type CheckoutFieldErrors,
@@ -13,10 +18,8 @@ import {
 } from "@/lib/checkout-validation";
 import { formatDh } from "@/lib/currency";
 import { getAmountForFreeDelivery, getDeliveryCost } from "@/lib/delivery";
-import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
-import type { Product } from "@/types";
 
 type CheckoutFormValues = CheckoutCustomerInput;
 
@@ -31,11 +34,6 @@ type OrderApiResponse = {
 };
 
 type FulfillmentMethod = "delivery" | "pickup";
-
-type ProductsApiResponse = {
-  products?: Product[];
-  activeOfferRulesByProductId?: Record<string, OfferUnitPricingRule>;
-};
 
 const initialCheckoutForm: CheckoutFormValues = {
   name: "",
@@ -60,10 +58,10 @@ export default function PanierPage() {
   const { items, updateQuantity, removeItem, clearCart } = useCart();
   const { showToast } = useToast();
 
-  const [productsById, setProductsById] = useState<Record<string, Product>>({});
-  const [activeOfferRulesByProductId, setActiveOfferRulesByProductId] = useState<
-    Record<string, OfferUnitPricingRule>
-  >({});
+  const [cartLookup, setCartLookup] = useState<CartProductsLookup>({
+    productsById: {},
+    activeOfferRulesByProductId: {},
+  });
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutFormValues>(initialCheckoutForm);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
@@ -105,54 +103,45 @@ export default function PanierPage() {
     const uniqueProductIds = [...new Set(items.map((item) => item.productId))];
 
     if (uniqueProductIds.length === 0) {
-      setProductsById({});
-      setActiveOfferRulesByProductId({});
+      setCartLookup({
+        productsById: {},
+        activeOfferRulesByProductId: {},
+      });
       setIsProductsLoading(false);
       return;
     }
 
-    const controller = new AbortController();
+    let isActive = true;
 
     const fetchProducts = async () => {
       setIsProductsLoading(true);
 
       try {
-        const searchParams = new URLSearchParams({
-          ids: uniqueProductIds.join(","),
-        });
-        const response = await fetch(`/api/products?${searchParams.toString()}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          throw new Error("Erreur API produits");
-        }
-
-        const payload = (await response.json()) as ProductsApiResponse;
-        const nextProductsById = (payload.products ?? []).reduce<Record<string, Product>>(
-          (accumulator, product) => {
-            accumulator[product.id] = product;
-            return accumulator;
-          },
-          {},
-        );
-        setProductsById(nextProductsById);
-        setActiveOfferRulesByProductId(payload.activeOfferRulesByProductId ?? {});
-      } catch (error) {
-        if ((error as { name?: string }).name === "AbortError") {
+        const nextLookup = await fetchCartProductsLookup(uniqueProductIds);
+        if (!isActive) {
           return;
         }
-        setProductsById({});
-        setActiveOfferRulesByProductId({});
+        setCartLookup(nextLookup);
+      } catch {
+        if (!isActive) {
+          return;
+        }
+        setCartLookup({
+          productsById: {},
+          activeOfferRulesByProductId: {},
+        });
       } finally {
-        setIsProductsLoading(false);
+        if (isActive) {
+          setIsProductsLoading(false);
+        }
       }
     };
 
     void fetchProducts();
 
-    return () => controller.abort();
+    return () => {
+      isActive = false;
+    };
   }, [items]);
 
   useEffect(() => {
@@ -212,41 +201,8 @@ export default function PanierPage() {
   }, [isCustomerAuthenticated]);
 
   const detailedItems = useMemo(
-    () =>
-      items
-        .map((item) => {
-          const product = productsById[item.productId];
-          if (!product) return null;
-
-          const selectedVariant =
-            item.variantId && Array.isArray(product.variants)
-              ? product.variants.find((variant) => variant.id === item.variantId)
-              : undefined;
-          const baseUnitPrice = selectedVariant?.price ?? product.price;
-          const offerRule = activeOfferRulesByProductId[item.productId];
-          const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
-          const unitPrice = effectivePricing.discountedPrice;
-          const originalUnitPrice =
-            effectivePricing.originalPrice > effectivePricing.discountedPrice
-              ? effectivePricing.originalPrice
-              : null;
-          const variantLabelParts = [
-            item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
-            item.selectedSize ? `Taille: ${item.selectedSize}` : null,
-          ].filter((value): value is string => Boolean(value));
-
-          return {
-            ...item,
-            product,
-            originalUnitPrice,
-            unitPrice,
-            lineTotal: unitPrice * item.quantity,
-            variantLabel: variantLabelParts.join(" | "),
-            lineKey: `${item.productId}::${item.variantId ?? "base"}`,
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null),
-    [items, productsById, activeOfferRulesByProductId],
+    () => buildDetailedCartItems(items, cartLookup),
+    [items, cartLookup],
   );
 
   const missingProductsCount = items.length - detailedItems.length;

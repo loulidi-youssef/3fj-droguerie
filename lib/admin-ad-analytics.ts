@@ -42,6 +42,21 @@ type AdEventRow = {
   event_type: "view" | "click";
 };
 
+type AdEventStatsRow = {
+  ad_id: string;
+  views: number | null;
+  clicks: number | null;
+};
+
+const isRelationMissingError = (message: string | undefined, relation: string): boolean => {
+  const normalizedMessage = (message ?? "").toLowerCase();
+  return (
+    normalizedMessage.includes(`relation "${relation.toLowerCase()}" does not exist`) ||
+    normalizedMessage.includes(`relation '${relation.toLowerCase()}' does not exist`) ||
+    normalizedMessage.includes("42p01")
+  );
+};
+
 const toRoundedCtr = (clicks: number, views: number): number => {
   if (views <= 0) {
     return 0;
@@ -98,16 +113,39 @@ const getAdEventCounters = async (
     return counters;
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data: statsData, error: statsError } = await supabaseAdmin
+    .from("ad_event_stats")
+    .select("ad_id, views, clicks")
+    .in("ad_id", adIds);
+
+  if (!statsError && statsData) {
+    for (const row of statsData as AdEventStatsRow[]) {
+      const views = Math.max(0, Number(row.views ?? 0));
+      const clicks = Math.max(0, Number(row.clicks ?? 0));
+      counters.set(row.ad_id, { views, clicks });
+    }
+
+    return counters;
+  }
+
+  // Backward-compatible fallback if migration was not applied yet.
+  if (
+    statsError &&
+    !isRelationMissingError(statsError.message, "ad_event_stats")
+  ) {
+    return counters;
+  }
+
+  const { data: rawData, error: rawError } = await supabaseAdmin
     .from("ad_events")
     .select("ad_id, event_type")
     .in("ad_id", adIds);
 
-  if (error || !data) {
+  if (rawError || !rawData) {
     return counters;
   }
 
-  for (const row of data as AdEventRow[]) {
+  for (const row of rawData as AdEventRow[]) {
     const existing = counters.get(row.ad_id) ?? { views: 0, clicks: 0 };
     if (row.event_type === "view") {
       existing.views += 1;

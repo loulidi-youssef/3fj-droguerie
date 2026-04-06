@@ -33,6 +33,13 @@ type ProductVariantRow = {
 };
 
 const PRODUCT_SELECT = "*";
+const PRODUCT_SEARCH_SELECT = "id, slug, name";
+
+export type ProductSearchSuggestion = {
+  id: string;
+  slug: string;
+  name: string;
+};
 
 const mapProductRow = (row: ProductRow): Product => ({
   id: row.id,
@@ -112,6 +119,40 @@ const getFallbackProducts = (): Product[] => {
   return [...fallbackProducts].sort((first, second) =>
     first.name.localeCompare(second.name),
   );
+};
+
+const getFallbackProductSearchSuggestions = (): ProductSearchSuggestion[] => {
+  return getFallbackProducts().map((product) => ({
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+  }));
+};
+
+export const getAllProductSearchSuggestions = async (): Promise<
+  ProductSearchSuggestion[]
+> => {
+  const supabase = getSupabaseServerClient();
+
+  if (!supabase) {
+    return getFallbackProductSearchSuggestions();
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SEARCH_SELECT)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    return getFallbackProductSearchSuggestions();
+  }
+
+  return (data as Array<{ id: string; slug: string; name: string }>).map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+  }));
 };
 
 export const getAllProducts = async (): Promise<Product[]> => {

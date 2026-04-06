@@ -12,6 +12,7 @@ type AddToCartButtonProps = {
   selectedPrice?: number;
   selectedPreviousPrice?: number;
   selectedImage?: string;
+  label?: string;
   quantity?: number;
   className?: string;
   controlsClassName?: string;
@@ -28,6 +29,7 @@ export const AddToCartButton = ({
   selectedPrice,
   selectedPreviousPrice,
   selectedImage,
+  label = "Ajouter au panier",
   quantity = 1,
   className,
   controlsClassName,
@@ -128,7 +130,7 @@ export const AddToCartButton = ({
         isActive ? "scale-[0.98]" : ""
       } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
     >
-      {disabled ? disabledLabel : "Ajouter au panier"}
+      {disabled ? disabledLabel : label}
     </button>
   );
 };
