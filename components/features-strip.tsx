@@ -1,30 +1,30 @@
 const trustItems = [
   {
-    title: "Livraison a Fes",
-    subtitle: "Rapide et fiable",
+    title: "Paiement a la livraison",
+    subtitle: "Commandez maintenant, payez a la reception",
+    icon: (
+      <path d="M3 7.2a2.2 2.2 0 0 1 2.2-2.2h13.6A2.2 2.2 0 0 1 21 7.2v9.6a2.2 2.2 0 0 1-2.2 2.2H5.2A2.2 2.2 0 0 1 3 16.8V7.2Zm2.2-.2a.2.2 0 0 0-.2.2v2h14V7.2a.2.2 0 0 0-.2-.2H5.2Zm13.6 10a.2.2 0 0 0 .2-.2v-5.6H5v5.6c0 .11.09.2.2.2h13.6ZM7.2 13h3.8a1 1 0 1 1 0 2H7.2a1 1 0 1 1 0-2Z" />
+    ),
+  },
+  {
+    title: "Livraison rapide",
+    subtitle: "Expedition rapide sur Fes et environs",
     icon: (
       <path d="M3.5 6.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1V9h2.4a1 1 0 0 1 .77.36l2.9 3.45a1 1 0 0 1 .23.64v3.05a1 1 0 0 1-1 1h-.96a2.75 2.75 0 0 1-5.34 0H9.84a2.75 2.75 0 0 1-5.34 0H4.5a1 1 0 0 1-1-1V6.5Z" />
     ),
   },
   {
-    title: "Prix competitifs",
-    subtitle: "Meilleurs tarifs",
+    title: "Retrait en magasin",
+    subtitle: "Recuperez votre commande en point de vente",
     icon: (
-      <path d="M11 2.5a1 1 0 0 1 1 1v1.45a6.9 6.9 0 0 1 2.4.96l1.03-1.03a1 1 0 1 1 1.41 1.41l-1.03 1.03a6.9 6.9 0 0 1 .96 2.4H18.2a1 1 0 1 1 0 2h-1.45a6.9 6.9 0 0 1-.96 2.4l1.03 1.03a1 1 0 0 1-1.41 1.41l-1.03-1.03a6.9 6.9 0 0 1-2.4.96V20.5a1 1 0 1 1-2 0v-1.45a6.9 6.9 0 0 1-2.4-.96l-1.03 1.03a1 1 0 1 1-1.41-1.41l1.03-1.03a6.9 6.9 0 0 1-.96-2.4H2.8a1 1 0 1 1 0-2h1.45a6.9 6.9 0 0 1 .96-2.4L4.18 6.85a1 1 0 1 1 1.41-1.41L6.62 6.47a6.9 6.9 0 0 1 2.4-.96V3.5a1 1 0 0 1 1-1Zm0 5.1a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
+      <path d="M4 8.2 12 3l8 5.2v9.3a1 1 0 0 1-1 1h-4.8v-5.3a1.2 1.2 0 0 0-2.4 0v5.3H5a1 1 0 0 1-1-1V8.2Zm2 1.1v7.2h3.8v-3.3a3.2 3.2 0 1 1 6.4 0v3.3H18V9.3l-6-3.9-6 3.9Z" />
     ),
   },
   {
-    title: "+500 clients satisfaits",
-    subtitle: "Qualite garantie",
+    title: "Produit garanti",
+    subtitle: "Selection fiable pour vos travaux",
     icon: (
-      <path d="m12 2.8 2.3 4.66 5.14.74-3.72 3.62.88 5.12L12 14.53 7.4 16.94l.88-5.12L4.56 8.2l5.14-.74L12 2.8Z" />
-    ),
-  },
-  {
-    title: "Service rapide",
-    subtitle: "Disponible 7j/7",
-    icon: (
-      <path d="M12 2.5A9.5 9.5 0 1 0 21.5 12 9.51 9.51 0 0 0 12 2.5Zm0 2a7.5 7.5 0 1 1-5.3 2.2A7.46 7.46 0 0 1 12 4.5Zm-.8 2.2v5.2a1 1 0 0 0 .29.71l3.3 3.3 1.42-1.41-3-3V6.7Z" />
+      <path d="M12 2.4 4.6 5.2v5.7c0 4.7 3 8.97 7.4 10.6 4.4-1.63 7.4-5.9 7.4-10.6V5.2L12 2.4Zm0 2.13 5.4 2.06v4.31c0 3.71-2.24 7.14-5.4 8.65-3.16-1.51-5.4-4.94-5.4-8.65V6.59L12 4.53Zm-1.15 9.17 4.37-4.37 1.41 1.41-5.08 5.08a1 1 0 0 1-1.41 0l-2.38-2.38 1.41-1.41 1.68 1.67Z" />
     ),
   },
 ];
@@ -32,23 +32,35 @@ const trustItems = [
 export const FeaturesStrip = () => {
   return (
     <section className="bg-[#f1f3f5] pb-7">
-      <div className="mx-auto grid max-w-7xl gap-3 px-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-4 lg:px-6">
-        {trustItems.map((feature) => (
-          <article
-            key={feature.title}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(15,42,77,0.08)]"
-          >
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-brand-orange">
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
-                {feature.icon}
-              </svg>
-            </span>
-            <div>
-              <p className="text-[1.03rem] font-extrabold leading-tight text-brand-blue">{feature.title}</p>
-              <p className="mt-0.5 text-sm text-slate-600">{feature.subtitle}</p>
-            </div>
-          </article>
-        ))}
+      <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-xl font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+            Achats en toute confiance
+          </h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:text-sm">
+            Service rapide, clair et fiable
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {trustItems.map((feature) => (
+            <article
+              key={feature.title}
+              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(15,42,77,0.08)]"
+            >
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-brand-orange">
+                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
+                  {feature.icon}
+                </svg>
+              </span>
+              <div>
+                <p className="text-[1.01rem] font-extrabold leading-tight text-brand-blue">
+                  {feature.title}
+                </p>
+                <p className="mt-0.5 text-sm text-slate-600">{feature.subtitle}</p>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );

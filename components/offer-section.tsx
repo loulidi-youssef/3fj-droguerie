@@ -49,8 +49,24 @@ export const OfferSection = async ({ variant = "homepage", maxOffers }: OfferSec
 
   if (variant === "homepage") {
     return (
-      <section className="bg-[#f1f3f5] pb-7">
+      <section id="offres-actives" className="bg-[#f1f3f5] pb-7">
         <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-brand-orange">
+                Offres actives du moment
+              </p>
+              <h2 className="text-xl font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">
+                Promotions a ne pas manquer
+              </h2>
+            </div>
+            <Link
+              href="/offres"
+              className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+            >
+              Voir toutes les offres
+            </Link>
+          </div>
           <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#ff8d1a] via-brand-orange to-[#e1560c] px-6 py-5 text-white shadow-[0_12px_28px_rgba(249,115,22,0.28)] sm:px-7">
             <div className="absolute -left-6 -top-6 h-28 w-28 rounded-full bg-yellow-300/30 blur-sm" />
             <div className="absolute -right-14 -bottom-14 h-40 w-40 rounded-full bg-black/10" />
