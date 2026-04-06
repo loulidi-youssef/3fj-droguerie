@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { ProductDetailPurchasePanel } from "@/components/product-detail-purchase-panel";
 import { ProductCard } from "@/components/product-card";
 import { RecentlyViewedProducts } from "@/components/recently-viewed-products";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { getActiveOffersWithProducts } from "@/lib/offers";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
 import { buildProductJsonLd } from "@/lib/seo";
@@ -193,6 +194,7 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
       },
     ],
   };
+  const primaryImage = getSafeNextImageProps(product.images[0]);
 
   return (
     <>
@@ -211,36 +213,45 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
           <div className="grid gap-3 sm:gap-8 lg:grid-cols-2">
             <div className="min-w-0">
               <Image
-                src={product.images[0]}
+                src={primaryImage.src}
                 alt={product.name}
                 width={900}
                 height={680}
+                unoptimized={primaryImage.unoptimized}
                 className="aspect-[4/3] w-full rounded-xl border border-slate-200 bg-white object-contain p-2 sm:aspect-[4/3] sm:rounded-2xl sm:object-cover sm:p-0"
               />
               <div className="mt-2 sm:mt-3">
                 <div className="flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  {product.images.map((image, index) => (
-                    <Image
-                      key={image}
-                      src={image}
-                      alt={`${product.name} vue ${index + 1}`}
-                      width={96}
-                      height={96}
-                      className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover p-1"
-                    />
-                  ))}
+                  {product.images.map((imageSrc, index) => {
+                    const image = getSafeNextImageProps(imageSrc);
+                    return (
+                      <Image
+                        key={imageSrc}
+                        src={image.src}
+                        alt={`${product.name} vue ${index + 1}`}
+                        width={96}
+                        height={96}
+                        unoptimized={image.unoptimized}
+                        className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover p-1"
+                      />
+                    );
+                  })}
                 </div>
                 <div className="hidden grid-cols-3 gap-3 sm:grid">
-                  {product.images.map((image, index) => (
-                    <Image
-                      key={image}
-                      src={image}
-                      alt={`${product.name} vue ${index + 1}`}
-                      width={280}
-                      height={200}
-                      className="aspect-[4/3] rounded-xl border border-slate-200 object-cover"
-                    />
-                  ))}
+                  {product.images.map((imageSrc, index) => {
+                    const image = getSafeNextImageProps(imageSrc);
+                    return (
+                      <Image
+                        key={imageSrc}
+                        src={image.src}
+                        alt={`${product.name} vue ${index + 1}`}
+                        width={280}
+                        height={200}
+                        unoptimized={image.unoptimized}
+                        className="aspect-[4/3] rounded-xl border border-slate-200 object-cover"
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -7,6 +7,7 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { StarRating } from "@/components/star-rating";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import {
   getProductAvailabilityMeta,
   getProductAvailabilityStatus,
@@ -19,6 +20,7 @@ type ProductCardProps = {
 };
 
 export const ProductCard = ({ product, variant = "default" }: ProductCardProps) => {
+  const primaryImage = getSafeNextImageProps(product.images[0]);
   const badgeLabel = product.badgeLabel?.trim()
     ? product.badgeLabel.trim()
     : product.isPromo
@@ -59,9 +61,10 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
               className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-500 shadow-sm transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
             />
             <Image
-              src={product.images[0]}
+              src={primaryImage.src}
               alt={product.name}
               fill
+              unoptimized={primaryImage.unoptimized}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
             />
@@ -135,9 +138,10 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
         <Link href={`/produits/${product.slug}`} className="block p-2 sm:p-3">
           <div className="relative flex h-28 w-full items-center justify-center overflow-hidden rounded-md bg-slate-50 sm:h-40 sm:rounded-lg">
             <Image
-              src={product.images[0]}
+              src={primaryImage.src}
               alt={product.name}
               fill
+              unoptimized={primaryImage.unoptimized}
               sizes="(max-width: 768px) 50vw, 25vw"
               className="object-contain p-2 transition-transform duration-300 group-hover:scale-105 sm:p-3"
             />
@@ -225,9 +229,10 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
             className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-500 shadow-sm transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
           />
           <Image
-            src={product.images[0]}
+            src={primaryImage.src}
             alt={product.name}
             fill
+            unoptimized={primaryImage.unoptimized}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             className="object-contain p-3 transition-transform duration-500 ease-out group-hover:scale-[1.035]"
           />

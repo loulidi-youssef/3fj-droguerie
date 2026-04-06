@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { StarRating } from "@/components/star-rating";
 import { getPublishedBlogPosts } from "@/lib/blog";
 import { getActiveReviews } from "@/lib/reviews";
@@ -71,14 +72,17 @@ export const HomepageSocialSection = async () => {
             <p className="p-5 text-sm text-slate-600">Aucun article disponible pour le moment.</p>
           ) : (
             <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
-              {visiblePosts.map((post) => (
+              {visiblePosts.map((post) => {
+                const image = getSafeNextImageProps(post.image);
+                return (
                 <article key={post.id} className="bg-white p-2.5 sm:p-3">
                   <Link href={`/blog/${post.slug}`} className="block overflow-hidden rounded-lg">
                     <Image
-                      src={post.image}
+                      src={image.src}
                       alt={post.title}
                       width={480}
                       height={270}
+                      unoptimized={image.unoptimized}
                       className="aspect-[16/9] w-full object-cover"
                     />
                   </Link>
@@ -96,7 +100,8 @@ export const HomepageSocialSection = async () => {
                   </Link>
                   <p className="mt-1 text-xs text-slate-500 sm:text-sm">{post.publishedAt}</p>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </article>

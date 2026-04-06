@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import type { BlogPost } from "@/types";
 
 type BlogCardProps = {
@@ -7,14 +8,17 @@ type BlogCardProps = {
 };
 
 export const BlogCard = ({ post }: BlogCardProps) => {
+  const image = getSafeNextImageProps(post.image);
+
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,42,77,0.09)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,42,77,0.14)]">
       <Link href={`/blog/${post.slug}`} className="block">
         <Image
-          src={post.image}
+          src={image.src}
           alt={post.title}
           width={600}
           height={360}
+          unoptimized={image.unoptimized}
           className="aspect-[16/9] w-full object-cover"
         />
       </Link>

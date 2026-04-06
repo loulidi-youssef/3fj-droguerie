@@ -11,6 +11,7 @@ import {
 } from "@/lib/cart-display";
 import { formatDh } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
@@ -208,7 +209,12 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 </p>
               ) : null}
 
-              {detailedItems.map((item) => (
+              {detailedItems.map((item) => {
+                const image = getSafeNextImageProps(
+                  item.selectedImage ?? item.product.images[0],
+                );
+
+                return (
                 <article
                   key={item.lineKey}
                   className="rounded-xl border border-slate-300/80 bg-[#f8f8f8] p-2.5 shadow-[0_3px_10px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:p-3"
@@ -216,9 +222,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                   <div className="flex items-start gap-2.5 sm:gap-3">
                     <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-white sm:h-20 sm:w-20 sm:rounded-xl">
                       <Image
-                        src={item.selectedImage ?? item.product.images[0]}
+                        src={image.src}
                         alt={item.product.name}
                         fill
+                        unoptimized={image.unoptimized}
                         sizes="(max-width: 640px) 64px, 80px"
                         className="object-cover"
                       />
@@ -274,7 +281,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     </button>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

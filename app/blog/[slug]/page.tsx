@@ -3,6 +3,7 @@ import Image from "next/image";
 import Script from "next/script";
 import { notFound } from "next/navigation";
 import { getBlogPostBySlug, getPublishedBlogPosts } from "@/lib/blog";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { buildArticleJsonLd } from "@/lib/seo";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -50,6 +51,7 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
     post,
     url: articleUrl,
   });
+  const image = getSafeNextImageProps(post.image);
 
   return (
     <>
@@ -67,10 +69,11 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
           </p>
 
           <Image
-            src={post.image}
+            src={image.src}
             alt={post.title}
             width={1200}
             height={680}
+            unoptimized={image.unoptimized}
             className="mt-6 w-full rounded-2xl border border-slate-200 object-cover"
           />
 
