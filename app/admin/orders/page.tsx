@@ -1,4 +1,4 @@
-﻿import { revalidatePath } from "next/cache";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
@@ -8,41 +8,26 @@ import {
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
 import {
-  getAllowedStatusesForFulfillment,
-  normalizeFulfillmentMethod,
-  isStatusAllowedForFulfillment,
-  type OrderStatus,
-  type FulfillmentMethod,
+  ORDER_STATUSES,
+  ORDER_STATUS_BADGE_CLASSNAME,
+  ORDER_STATUS_LABEL,
   getAdminOrders,
+  getOrderQuickActions,
   isOrderStatus,
-  updateAdminOrderStatus,
+  isStatusAllowedForFulfillment,
+  normalizeFulfillmentMethod,
+  type OrderStatus,
 } from "@/lib/admin-orders";
 
 type AdminOrdersPageProps = {
   searchParams: {
+    q?: string | string[];
+    status?: string | string[];
+    dateFrom?: string | string[];
+    dateTo?: string | string[];
     updated?: string | string[];
     error?: string | string[];
   };
-};
-
-const statusLabel: Record<OrderStatus, string> = {
-  new: "Nouveau",
-  confirmed: "Confirmee",
-  preparing: "En preparation",
-  ready: "Prete",
-  collected: "Recuperee",
-  delivered: "Livree",
-  cancelled: "Annulee",
-};
-
-const statusClassName: Record<OrderStatus, string> = {
-  new: "bg-sky-100 text-sky-700",
-  confirmed: "bg-amber-100 text-amber-700",
-  preparing: "bg-orange-100 text-orange-700",
-  ready: "bg-indigo-100 text-indigo-700",
-  collected: "bg-emerald-100 text-emerald-700",
-  delivered: "bg-emerald-100 text-emerald-700",
-  cancelled: "bg-rose-100 text-rose-700",
 };
 
 const toSingleValue = (value: string | string[] | undefined): string => {
@@ -67,6 +52,46 @@ const formatOrderDate = (value: string): string => {
   }).format(date);
 };
 
+const toWhatsappUrl = (rawPhone: string): string | null => {
+  const digits = rawPhone.replace(/[^\d]/g, "");
+  if (!digits) {
+    return null;
+  }
+  return `https://wa.me/${digits}`;
+};
+
+const buildOrdersHref = (params: {
+  q?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  updated?: string;
+  error?: string;
+}): string => {
+  const searchParams = new URLSearchParams();
+  if (params.q?.trim()) {
+    searchParams.set("q", params.q.trim());
+  }
+  if (params.status?.trim() && params.status !== "all") {
+    searchParams.set("status", params.status.trim());
+  }
+  if (params.dateFrom?.trim()) {
+    searchParams.set("dateFrom", params.dateFrom.trim());
+  }
+  if (params.dateTo?.trim()) {
+    searchParams.set("dateTo", params.dateTo.trim());
+  }
+  if (params.updated?.trim()) {
+    searchParams.set("updated", params.updated.trim());
+  }
+  if (params.error?.trim()) {
+    searchParams.set("error", params.error.trim());
+  }
+
+  const query = searchParams.toString();
+  return query ? `/admin/orders?${query}` : "/admin/orders";
+};
+
 const logoutAdminAction = async () => {
   "use server";
   await clearAdminSession();
@@ -83,29 +108,55 @@ const updateOrderStatusAction = async (formData: FormData) => {
   const orderIdRaw = formData.get("orderId");
   const statusRaw = formData.get("status");
   const fulfillmentMethodRaw = formData.get("fulfillmentMethod");
+  const qRaw = formData.get("q");
+  const statusFilterRaw = formData.get("statusFilter");
+  const dateFromRaw = formData.get("dateFrom");
+  const dateToRaw = formData.get("dateTo");
 
   const orderId = typeof orderIdRaw === "string" ? orderIdRaw.trim() : "";
   const nextStatus = typeof statusRaw === "string" ? statusRaw.trim() : "";
-  const fulfillmentMethod: FulfillmentMethod = normalizeFulfillmentMethod(
+  const fulfillmentMethod = normalizeFulfillmentMethod(
     typeof fulfillmentMethodRaw === "string" ? fulfillmentMethodRaw.trim() : "",
   );
+  const q = typeof qRaw === "string" ? qRaw : "";
+  const statusFilter = typeof statusFilterRaw === "string" ? statusFilterRaw : "";
+  const dateFrom = typeof dateFromRaw === "string" ? dateFromRaw : "";
+  const dateTo = typeof dateToRaw === "string" ? dateToRaw : "";
+
+  const redirectBaseParams = {
+    q,
+    status: statusFilter,
+    dateFrom,
+    dateTo,
+  };
 
   if (
     !orderId ||
     !isOrderStatus(nextStatus) ||
     !isStatusAllowedForFulfillment(nextStatus, fulfillmentMethod)
   ) {
-    redirect("/admin/orders?error=invalid-status");
+    redirect(buildOrdersHref({ ...redirectBaseParams, error: "invalid-status" }));
   }
 
+  const { updateAdminOrderStatus } = await import("@/lib/admin-orders");
   const updated = await updateAdminOrderStatus(orderId, nextStatus);
+
   revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/customers");
 
   if (!updated) {
-    redirect("/admin/orders?error=update-failed");
+    redirect(buildOrdersHref({ ...redirectBaseParams, error: "update-failed" }));
   }
 
-  redirect("/admin/orders?updated=1");
+  redirect(buildOrdersHref({ ...redirectBaseParams, updated: "1" }));
+};
+
+const getStatusCount = (
+  statuses: readonly OrderStatus[],
+  orders: Array<{ status: OrderStatus }>,
+): number => {
+  return orders.reduce((count, order) => (statuses.includes(order.status) ? count + 1 : count), 0);
 };
 
 export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageProps) {
@@ -130,10 +181,44 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
     redirect("/admin/login");
   }
 
-  const orders = await getAdminOrders();
+  const query = toSingleValue(searchParams.q).trim();
+  const normalizedQuery = query.toLowerCase();
+  const statusFilterRaw = toSingleValue(searchParams.status).trim().toLowerCase();
+  const selectedStatus: OrderStatus | "all" =
+    statusFilterRaw && statusFilterRaw !== "all" && isOrderStatus(statusFilterRaw)
+      ? statusFilterRaw
+      : "all";
+  const dateFrom = toSingleValue(searchParams.dateFrom).trim();
+  const dateTo = toSingleValue(searchParams.dateTo).trim();
+
+  const orders = await getAdminOrders({
+    status: selectedStatus,
+    dateFrom: dateFrom || null,
+    dateTo: dateTo || null,
+  });
+
+  const filteredOrders = normalizedQuery
+    ? orders.filter((order) => {
+        const rawId = order.id.toLowerCase();
+        const customerName = order.customer_name.toLowerCase();
+        const phone = order.customer_phone.toLowerCase();
+        return (
+          rawId.includes(normalizedQuery) ||
+          customerName.includes(normalizedQuery) ||
+          phone.includes(normalizedQuery)
+        );
+      })
+    : orders;
 
   const updatedParam = toSingleValue(searchParams.updated);
   const errorParam = toSingleValue(searchParams.error);
+
+  const pendingCount = getStatusCount(
+    ["new", "confirmed", "preparing", "ready", "shipped"],
+    filteredOrders,
+  );
+  const deliveredCount = getStatusCount(["delivered", "collected"], filteredOrders);
+  const cancelledCount = getStatusCount(["cancelled"], filteredOrders);
 
   return (
     <section className="bg-brand-light py-12">
@@ -142,7 +227,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
           <div>
             <h1 className="text-3xl font-extrabold text-brand-blue">Admin commandes</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Visualisez les commandes entrantes et mettez a jour leur statut.
+              Recherche, filtres, suivi de statut et actions rapides de traitement.
             </p>
           </div>
 
@@ -151,31 +236,13 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
               href="/admin/products"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
-              Voir produits
+              Produits
             </Link>
             <Link
               href="/admin/customers"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
-              Voir clients
-            </Link>
-            <Link
-              href="/admin/offres"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir offres
-            </Link>
-            <Link
-              href="/admin/blog"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir blog
-            </Link>
-            <Link
-              href="/admin/reviews"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir avis
+              Clients
             </Link>
             <form action={logoutAdminAction}>
               <button
@@ -188,153 +255,225 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
           </div>
         </div>
 
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <article className="rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-xs uppercase tracking-wide text-slate-500">En cours</p>
+            <p className="mt-1 text-2xl font-extrabold text-brand-blue">{pendingCount}</p>
+          </article>
+          <article className="rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Terminees</p>
+            <p className="mt-1 text-2xl font-extrabold text-emerald-700">{deliveredCount}</p>
+          </article>
+          <article className="rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Annulees</p>
+            <p className="mt-1 text-2xl font-extrabold text-rose-700">{cancelledCount}</p>
+          </article>
+        </div>
+
+        <form method="get" action="/admin/orders" className="mb-4 rounded-2xl bg-white p-4 shadow-card">
+          <div className="grid gap-3 lg:grid-cols-4">
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Recherche
+              </span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={query}
+                placeholder="Nom, telephone ou ID commande"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Statut
+              </span>
+              <select
+                name="status"
+                defaultValue={selectedStatus}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                <option value="all">Tous</option>
+                {ORDER_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {ORDER_STATUS_LABEL[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Date debut
+              </span>
+              <input
+                type="date"
+                name="dateFrom"
+                defaultValue={dateFrom}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Date fin
+              </span>
+              <input
+                type="date"
+                name="dateTo"
+                defaultValue={dateTo}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
+            >
+              Filtrer
+            </button>
+            <Link
+              href="/admin/orders"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Reinitialiser
+            </Link>
+          </div>
+        </form>
+
         {updatedParam === "1" ? (
           <p className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
-            Statut mis a jour avec succes.
+            Statut commande mis a jour.
           </p>
         ) : null}
 
         {errorParam ? (
           <p className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
-            Mise a jour impossible. Merci de reessayer.
+            Action impossible. Merci de verifier le statut cible et reessayer.
           </p>
         ) : null}
 
-        {orders.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 shadow-card">
-            <p className="text-sm text-slate-600">Aucune commande pour le moment.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {orders.map((order) => {
-              const fulfillmentMethod = normalizeFulfillmentMethod(order.fulfillment_method);
-              const statusOptions = getAllowedStatusesForFulfillment(fulfillmentMethod);
+        <div className="rounded-2xl bg-white p-4 shadow-card">
+          <p className="mb-3 text-sm font-semibold text-slate-600">
+            {filteredOrders.length} commande(s)
+          </p>
 
-              return (
-                <details key={order.id} className="rounded-2xl bg-white p-5 shadow-card">
-                  <summary className="cursor-pointer list-none">
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Client
-                        </p>
-                        <p className="text-sm font-bold text-brand-blue">{order.customer_name}</p>
-                        <p className="text-xs text-slate-600">{order.customer_phone}</p>
-                      </div>
+          {filteredOrders.length === 0 ? (
+            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+              Aucune commande ne correspond aux filtres.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-2">Commande</th>
+                    <th className="px-3 py-2">Client</th>
+                    <th className="px-3 py-2">Contact</th>
+                    <th className="px-3 py-2">Mode</th>
+                    <th className="px-3 py-2">Statut</th>
+                    <th className="px-3 py-2">Total</th>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Actions rapides</th>
+                    <th className="px-3 py-2">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => {
+                    const fulfillmentMethod = normalizeFulfillmentMethod(order.fulfillment_method);
+                    const whatsappUrl = toWhatsappUrl(order.customer_phone);
+                    const quickActions = getOrderQuickActions(order.status, fulfillmentMethod);
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Adresse
-                        </p>
-                        <p className="text-sm text-slate-700">
-                          {fulfillmentMethod === "pickup"
-                            ? "Retrait en magasin"
-                            : order.customer_address}
-                        </p>
-                        <p className="text-xs text-slate-600">{order.customer_location}</p>
-                        <p className="text-xs text-slate-600">
-                          Mode: {fulfillmentMethod === "pickup" ? "Retrait magasin" : "Livraison"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Total / Livraison
-                        </p>
-                        <p className="text-sm font-bold text-brand-blue">{formatDh(order.total)}</p>
-                        <p className="text-xs text-slate-600">
-                          Livraison: {formatDh(order.delivery_fee)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Statut / Date
-                        </p>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClassName[order.status]}`}
-                        >
-                          {statusLabel[order.status]}
-                        </span>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {formatOrderDate(order.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                  </summary>
-
-                  <div className="mt-4 border-t border-slate-200 pt-4">
-                    <p className="text-sm font-semibold text-brand-blue">Produits commandes</p>
-                    {order.order_items.length === 0 ? (
-                      <p className="mt-2 text-sm text-slate-600">
-                        Aucun produit trouve pour cette commande.
-                      </p>
-                    ) : (
-                      <div className="mt-2 overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                              <th className="px-2 py-2">Produit</th>
-                              <th className="px-2 py-2">Quantite</th>
-                              <th className="px-2 py-2">Prix unite</th>
-                              <th className="px-2 py-2">Total ligne</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {order.order_items.map((item) => (
-                              <tr key={item.id} className="border-b border-slate-100 text-slate-700">
-                                <td className="px-2 py-2">{item.product_name}</td>
-                                <td className="px-2 py-2">{item.quantity}</td>
-                                <td className="px-2 py-2">{formatDh(item.unit_price)}</td>
-                                <td className="px-2 py-2 font-semibold text-brand-blue">
-                                  {formatDh(item.line_total)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    <form
-                      action={updateOrderStatusAction}
-                      className="mt-4 flex flex-wrap items-center gap-2"
-                    >
-                      <input type="hidden" name="orderId" value={order.id} />
-                      <input
-                        type="hidden"
-                        name="fulfillmentMethod"
-                        value={fulfillmentMethod}
-                      />
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Changer statut
-                      </label>
-                      <select
-                        name="status"
-                        defaultValue={order.status}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-                      >
-                        {statusOptions.map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabel[status]}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="submit"
-                        className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
-                      >
-                        Mettre a jour
-                      </button>
-                    </form>
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-        )}
+                    return (
+                      <tr key={order.id} className="border-b border-slate-100 text-slate-700">
+                        <td className="px-3 py-2 font-semibold text-brand-blue">{order.id.slice(0, 8)}</td>
+                        <td className="px-3 py-2">{order.customer_name}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-1">
+                            <span>{order.customer_phone}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {whatsappUrl ? (
+                                <Link
+                                  href={whatsappUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-md border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                                >
+                                  WhatsApp
+                                </Link>
+                              ) : null}
+                              <a
+                                href={`tel:${order.customer_phone}`}
+                                className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+                              >
+                                Appeler
+                              </a>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {fulfillmentMethod === "pickup" ? "Retrait" : "Livraison"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_BADGE_CLASSNAME[order.status]}`}
+                          >
+                            {ORDER_STATUS_LABEL[order.status]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-semibold">{formatDh(order.total)}</td>
+                        <td className="px-3 py-2">{formatOrderDate(order.created_at)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {quickActions.length === 0 ? (
+                              <span className="text-xs text-slate-500">Aucune</span>
+                            ) : (
+                              quickActions.map((action) => (
+                                <form key={action.status} action={updateOrderStatusAction}>
+                                  <input type="hidden" name="orderId" value={order.id} />
+                                  <input type="hidden" name="status" value={action.status} />
+                                  <input
+                                    type="hidden"
+                                    name="fulfillmentMethod"
+                                    value={fulfillmentMethod}
+                                  />
+                                  <input type="hidden" name="q" value={query} />
+                                  <input type="hidden" name="statusFilter" value={selectedStatus} />
+                                  <input type="hidden" name="dateFrom" value={dateFrom} />
+                                  <input type="hidden" name="dateTo" value={dateTo} />
+                                  <button
+                                    type="submit"
+                                    className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
+                                      action.intent === "primary"
+                                        ? "bg-brand-blue text-white"
+                                        : action.intent === "danger"
+                                          ? "bg-rose-600 text-white"
+                                          : "border border-slate-300 bg-white text-slate-700"
+                                    }`}
+                                  >
+                                    {action.label}
+                                  </button>
+                                </form>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Link
+                            href={`/admin/orders/${order.id}`}
+                            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                          >
+                            Ouvrir
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
 }
-

@@ -80,11 +80,12 @@ create table if not exists public.orders (
   subtotal integer not null check (subtotal >= 0),
   delivery_fee integer not null check (delivery_fee >= 0),
   total integer not null check (total >= 0),
-  status text not null default 'new' check (status in ('new', 'confirmed', 'preparing', 'ready', 'collected', 'delivered', 'cancelled')),
+  status text not null default 'new' check (status in ('new', 'confirmed', 'preparing', 'ready', 'shipped', 'collected', 'delivered', 'cancelled')),
+  admin_note text null,
   constraint orders_status_fulfillment_compat_check check (
     (
       fulfillment_method = 'delivery'
-      and status in ('new', 'confirmed', 'delivered', 'cancelled')
+      and status in ('new', 'confirmed', 'shipped', 'delivered', 'cancelled')
     )
     or (
       fulfillment_method = 'pickup'

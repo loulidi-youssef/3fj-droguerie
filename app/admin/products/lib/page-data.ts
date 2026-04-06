@@ -10,6 +10,7 @@ export type AdminProductsSearchParams = {
   success?: string | string[];
   error?: string | string[];
   category?: string | string[];
+  q?: string | string[];
 };
 
 export type ProductsGroup = {
@@ -24,6 +25,7 @@ export type AdminProductsPageData = {
   categoryOptions: string[];
   sortedCategoryEntries: Array<[string, number]>;
   selectedCategory: string;
+  searchQuery: string;
   successMessage: string;
   errorMessage: string;
 };
@@ -35,6 +37,8 @@ export const getAdminProductsPageData = async (
   const successMessage = parseFlashMessage(searchParams.success);
   const errorMessage = parseFlashMessage(searchParams.error);
   const selectedCategory = parseSelectedCategory(searchParams.category);
+  const searchQueryRaw = parseFlashMessage(searchParams.q).trim();
+  const normalizedSearchQuery = searchQueryRaw.toLowerCase();
 
   const categoryCountMap = new Map<string, number>();
   for (const product of products) {
@@ -55,11 +59,19 @@ export const getAdminProductsPageData = async (
     return firstLabel.localeCompare(secondLabel, "fr");
   });
 
-  const filteredProducts = selectedCategory
-    ? products.filter(
-        (product) => product.category_slug.trim().toLowerCase() === selectedCategory,
-      )
-    : products;
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory = selectedCategory
+      ? product.category_slug.trim().toLowerCase() === selectedCategory
+      : true;
+
+    const matchesQuery = normalizedSearchQuery
+      ? product.name.toLowerCase().includes(normalizedSearchQuery) ||
+        product.slug.toLowerCase().includes(normalizedSearchQuery) ||
+        product.id.toLowerCase().includes(normalizedSearchQuery)
+      : true;
+
+    return matchesCategory && matchesQuery;
+  });
 
   const groupedProductsMap = new Map<string, AdminProduct[]>();
   for (const product of filteredProducts) {
@@ -84,8 +96,8 @@ export const getAdminProductsPageData = async (
     categoryOptions,
     sortedCategoryEntries,
     selectedCategory,
+    searchQuery: searchQueryRaw,
     successMessage,
     errorMessage,
   };
 };
-

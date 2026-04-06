@@ -23,6 +23,7 @@ type CustomerOrder = {
     | "confirmed"
     | "preparing"
     | "ready"
+    | "shipped"
     | "collected"
     | "delivered"
     | "cancelled";
@@ -51,6 +52,7 @@ const statusLabel: Record<CustomerOrder["status"], string> = {
   confirmed: "Acceptee / Confirmee",
   preparing: "En preparation",
   ready: "Prete",
+  shipped: "Expediee",
   collected: "Recuperee",
   delivered: "Livree",
   cancelled: "Annulee",
@@ -61,6 +63,7 @@ const statusClassName: Record<CustomerOrder["status"], string> = {
   confirmed: "bg-amber-100 text-amber-700",
   preparing: "bg-orange-100 text-orange-700",
   ready: "bg-indigo-100 text-indigo-700",
+  shipped: "bg-cyan-100 text-cyan-700",
   collected: "bg-emerald-100 text-emerald-700",
   delivered: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-rose-100 text-rose-700",
@@ -88,6 +91,12 @@ const getDeliveryTrackingIndex = (status: CustomerOrder["status"]): number => {
   }
   if (status === "confirmed") {
     return 1;
+  }
+  if (status === "preparing") {
+    return 2;
+  }
+  if (status === "shipped") {
+    return 3;
   }
   if (status === "delivered") {
     return 4;

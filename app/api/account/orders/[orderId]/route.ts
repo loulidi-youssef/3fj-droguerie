@@ -24,6 +24,7 @@ type ApiOrderRow = {
     | "confirmed"
     | "preparing"
     | "ready"
+    | "shipped"
     | "collected"
     | "delivered"
     | "cancelled";

@@ -49,6 +49,18 @@ const formatDateTime = (value: string | null): string => {
 };
 
 const orderStatusLabel = (status: string | null): string => {
+  if (status === "shipped") {
+    return "Expediee";
+  }
+  if (status === "preparing") {
+    return "En preparation";
+  }
+  if (status === "ready") {
+    return "Prete";
+  }
+  if (status === "collected") {
+    return "Recuperee";
+  }
   if (status === "delivered") {
     return "Livree";
   }
@@ -62,6 +74,18 @@ const orderStatusLabel = (status: string | null): string => {
 };
 
 const orderStatusBadgeClassName = (status: string | null): string => {
+  if (status === "shipped") {
+    return "bg-cyan-100 text-cyan-700";
+  }
+  if (status === "preparing") {
+    return "bg-orange-100 text-orange-700";
+  }
+  if (status === "ready") {
+    return "bg-indigo-100 text-indigo-700";
+  }
+  if (status === "collected") {
+    return "bg-emerald-100 text-emerald-700";
+  }
   if (status === "delivered") {
     return "bg-emerald-100 text-emerald-700";
   }

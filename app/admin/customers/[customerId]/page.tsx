@@ -51,6 +51,18 @@ const formatDateTime = (value: string | null): string => {
 };
 
 const statusBadgeClassName = (status: string): string => {
+  if (status === "shipped") {
+    return "bg-cyan-100 text-cyan-700";
+  }
+  if (status === "preparing") {
+    return "bg-orange-100 text-orange-700";
+  }
+  if (status === "ready") {
+    return "bg-indigo-100 text-indigo-700";
+  }
+  if (status === "collected") {
+    return "bg-emerald-100 text-emerald-700";
+  }
   if (status === "delivered") {
     return "bg-emerald-100 text-emerald-700";
   }
@@ -64,6 +76,18 @@ const statusBadgeClassName = (status: string): string => {
 };
 
 const statusLabel = (status: string): string => {
+  if (status === "shipped") {
+    return "Expediee";
+  }
+  if (status === "preparing") {
+    return "En preparation";
+  }
+  if (status === "ready") {
+    return "Prete";
+  }
+  if (status === "collected") {
+    return "Recuperee";
+  }
   if (status === "delivered") {
     return "Livree";
   }
@@ -377,10 +401,10 @@ export default async function AdminCustomerDetailPage({
                         <td className="px-3 py-2 font-semibold">{formatDh(order.total)}</td>
                         <td className="px-3 py-2">
                           <Link
-                            href="/admin/orders"
+                            href={`/admin/orders/${order.id}`}
                             className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
                           >
-                            Ouvrir commandes
+                            Ouvrir commande
                           </Link>
                         </td>
                       </tr>
@@ -389,6 +413,51 @@ export default async function AdminCustomerDetailPage({
                 </table>
               </div>
             )}
+
+            <div className="mt-5 border-t border-slate-200 pt-4">
+              <h3 className="text-base font-bold text-brand-blue">Favoris recents</h3>
+              {customer.favorites.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">Aucun favori enregistre.</p>
+              ) : (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2">Produit</th>
+                        <th className="px-3 py-2">Prix</th>
+                        <th className="px-3 py-2">Ajoute le</th>
+                        <th className="px-3 py-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customer.favorites.map((favorite) => (
+                        <tr key={`${favorite.productId}:${favorite.createdAt}`} className="border-b border-slate-100 text-slate-700">
+                          <td className="px-3 py-2 font-semibold">{favorite.productName}</td>
+                          <td className="px-3 py-2">
+                            {typeof favorite.price === "number" ? formatDh(favorite.price) : "-"}
+                          </td>
+                          <td className="px-3 py-2">{formatDateTime(favorite.createdAt)}</td>
+                          <td className="px-3 py-2">
+                            {favorite.productSlug ? (
+                              <Link
+                                href={`/produits/${favorite.productSlug}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+                              >
+                                Ouvrir produit
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-slate-500">Indisponible</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </article>
         </div>
       </div>

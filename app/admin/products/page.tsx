@@ -51,6 +51,7 @@ export default async function AdminProductsPage({
       categoryOptions={pageData.categoryOptions}
       sortedCategoryEntries={pageData.sortedCategoryEntries}
       selectedCategory={pageData.selectedCategory}
+      searchQuery={pageData.searchQuery}
       successMessage={pageData.successMessage}
       errorMessage={pageData.errorMessage}
       logoutAdminAction={logoutAdminAction}

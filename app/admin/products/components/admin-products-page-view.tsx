@@ -15,6 +15,7 @@ type AdminProductsPageViewProps = {
   categoryOptions: string[];
   sortedCategoryEntries: Array<[string, number]>;
   selectedCategory: string;
+  searchQuery: string;
   successMessage: string;
   errorMessage: string;
   logoutAdminAction: LogoutAction;
@@ -31,6 +32,7 @@ export const AdminProductsPageView = ({
   categoryOptions,
   sortedCategoryEntries,
   selectedCategory,
+  searchQuery,
   successMessage,
   errorMessage,
   logoutAdminAction,
@@ -39,6 +41,18 @@ export const AdminProductsPageView = ({
   toggleProductActiveAction,
   deleteProductAction,
 }: AdminProductsPageViewProps) => {
+  const buildProductsHref = (category: string): string => {
+    const params = new URLSearchParams();
+    if (category) {
+      params.set("category", category);
+    }
+    if (searchQuery.trim()) {
+      params.set("q", searchQuery.trim());
+    }
+    const query = params.toString();
+    return query ? `/admin/products?${query}` : "/admin/products";
+  };
+
   return (
     <section className="bg-brand-light py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
@@ -114,12 +128,44 @@ export const AdminProductsPageView = ({
         ) : null}
 
         <div className="mb-6 rounded-2xl bg-white p-4 shadow-card">
+          <form method="get" action="/admin/products" className="mb-3">
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Recherche produit
+              </span>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={searchQuery}
+                  placeholder="Nom, slug ou ID produit"
+                  className="min-w-[220px] flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                />
+                {selectedCategory ? (
+                  <input type="hidden" name="category" value={selectedCategory} />
+                ) : null}
+                <button
+                  type="submit"
+                  className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Rechercher
+                </button>
+                <Link
+                  href="/admin/products"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Reinitialiser
+                </Link>
+              </div>
+            </label>
+          </form>
+
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Organisation par categorie
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Link
-              href="/admin/products"
+              href={buildProductsHref("")}
               className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                 !selectedCategory
                   ? "border-brand-blue bg-brand-blue text-white"
@@ -131,7 +177,7 @@ export const AdminProductsPageView = ({
             {sortedCategoryEntries.map(([categorySlug, total]) => (
               <Link
                 key={categorySlug}
-                href={`/admin/products?category=${encodeURIComponent(categorySlug)}`}
+                href={buildProductsHref(categorySlug)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   selectedCategory === categorySlug
                     ? "border-brand-blue bg-brand-blue text-white"
@@ -146,6 +192,11 @@ export const AdminProductsPageView = ({
             <p className="mt-2 text-xs text-slate-600">
               Filtre actif:{" "}
               <span className="font-semibold">{formatCategoryLabel(selectedCategory)}</span>
+            </p>
+          ) : null}
+          {searchQuery.trim() ? (
+            <p className="mt-2 text-xs text-slate-600">
+              Recherche active: <span className="font-semibold">{searchQuery.trim()}</span>
             </p>
           ) : (
             <p className="mt-2 text-xs text-slate-600">

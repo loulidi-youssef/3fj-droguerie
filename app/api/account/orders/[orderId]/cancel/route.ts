@@ -16,6 +16,7 @@ type OrderRow = {
     | "confirmed"
     | "preparing"
     | "ready"
+    | "shipped"
     | "collected"
     | "delivered"
     | "cancelled";

@@ -40,6 +40,15 @@ export type AdminCustomerOrderSummary = {
   createdAt: string;
 };
 
+export type AdminCustomerFavoriteSummary = {
+  productId: string;
+  productName: string;
+  productSlug: string;
+  price: number | null;
+  image: string | null;
+  createdAt: string;
+};
+
 export type AdminCustomerDetail = {
   id: string;
   userId: string;
@@ -53,11 +62,31 @@ export type AdminCustomerDetail = {
   lastOrderAt: string | null;
   latestOrderStatus: string | null;
   orders: AdminCustomerOrderSummary[];
+  favorites: AdminCustomerFavoriteSummary[];
 };
 
 type AdminCustomerActionResult = {
   ok: boolean;
   error?: string;
+};
+
+type FavoriteRow = {
+  product_id: string;
+  created_at: string;
+  products:
+    | {
+        name: string;
+        slug: string;
+        price: number;
+        images: string[] | null;
+      }
+    | Array<{
+        name: string;
+        slug: string;
+        price: number;
+        images: string[] | null;
+      }>
+    | null;
 };
 
 const coerceNonEmptyString = (value: unknown): string | null => {
@@ -226,6 +255,33 @@ export const getAdminCustomerDetail = async (
   const rows = data as CustomerOrderRow[];
   const safeProfile = await getSafeUserProfileById(normalizedUserId);
 
+  const favoritesResult = await supabaseAdmin
+    .from("favorites")
+    .select("product_id, created_at, products(name, slug, price, images)")
+    .eq("user_id", normalizedUserId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  const favorites: AdminCustomerFavoriteSummary[] = !favoritesResult.error && favoritesResult.data
+    ? (favoritesResult.data as FavoriteRow[]).map((row) => {
+        const productsValue = Array.isArray(row.products)
+          ? row.products[0] ?? null
+          : row.products;
+
+        return {
+          productId: row.product_id,
+          productName: productsValue?.name ?? "Produit",
+          productSlug: productsValue?.slug ?? "",
+          price: typeof productsValue?.price === "number" ? productsValue.price : null,
+          image:
+            Array.isArray(productsValue?.images) && productsValue.images.length > 0
+              ? productsValue.images[0] ?? null
+              : null,
+          createdAt: row.created_at,
+        };
+      })
+    : [];
+
   const latestOrder = rows[0];
   const orderCount = rows.length;
   const totalSpent = rows.reduce((sum, order) => sum + order.total, 0);
@@ -248,6 +304,7 @@ export const getAdminCustomerDetail = async (
       status: row.status,
       createdAt: row.created_at,
     })),
+    favorites,
   };
 };
 

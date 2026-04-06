@@ -41,6 +41,9 @@ export default async function AdminLayout({
               <p className="text-sm font-semibold text-slate-600">Gestion du site</p>
             </div>
             <nav className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+              <Link href="/admin" className="admin-nav-link">
+                Dashboard
+              </Link>
               <Link href="/admin/orders" className="admin-nav-link">
                 Commandes
               </Link>
