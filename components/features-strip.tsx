@@ -31,7 +31,7 @@ const trustItems = [
 
 export const FeaturesStrip = () => {
   return (
-    <section className="bg-[#f1f3f5] pb-5 sm:pb-7">
+    <section className="hidden bg-[#f1f3f5] sm:block sm:pb-7">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-1.5 sm:mb-3 sm:gap-2">
           <h2 className="text-lg font-extrabold uppercase tracking-tight text-brand-blue sm:text-2xl">

@@ -89,7 +89,43 @@ export const CategoriesProductsSection = async () => {
 
         <div className="grid gap-3 sm:gap-5 lg:grid-cols-12">
           <aside className="lg:col-span-3">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_10px_22px_rgba(15,42,77,0.08)] sm:rounded-2xl">
+            <div className="lg:hidden">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-base font-extrabold uppercase tracking-wide text-brand-blue">
+                  Categories phares
+                </h3>
+                <Link
+                  href="/produits"
+                  className="text-xs font-bold text-brand-blue transition hover:text-brand-orange"
+                >
+                  Voir tout
+                </Link>
+              </div>
+              <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {visibleCategories.map((category) => (
+                  <li key={category.id} className="shrink-0">
+                    <Link
+                      href={`/produits?categorie=${category.slug}`}
+                      className="flex min-w-[170px] items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_8px_18px_rgba(15,42,77,0.08)] transition hover:border-orange-200 hover:bg-orange-50 hover:text-brand-orange"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-orange-50 text-brand-orange">
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden>
+                            <path d={categoryIconPathBySlug[category.slug] ?? categoryIconPathBySlug.bricolage} />
+                          </svg>
+                        </span>
+                        <span className="line-clamp-1">{category.name}</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {categoryCountMap.get(category.slug) ?? 0}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_10px_22px_rgba(15,42,77,0.08)] sm:rounded-2xl lg:block">
               <h3 className="bg-brand-blue px-4 py-2.5 text-base font-extrabold uppercase tracking-wide text-white sm:px-5 sm:py-3 sm:text-xl">
                 Categories phares
               </h3>
