@@ -183,10 +183,11 @@ export default async function AdminCustomerDetailPage({
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-card">
           <h1 className="text-2xl font-extrabold text-brand-blue">Admin client</h1>
           <p className="mt-3 text-sm text-slate-700">
-            Configurez la variable
-            <span className="font-semibold"> ADMIN_ACCESS_PASSWORD </span>
-            dans
-            <span className="font-semibold"> .env.local</span>, puis redemarrez le serveur.
+            Configurez
+            <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
+            et
+            <span className="font-semibold"> ADMIN_SESSION_SECRET </span>
+            (obligatoires en production), puis redemarrez le serveur.
           </p>
         </div>
       </section>

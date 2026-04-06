@@ -17,6 +17,10 @@ const SESSION_REFRESH_INTERVAL_SECONDS = 15 * 60;
 const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
+const MIN_SESSION_SECRET_LENGTH = 16;
+const MIN_PRODUCTION_SESSION_SECRET_LENGTH = 32;
+
+const loggedAdminAuthConfigMessages = new Set<string>();
 
 type AdminSessionRow = {
   id: string;
@@ -52,6 +56,30 @@ type AdminLoginFailureResult = {
   locked: boolean;
 };
 
+type ParsedPbkdf2PasswordHash = {
+  iterations: number;
+  salt: string;
+  expectedDigest: string;
+};
+
+type AdminAuthConfigStatus =
+  | "ok"
+  | "missing-password"
+  | "missing-password-hash"
+  | "invalid-password-hash"
+  | "plaintext-password-disallowed"
+  | "missing-session-secret"
+  | "weak-session-secret";
+
+type ResolvedAdminAuthConfig = {
+  status: AdminAuthConfigStatus;
+  isProduction: boolean;
+  passwordHash: string | null;
+  parsedPasswordHash: ParsedPbkdf2PasswordHash | null;
+  plaintextPassword: string | null;
+  sessionSecret: string | null;
+};
+
 const readEnv = (value: string | undefined): string | null => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -66,27 +94,315 @@ const getConfiguredAdminPassword = (): string | null => {
   return configured;
 };
 
-const getSessionSecret = (): string | null => {
-  const configuredSessionSecret = readEnv(process.env.ADMIN_SESSION_SECRET);
-  if (configuredSessionSecret && configuredSessionSecret.length >= 16) {
-    return configuredSessionSecret;
-  }
+const isProductionEnvironment = (): boolean => process.env.NODE_ENV === "production";
 
-  const passwordHash = getConfiguredAdminPasswordHash();
-  if (passwordHash) {
-    return createHash("sha256")
-      .update(`3fj-admin-session|${passwordHash}`)
-      .digest("hex");
+const logAdminAuthConfigMessageOnce = (
+  level: "warn" | "error",
+  code: string,
+  message: string,
+): void => {
+  if (loggedAdminAuthConfigMessages.has(code)) {
+    return;
   }
+  loggedAdminAuthConfigMessages.add(code);
+  if (level === "error") {
+    console.error(`[admin-auth] ${message}`);
+    return;
+  }
+  console.warn(`[admin-auth] ${message}`);
+};
 
-  const password = getConfiguredAdminPassword();
-  if (!password) {
+const parsePbkdf2PasswordHash = (
+  configuredHash: string,
+): ParsedPbkdf2PasswordHash | null => {
+  // Expected format: pbkdf2_sha256$<iterations>$<salt>$<hex_digest>
+  const [scheme, iterationsValue, salt, expectedHexDigest] = configuredHash.split("$");
+  if (
+    scheme !== "pbkdf2_sha256" ||
+    !iterationsValue ||
+    !salt ||
+    !expectedHexDigest
+  ) {
     return null;
   }
 
+  const iterations = Number(iterationsValue);
+  if (!Number.isInteger(iterations) || iterations < 10_000 || iterations > 1_000_000) {
+    return null;
+  }
+
+  const expectedDigest = expectedHexDigest.trim().toLowerCase();
+  if (!/^[a-f0-9]{32,256}$/i.test(expectedDigest) || expectedDigest.length % 2 !== 0) {
+    return null;
+  }
+
+  return {
+    iterations,
+    salt,
+    expectedDigest,
+  };
+};
+
+const deriveSessionSecret = (input: string): string => {
   return createHash("sha256")
-    .update(`3fj-admin-session|${password}`)
+    .update(`3fj-admin-session|${input}`)
     .digest("hex");
+};
+
+const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
+  if (config.status === "ok") {
+    if (!config.isProduction && config.passwordHash && config.plaintextPassword) {
+      logAdminAuthConfigMessageOnce(
+        "warn",
+        "dev-both-hash-and-plaintext-password",
+        "Both ADMIN_ACCESS_PASSWORD_HASH and plaintext admin password are set. The hash will be used.",
+      );
+    }
+    return;
+  }
+
+  if (config.isProduction) {
+    if (config.status === "missing-password-hash") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-missing-password-hash",
+        "Production admin auth requires ADMIN_ACCESS_PASSWORD_HASH.",
+      );
+      return;
+    }
+    if (config.status === "invalid-password-hash") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-invalid-password-hash",
+        "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256 format.",
+      );
+      return;
+    }
+    if (config.status === "plaintext-password-disallowed") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-plaintext-password-disallowed",
+        "Plaintext admin password env vars are not allowed in production. Remove ADMIN_ACCESS_PASSWORD and ADMIN_PASSWORD.",
+      );
+      return;
+    }
+    if (config.status === "missing-session-secret") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-missing-session-secret",
+        "Production admin auth requires ADMIN_SESSION_SECRET (at least 32 characters).",
+      );
+      return;
+    }
+    if (config.status === "weak-session-secret") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-weak-session-secret",
+        "ADMIN_SESSION_SECRET is too short for production. Use at least 32 characters.",
+      );
+      return;
+    }
+    return;
+  }
+
+  if (config.status === "missing-password") {
+    logAdminAuthConfigMessageOnce(
+      "warn",
+      "dev-missing-password",
+      "Admin auth is not configured in development. Set ADMIN_ACCESS_PASSWORD_HASH or ADMIN_ACCESS_PASSWORD.",
+    );
+    return;
+  }
+  if (config.status === "invalid-password-hash") {
+    logAdminAuthConfigMessageOnce(
+      "warn",
+      "dev-invalid-password-hash",
+      "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256 format.",
+    );
+    return;
+  }
+  if (config.status === "weak-session-secret") {
+    logAdminAuthConfigMessageOnce(
+      "warn",
+      "dev-weak-session-secret",
+      `ADMIN_SESSION_SECRET is shorter than ${MIN_SESSION_SECRET_LENGTH} characters and will be ignored in development.`,
+    );
+    return;
+  }
+  if (config.status === "missing-session-secret") {
+    logAdminAuthConfigMessageOnce(
+      "warn",
+      "dev-derived-session-secret",
+      "ADMIN_SESSION_SECRET is not set in development. A derived fallback secret is being used.",
+    );
+  }
+};
+
+const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
+  const isProduction = isProductionEnvironment();
+  const passwordHash = getConfiguredAdminPasswordHash();
+  const parsedPasswordHash = passwordHash ? parsePbkdf2PasswordHash(passwordHash) : null;
+  const plaintextPassword = getConfiguredAdminPassword();
+  const explicitSessionSecret = readEnv(process.env.ADMIN_SESSION_SECRET);
+
+  if (passwordHash && !parsedPasswordHash) {
+    const config: ResolvedAdminAuthConfig = {
+      status: "invalid-password-hash",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash: null,
+      plaintextPassword,
+      sessionSecret: null,
+    };
+    logAdminAuthConfigStatus(config);
+    return config;
+  }
+
+  if (isProduction) {
+    if (!passwordHash || !parsedPasswordHash) {
+      const config: ResolvedAdminAuthConfig = {
+        status: "missing-password-hash",
+        isProduction,
+        passwordHash,
+        parsedPasswordHash,
+        plaintextPassword,
+        sessionSecret: null,
+      };
+      logAdminAuthConfigStatus(config);
+      return config;
+    }
+
+    if (plaintextPassword) {
+      const config: ResolvedAdminAuthConfig = {
+        status: "plaintext-password-disallowed",
+        isProduction,
+        passwordHash,
+        parsedPasswordHash,
+        plaintextPassword,
+        sessionSecret: null,
+      };
+      logAdminAuthConfigStatus(config);
+      return config;
+    }
+
+    if (!explicitSessionSecret) {
+      const config: ResolvedAdminAuthConfig = {
+        status: "missing-session-secret",
+        isProduction,
+        passwordHash,
+        parsedPasswordHash,
+        plaintextPassword: null,
+        sessionSecret: null,
+      };
+      logAdminAuthConfigStatus(config);
+      return config;
+    }
+
+    if (explicitSessionSecret.length < MIN_PRODUCTION_SESSION_SECRET_LENGTH) {
+      const config: ResolvedAdminAuthConfig = {
+        status: "weak-session-secret",
+        isProduction,
+        passwordHash,
+        parsedPasswordHash,
+        plaintextPassword: null,
+        sessionSecret: null,
+      };
+      logAdminAuthConfigStatus(config);
+      return config;
+    }
+
+    const config: ResolvedAdminAuthConfig = {
+      status: "ok",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash,
+      plaintextPassword: null,
+      sessionSecret: explicitSessionSecret,
+    };
+    logAdminAuthConfigStatus(config);
+    return config;
+  }
+
+  if (!parsedPasswordHash && !plaintextPassword) {
+    const config: ResolvedAdminAuthConfig = {
+      status: "missing-password",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash,
+      plaintextPassword,
+      sessionSecret: null,
+    };
+    logAdminAuthConfigStatus(config);
+    return config;
+  }
+
+  if (explicitSessionSecret && explicitSessionSecret.length >= MIN_SESSION_SECRET_LENGTH) {
+    const config: ResolvedAdminAuthConfig = {
+      status: "ok",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash,
+      plaintextPassword,
+      sessionSecret: explicitSessionSecret,
+    };
+    logAdminAuthConfigStatus(config);
+    return config;
+  }
+
+  if (explicitSessionSecret && explicitSessionSecret.length < MIN_SESSION_SECRET_LENGTH) {
+    const warningConfig: ResolvedAdminAuthConfig = {
+      status: "weak-session-secret",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash,
+      plaintextPassword,
+      sessionSecret: null,
+    };
+    logAdminAuthConfigStatus(warningConfig);
+  }
+
+  const secretSeed = passwordHash ?? plaintextPassword;
+  if (!secretSeed) {
+    const config: ResolvedAdminAuthConfig = {
+      status: "missing-session-secret",
+      isProduction,
+      passwordHash,
+      parsedPasswordHash,
+      plaintextPassword,
+      sessionSecret: null,
+    };
+    logAdminAuthConfigStatus(config);
+    return config;
+  }
+
+  const derivedConfig: ResolvedAdminAuthConfig = {
+    status: "missing-session-secret",
+    isProduction,
+    passwordHash,
+    parsedPasswordHash,
+    plaintextPassword,
+    sessionSecret: null,
+  };
+  logAdminAuthConfigStatus(derivedConfig);
+
+  const config: ResolvedAdminAuthConfig = {
+    status: "ok",
+    isProduction,
+    passwordHash,
+    parsedPasswordHash,
+    plaintextPassword,
+    sessionSecret: deriveSessionSecret(secretSeed),
+  };
+  logAdminAuthConfigStatus(config);
+  return config;
+};
+
+const getSessionSecret = (): string | null => {
+  const config = resolveAdminAuthConfig();
+  if (config.status !== "ok") {
+    return null;
+  }
+  return config.sessionSecret;
 };
 
 const safeEqual = (left: string, right: string): boolean => {
@@ -424,37 +740,25 @@ const revokeDbSessionToken = async (rawToken: string): Promise<void> => {
   }
 };
 
-const verifyPbkdf2PasswordHash = (candidate: string, configuredHash: string): boolean => {
-  // Expected format: pbkdf2_sha256$<iterations>$<salt>$<hex_digest>
-  const [scheme, iterationsValue, salt, expectedHexDigest] = configuredHash.split("$");
-  if (
-    scheme !== "pbkdf2_sha256" ||
-    !iterationsValue ||
-    !salt ||
-    !expectedHexDigest
-  ) {
-    return false;
-  }
-
-  const iterations = Number(iterationsValue);
-  if (!Number.isInteger(iterations) || iterations < 10_000 || iterations > 1_000_000) {
-    return false;
-  }
-
-  const expectedDigest = expectedHexDigest.trim().toLowerCase();
-  if (!/^[a-f0-9]{32,256}$/i.test(expectedDigest)) {
-    return false;
-  }
-
-  const derivedDigest = pbkdf2Sync(candidate, salt, iterations, expectedDigest.length / 2, "sha256")
+const verifyPbkdf2PasswordHash = (
+  candidate: string,
+  configuredHash: ParsedPbkdf2PasswordHash,
+): boolean => {
+  const derivedDigest = pbkdf2Sync(
+    candidate,
+    configuredHash.salt,
+    configuredHash.iterations,
+    configuredHash.expectedDigest.length / 2,
+    "sha256",
+  )
     .toString("hex")
     .toLowerCase();
 
-  return safeEqual(derivedDigest, expectedDigest);
+  return safeEqual(derivedDigest, configuredHash.expectedDigest);
 };
 
 export const isAdminAuthConfigured = (): boolean => {
-  return Boolean(getConfiguredAdminPassword() || getConfiguredAdminPasswordHash());
+  return resolveAdminAuthConfig().status === "ok";
 };
 
 export const verifyAdminPassword = (candidatePassword: string): boolean => {
@@ -463,17 +767,20 @@ export const verifyAdminPassword = (candidatePassword: string): boolean => {
     return false;
   }
 
-  const configuredPasswordHash = getConfiguredAdminPasswordHash();
-  if (configuredPasswordHash) {
-    return verifyPbkdf2PasswordHash(candidate, configuredPasswordHash);
-  }
-
-  const configuredPassword = getConfiguredAdminPassword();
-  if (!configuredPassword) {
+  const config = resolveAdminAuthConfig();
+  if (config.status !== "ok") {
     return false;
   }
 
-  return safeEqual(candidate, configuredPassword);
+  if (config.parsedPasswordHash) {
+    return verifyPbkdf2PasswordHash(candidate, config.parsedPasswordHash);
+  }
+
+  if (!config.plaintextPassword || config.isProduction) {
+    return false;
+  }
+
+  return safeEqual(candidate, config.plaintextPassword);
 };
 
 export const getAdminLoginAllowance = async (): Promise<AdminLoginAllowance> => {
@@ -587,7 +894,7 @@ export const clearAdminLoginFailures = async (
 };
 
 export const hasValidAdminSession = async (): Promise<boolean> => {
-  if (!isAdminAuthConfigured()) {
+  if (resolveAdminAuthConfig().status !== "ok") {
     return false;
   }
 
@@ -609,8 +916,8 @@ export const hasValidAdminSession = async (): Promise<boolean> => {
 };
 
 export const createAdminSession = async (): Promise<void> => {
-  if (!isAdminAuthConfigured()) {
-    return;
+  if (resolveAdminAuthConfig().status !== "ok") {
+    throw new Error("Admin authentication is not securely configured.");
   }
 
   const dbSessionToken = await issueDbSessionToken();

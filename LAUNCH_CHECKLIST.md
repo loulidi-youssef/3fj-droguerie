@@ -10,12 +10,14 @@ NEXT_PUBLIC_SITE_URL=https://3fj-droguerie.ma
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-ADMIN_ACCESS_PASSWORD=...
+ADMIN_ACCESS_PASSWORD_HASH=pbkdf2_sha256$<iterations>$<salt>$<hex_digest>
+ADMIN_SESSION_SECRET=<long_random_secret_at_least_32_chars>
 ```
 
 Rules:
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
-- Use a strong `ADMIN_ACCESS_PASSWORD` (long and unique).
+- Set `ADMIN_ACCESS_PASSWORD_HASH` only (do not set plaintext `ADMIN_ACCESS_PASSWORD` in production).
+- Use a strong random `ADMIN_SESSION_SECRET` (32+ characters).
 
 ## 2. Supabase production checks
 1. Run latest SQL schema/migrations.

@@ -42,6 +42,10 @@ const buildTooManyAttemptsMessage = (retryAfterSeconds: number): string => {
 const loginAdminAction = async (formData: FormData) => {
   "use server";
 
+  if (!isAdminAuthConfigured()) {
+    redirect("/admin/login?error=auth-unavailable");
+  }
+
   const loginAllowance = await getAdminLoginAllowance();
   if (!loginAllowance.allowed) {
     redirect(
@@ -79,15 +83,35 @@ const loginAdminAction = async (formData: FormData) => {
 };
 
 export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
+  const isProduction = process.env.NODE_ENV === "production";
+
   if (!isAdminAuthConfigured()) {
     return (
       <section className="bg-brand-light py-12">
         <div className="mx-auto max-w-xl rounded-2xl bg-white p-6 shadow-card">
           <h1 className="text-2xl font-extrabold text-brand-blue">Admin login</h1>
           <p className="mt-3 text-sm text-slate-700">
-            Configurez la variable d&apos;environnement
-            <span className="font-semibold"> ADMIN_ACCESS_PASSWORD</span> dans
-            <span className="font-semibold"> .env.local</span>, puis redemarrez le serveur.
+            {isProduction ? (
+              <>
+                Configurez
+                <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
+                et
+                <span className="font-semibold"> ADMIN_SESSION_SECRET </span>
+                (32+ caracteres), puis supprimez
+                <span className="font-semibold"> ADMIN_ACCESS_PASSWORD </span>
+                et
+                <span className="font-semibold"> ADMIN_PASSWORD</span>.
+              </>
+            ) : (
+              <>
+                Configurez
+                <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
+                (recommande) ou
+                <span className="font-semibold"> ADMIN_ACCESS_PASSWORD </span>
+                dans
+                <span className="font-semibold"> .env.local</span>.
+              </>
+            )}
           </p>
         </div>
       </section>
