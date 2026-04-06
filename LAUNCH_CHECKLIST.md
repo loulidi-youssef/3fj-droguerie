@@ -16,8 +16,16 @@ ADMIN_SESSION_SECRET=<long_random_secret_at_least_32_chars>
 
 Rules:
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
-- Set `ADMIN_ACCESS_PASSWORD_HASH` only (do not set plaintext `ADMIN_ACCESS_PASSWORD` in production).
+- `ADMIN_ACCESS_PASSWORD_HASH` must be `pbkdf2_sha256$<iterations>$<salt>$<hex_digest>` (bcrypt is not supported).
+- Set `ADMIN_ACCESS_PASSWORD_HASH` only (do not set deprecated `ADMIN_ACCESS_PASSWORD` / `ADMIN_PASSWORD` in production).
 - Use a strong random `ADMIN_SESSION_SECRET` (32+ characters).
+
+Vercel steps:
+1. Open Project -> Settings -> Environment Variables.
+2. Add/update `ADMIN_ACCESS_PASSWORD_HASH` and `ADMIN_SESSION_SECRET` for `Production`.
+3. Remove `ADMIN_ACCESS_PASSWORD` and `ADMIN_PASSWORD` if present.
+4. Trigger a new deployment (env var changes are applied per deployment).
+5. Verify `/admin/login` with the original plaintext password used to generate the hash.
 
 ## 2. Supabase production checks
 1. Run latest SQL schema/migrations.
@@ -53,6 +61,8 @@ Rules:
    - `/admin/offres`
    - `/admin/blog`
    - `/admin/reviews`
+   - Confirm no message about missing `ADMIN_ACCESS_PASSWORD_HASH` / `ADMIN_SESSION_SECRET`
+   - Confirm successful login with the original plaintext password
 5. Check SEO files:
    - `/robots.txt`
    - `/sitemap.xml`

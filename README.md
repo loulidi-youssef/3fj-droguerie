@@ -8,6 +8,7 @@
 ## Production launch
 - Use `LAUNCH_CHECKLIST.md` for the final deployment checklist.
 - Set all production environment variables (including `NEXT_PUBLIC_SITE_URL`).
+- For admin auth, set `ADMIN_ACCESS_PASSWORD_HASH` (pbkdf2 format) and `ADMIN_SESSION_SECRET` in Vercel, then redeploy.
 - Verify `robots.txt` and `sitemap.xml` after deploy:
   - `/robots.txt`
   - `/sitemap.xml`

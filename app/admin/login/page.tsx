@@ -95,9 +95,15 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
               <>
                 Configurez
                 <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
+                (format
+                <span className="font-semibold">
+                  {" "}
+                  pbkdf2_sha256$iterations$salt$hash
+                </span>
+                )
                 et
                 <span className="font-semibold"> ADMIN_SESSION_SECRET </span>
-                (32+ caracteres), puis supprimez
+                (32+ caracteres) dans Vercel, puis redeployez. Ne configurez pas
                 <span className="font-semibold"> ADMIN_ACCESS_PASSWORD </span>
                 et
                 <span className="font-semibold"> ADMIN_PASSWORD</span>.
@@ -106,8 +112,14 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
               <>
                 Configurez
                 <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
-                (recommande) ou
-                <span className="font-semibold"> ADMIN_ACCESS_PASSWORD </span>
+                (format
+                <span className="font-semibold">
+                  {" "}
+                  pbkdf2_sha256$iterations$salt$hash
+                </span>
+                )
+                et
+                <span className="font-semibold"> ADMIN_SESSION_SECRET </span>
                 dans
                 <span className="font-semibold"> .env.local</span>.
               </>

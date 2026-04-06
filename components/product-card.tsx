@@ -8,6 +8,7 @@ import { StarRating } from "@/components/star-rating";
 import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
+import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
 import {
   getProductAvailabilityMeta,
   getProductAvailabilityStatus,
@@ -20,7 +21,10 @@ type ProductCardProps = {
 };
 
 export const ProductCard = ({ product, variant = "default" }: ProductCardProps) => {
-  const primaryImage = getSafeNextImageProps(product.images[0]);
+  const primaryImage = getSafeNextImageProps(product.images[0], {
+    variant: "thumbnail",
+    fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
+  });
   const badgeLabel = product.badgeLabel?.trim()
     ? product.badgeLabel.trim()
     : product.isPromo
@@ -65,7 +69,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
               alt={product.name}
               fill
               unoptimized={primaryImage.unoptimized}
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              sizes="(max-width: 640px) 46vw, (max-width: 1024px) 30vw, 22vw"
               className="object-contain p-1.5 transition-transform duration-300 group-hover:scale-[1.03] sm:p-2"
             />
           </div>
@@ -136,13 +140,13 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
     return (
       <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_7px_15px_rgba(15,42,77,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_26px_rgba(15,42,77,0.12)] sm:rounded-xl sm:shadow-[0_8px_18px_rgba(15,42,77,0.08)]">
         <Link href={`/produits/${product.slug}`} className="block p-1.5 sm:p-3">
-          <div className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-md bg-slate-50 sm:h-40 sm:rounded-lg">
+          <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-slate-50 sm:rounded-lg">
             <Image
               src={primaryImage.src}
               alt={product.name}
               fill
               unoptimized={primaryImage.unoptimized}
-              sizes="(max-width: 768px) 50vw, 25vw"
+              sizes="(max-width: 768px) 45vw, 23vw"
               className="object-contain p-1.5 transition-transform duration-300 group-hover:scale-105 sm:p-3"
             />
           </div>
@@ -214,7 +218,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_22px_rgba(15,42,77,0.09)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,42,77,0.14)]">
       <Link href={`/produits/${product.slug}`} className="block p-3 pb-0">
-        <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50 sm:h-48">
+        <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50">
           {hasBadge ? (
             <span
               className={`pointer-events-none absolute left-2 top-2 z-10 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
@@ -233,7 +237,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
             alt={product.name}
             fill
             unoptimized={primaryImage.unoptimized}
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 31vw, 24vw"
             className="object-contain p-3 transition-transform duration-500 ease-out group-hover:scale-[1.035]"
           />
         </div>

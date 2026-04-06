@@ -1,6 +1,18 @@
+import {
+  PRODUCT_IMAGE_FALLBACK_SRC,
+  PRODUCT_IMAGE_VARIANT_PATTERN,
+  PRODUCT_IMAGE_VARIANT_SUFFIX,
+  type ProductImageVariant,
+} from "@/lib/product-image-variants";
+
 type SafeNextImageProps = {
   src: string;
   unoptimized: boolean;
+};
+
+type SafeNextImageOptions = {
+  variant?: ProductImageVariant;
+  fallbackSrc?: string;
 };
 
 const toNormalizedEnvOrigin = (value: string | undefined): string | null => {
@@ -77,11 +89,63 @@ const shouldBypassOptimization = (src: string): boolean => {
   return !isSupabaseStorageObjectUrl(src);
 };
 
-export const getSafeNextImageProps = (rawSrc: string): SafeNextImageProps => {
-  const src = normalizeSameOriginAbsoluteSrc(rawSrc?.trim() ?? "");
+const replaceVariantSuffix = (
+  sourceValue: string,
+  variant: ProductImageVariant,
+): string => {
+  const suffix = PRODUCT_IMAGE_VARIANT_SUFFIX[variant];
+
+  if (!PRODUCT_IMAGE_VARIANT_PATTERN.test(sourceValue)) {
+    return sourceValue;
+  }
+
+  return sourceValue.replace(PRODUCT_IMAGE_VARIANT_PATTERN, `-${suffix}.webp`);
+};
+
+const toVariantSrc = (sourceSrc: string, variant: ProductImageVariant): string => {
+  if (!sourceSrc) {
+    return sourceSrc;
+  }
+
+  const isAbsoluteUrl = /^https?:\/\//i.test(sourceSrc);
+
+  try {
+    const parsed = isAbsoluteUrl
+      ? new URL(sourceSrc)
+      : new URL(sourceSrc, "https://images.local");
+    const replacedPathname = replaceVariantSuffix(parsed.pathname, variant);
+
+    if (replacedPathname === parsed.pathname) {
+      return sourceSrc;
+    }
+
+    parsed.pathname = replacedPathname;
+    if (isAbsoluteUrl) {
+      return parsed.toString();
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return replaceVariantSuffix(sourceSrc, variant);
+  }
+};
+
+const toSafeFallbackSrc = (rawFallbackSrc: string | undefined): string => {
+  return normalizeSameOriginAbsoluteSrc(rawFallbackSrc?.trim() || PRODUCT_IMAGE_FALLBACK_SRC);
+};
+
+export const getSafeNextImageProps = (
+  rawSrc: string | null | undefined,
+  options?: SafeNextImageOptions,
+): SafeNextImageProps => {
+  const fallbackSrc = toSafeFallbackSrc(options?.fallbackSrc);
+  const normalizedSrc = normalizeSameOriginAbsoluteSrc(rawSrc?.trim() ?? "");
+  const withVariantSrc =
+    options?.variant && normalizedSrc ? toVariantSrc(normalizedSrc, options.variant) : normalizedSrc;
+  const src = withVariantSrc || fallbackSrc;
+
   return {
     src,
     unoptimized: shouldBypassOptimization(src),
   };
 };
-

@@ -12,6 +12,7 @@ import {
 import { formatDh } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
+import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
@@ -212,6 +213,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               {detailedItems.map((item) => {
                 const image = getSafeNextImageProps(
                   item.selectedImage ?? item.product.images[0],
+                  {
+                    variant: "thumbnail",
+                    fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
+                  },
                 );
 
                 return (
@@ -227,7 +232,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         fill
                         unoptimized={image.unoptimized}
                         sizes="(max-width: 640px) 64px, 80px"
-                        className="object-cover"
+                        className="object-contain p-1"
                       />
                     </div>
 

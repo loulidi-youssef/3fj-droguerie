@@ -82,6 +82,8 @@ const buildContentSecurityPolicy = () => {
 const nextConfig = {
   images: {
     remotePatterns: storageRemotePatterns,
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
   async headers() {
     return [

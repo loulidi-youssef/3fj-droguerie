@@ -1,6 +1,8 @@
-﻿"use client";
+"use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef } from "react";
+import { getSafeNextImageProps } from "@/lib/image-optimization";
 import type { Ad } from "@/types";
 
 type HomepageAdBannerProps = {
@@ -63,6 +65,8 @@ const getAltText = (ad: Ad): string => {
   return "Publicite sponsorisee";
 };
 
+const passthroughImageLoader = ({ src }: { src: string }): string => src;
+
 export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
   const didTrackViewRef = useRef(false);
@@ -117,6 +121,7 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
     return null;
   }
 
+  const image = getSafeNextImageProps(ad.imageUrl);
   const hasOverlayContent = Boolean(ad.title?.trim() || ad.description?.trim());
   const containerHeightClass =
     slot === "top"
@@ -140,10 +145,13 @@ export const HomepageAdBanner = ({ ad, slot }: HomepageAdBannerProps) => {
           className="group block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card sm:rounded-2xl"
         >
           <div className={`relative ${containerHeightClass}`}>
-            <img
-              src={ad.imageUrl}
+            <Image
+              src={image.src}
               alt={getAltText(ad)}
-              loading="lazy"
+              fill
+              loader={passthroughImageLoader}
+              unoptimized={image.unoptimized}
+              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 92vw, 1240px"
               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02] group-hover:opacity-95"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/55 via-slate-950/25 to-transparent" />

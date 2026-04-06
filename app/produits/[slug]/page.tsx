@@ -6,6 +6,7 @@ import { ProductDetailPurchasePanel } from "@/components/product-detail-purchase
 import { ProductCard } from "@/components/product-card";
 import { RecentlyViewedProducts } from "@/components/recently-viewed-products";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
+import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
 import { getActiveOffersWithProducts } from "@/lib/offers";
 import { getAllProducts, getProductBySlug } from "@/lib/products";
 import { buildProductJsonLd, buildSocialMetadata } from "@/lib/seo";
@@ -200,7 +201,10 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
       },
     ],
   };
-  const primaryImage = getSafeNextImageProps(product.images[0]);
+  const primaryImage = getSafeNextImageProps(product.images[0], {
+    variant: "large",
+    fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
+  });
 
   return (
     <>
@@ -218,18 +222,23 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
           <div className="grid gap-2.5 sm:gap-8 lg:grid-cols-2">
             <div className="min-w-0">
-              <Image
-                src={primaryImage.src}
-                alt={product.name}
-                width={900}
-                height={680}
-                unoptimized={primaryImage.unoptimized}
-                className="aspect-[4/3] max-h-[260px] w-full rounded-lg border border-slate-200 bg-white object-contain p-1.5 sm:aspect-[4/3] sm:max-h-none sm:rounded-2xl sm:object-cover sm:p-0"
-              />
+              <div className="relative aspect-[4/3] max-h-[260px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white sm:rounded-2xl lg:h-[520px] lg:max-h-none lg:aspect-auto">
+                <Image
+                  src={primaryImage.src}
+                  alt={product.name}
+                  fill
+                  unoptimized={primaryImage.unoptimized}
+                  sizes="(max-width: 768px) 94vw, (max-width: 1200px) 50vw, 640px"
+                  className="object-contain object-center p-1.5 sm:p-2 lg:p-5"
+                />
+              </div>
               <div className="mt-1.5 sm:mt-3">
                 <div className="flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                   {product.images.map((imageSrc, index) => {
-                    const image = getSafeNextImageProps(imageSrc);
+                    const image = getSafeNextImageProps(imageSrc, {
+                      variant: "thumbnail",
+                      fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
+                    });
                     return (
                       <Image
                         key={imageSrc}
@@ -238,14 +247,18 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
                         width={96}
                         height={96}
                         unoptimized={image.unoptimized}
-                        className="h-12 w-12 shrink-0 rounded-md border border-slate-200 bg-white object-cover p-0.5"
+                        sizes="48px"
+                        className="h-12 w-12 shrink-0 rounded-md border border-slate-200 bg-white object-contain p-0.5"
                       />
                     );
                   })}
                 </div>
                 <div className="hidden grid-cols-3 gap-3 sm:grid">
                   {product.images.map((imageSrc, index) => {
-                    const image = getSafeNextImageProps(imageSrc);
+                    const image = getSafeNextImageProps(imageSrc, {
+                      variant: "thumbnail",
+                      fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
+                    });
                     return (
                       <Image
                         key={imageSrc}
@@ -254,7 +267,8 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
                         width={280}
                         height={200}
                         unoptimized={image.unoptimized}
-                        className="aspect-[4/3] rounded-xl border border-slate-200 object-cover"
+                        sizes="(max-width: 1200px) 30vw, 220px"
+                        className="aspect-[4/3] rounded-xl border border-slate-200 bg-white object-contain p-1"
                       />
                     );
                   })}

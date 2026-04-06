@@ -12,8 +12,11 @@ type ProductsPageProps = {
     q?: string | string[];
     categorie?: string | string[];
     tri?: string | string[];
+    page?: string | string[];
   };
 };
+
+const PRODUCTS_PER_PAGE = 24;
 
 const getSingleSearchParam = (value: string | string[] | undefined): string => {
   if (typeof value === "string") return value;
@@ -35,14 +38,24 @@ const normalizeSort = (value: string): ProductSortOption => {
   return "defaut";
 };
 
+const normalizePage = (value: string): number => {
+  const parsed = Number(value.trim());
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return Math.floor(parsed);
+};
+
 export async function generateMetadata({
   searchParams,
 }: ProductsPageProps): Promise<Metadata> {
   const selectedCategory = getSingleSearchParam(searchParams.categorie).trim().toLowerCase();
   const rawQuery = getSingleSearchParam(searchParams.q).trim();
   const sort = normalizeSort(getSingleSearchParam(searchParams.tri));
+  const page = normalizePage(getSingleSearchParam(searchParams.page));
   const category = selectedCategory ? getCategoryBySlug(selectedCategory) : null;
-  const shouldIndex = rawQuery.length === 0 && sort === "defaut";
+  const shouldIndex = rawQuery.length === 0 && sort === "defaut" && page === 1;
 
   if (category) {
     const title = `${category.name} a Fes | Materiaux de construction`;
@@ -92,6 +105,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
   const rawQuery = getSingleSearchParam(searchParams.q).trim();
   const query = rawQuery.toLowerCase();
   const sort = normalizeSort(getSingleSearchParam(searchParams.tri));
+  const requestedPage = normalizePage(getSingleSearchParam(searchParams.page));
 
   const filteredByCategory = selectedCategory
     ? products.filter((product) => product.categorySlug === selectedCategory)
@@ -121,6 +135,17 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
     ? getCategoryBySlug(selectedCategory)?.name
     : undefined;
   const hasActiveFilters = Boolean(selectedCategory || rawQuery || sort !== "defaut");
+  const totalResults = sortedProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / PRODUCTS_PER_PAGE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const pageStartIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+  const paginatedProducts = sortedProducts.slice(
+    pageStartIndex,
+    pageStartIndex + PRODUCTS_PER_PAGE,
+  );
+  const firstItemIndex = totalResults === 0 ? 0 : pageStartIndex + 1;
+  const lastItemIndex =
+    totalResults === 0 ? 0 : Math.min(pageStartIndex + paginatedProducts.length, totalResults);
 
   const buildCategoryUrl = (categorySlug: string | null): string => {
     const params = new URLSearchParams();
@@ -140,6 +165,34 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
     const queryString = params.toString();
     return queryString ? `/produits?${queryString}` : "/produits";
   };
+
+  const buildProductsUrl = (page: number): string => {
+    const params = new URLSearchParams();
+
+    if (selectedCategory) {
+      params.set("categorie", selectedCategory);
+    }
+    if (rawQuery) {
+      params.set("q", rawQuery);
+    }
+    if (sort !== "defaut") {
+      params.set("tri", sort);
+    }
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/produits?${queryString}` : "/produits";
+  };
+
+  const paginationWindow = 2;
+  const visiblePageStart = Math.max(1, currentPage - paginationWindow);
+  const visiblePageEnd = Math.min(totalPages, currentPage + paginationWindow);
+  const visiblePages = Array.from(
+    { length: visiblePageEnd - visiblePageStart + 1 },
+    (_, index) => visiblePageStart + index,
+  );
 
   return (
     <section className="bg-[#f1f3f5] py-3 md:py-10">
@@ -292,17 +345,70 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
               </p>
             ) : null}
 
-            <p className="font-semibold text-slate-600">{sortedProducts.length} produit(s) trouve(s).</p>
+            <p className="font-semibold text-slate-600">
+              {totalResults} produit(s) trouve(s).
+            </p>
+            {totalResults > 0 ? (
+              <p className="text-slate-500">
+                Affichage {firstItemIndex}-{lastItemIndex}
+              </p>
+            ) : null}
           </div>
         </div>
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 md:mt-6 md:gap-4 xl:grid-cols-4">
-          {sortedProducts.map((product) => (
+          {paginatedProducts.map((product) => (
             <ProductCard key={product.id} product={product} variant="listing" />
           ))}
         </div>
 
-        {sortedProducts.length === 0 ? (
+        {totalPages > 1 ? (
+          <nav
+            className="mt-4 flex flex-wrap items-center justify-center gap-2 md:mt-6"
+            aria-label="Pagination produits"
+          >
+            <a
+              href={buildProductsUrl(Math.max(1, currentPage - 1))}
+              aria-disabled={currentPage <= 1}
+              className={`inline-flex h-9 items-center rounded-lg border px-3 text-sm font-semibold transition ${
+                currentPage <= 1
+                  ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+            >
+              Precedent
+            </a>
+
+            {visiblePages.map((pageNumber) => (
+              <a
+                key={pageNumber}
+                href={buildProductsUrl(pageNumber)}
+                aria-current={pageNumber === currentPage ? "page" : undefined}
+                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                  pageNumber === currentPage
+                    ? "border-brand-blue bg-brand-blue text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+                }`}
+              >
+                {pageNumber}
+              </a>
+            ))}
+
+            <a
+              href={buildProductsUrl(Math.min(totalPages, currentPage + 1))}
+              aria-disabled={currentPage >= totalPages}
+              className={`inline-flex h-9 items-center rounded-lg border px-3 text-sm font-semibold transition ${
+                currentPage >= totalPages
+                  ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+            >
+              Suivant
+            </a>
+          </nav>
+        ) : null}
+
+        {totalResults === 0 ? (
           <p className="mt-8 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-card">
             Aucun produit ne correspond a votre recherche ou a vos filtres.
           </p>

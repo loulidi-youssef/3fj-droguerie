@@ -66,6 +66,7 @@ type AdminAuthConfigStatus =
   | "ok"
   | "missing-password"
   | "missing-password-hash"
+  | "unsupported-password-hash-algorithm"
   | "invalid-password-hash"
   | "plaintext-password-disallowed"
   | "missing-session-secret"
@@ -143,6 +144,10 @@ const parsePbkdf2PasswordHash = (
   };
 };
 
+const looksLikeBcryptHash = (value: string): boolean => {
+  return /^\$2[aby]\$\d{2}\$/.test(value.trim());
+};
+
 const deriveSessionSecret = (input: string): string => {
   return createHash("sha256")
     .update(`3fj-admin-session|${input}`)
@@ -174,7 +179,15 @@ const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
       logAdminAuthConfigMessageOnce(
         "error",
         "prod-invalid-password-hash",
-        "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256 format.",
+        "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+      );
+      return;
+    }
+    if (config.status === "unsupported-password-hash-algorithm") {
+      logAdminAuthConfigMessageOnce(
+        "error",
+        "prod-unsupported-password-hash-algorithm",
+        "ADMIN_ACCESS_PASSWORD_HASH must use pbkdf2_sha256. bcrypt hashes are not supported.",
       );
       return;
     }
@@ -217,7 +230,15 @@ const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
     logAdminAuthConfigMessageOnce(
       "warn",
       "dev-invalid-password-hash",
-      "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256 format.",
+      "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+    );
+    return;
+  }
+  if (config.status === "unsupported-password-hash-algorithm") {
+    logAdminAuthConfigMessageOnce(
+      "warn",
+      "dev-unsupported-password-hash-algorithm",
+      "ADMIN_ACCESS_PASSWORD_HASH must use pbkdf2_sha256. bcrypt hashes are not supported.",
     );
     return;
   }
@@ -246,8 +267,11 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
   const explicitSessionSecret = readEnv(process.env.ADMIN_SESSION_SECRET);
 
   if (passwordHash && !parsedPasswordHash) {
+    const status: AdminAuthConfigStatus = looksLikeBcryptHash(passwordHash)
+      ? "unsupported-password-hash-algorithm"
+      : "invalid-password-hash";
     const config: ResolvedAdminAuthConfig = {
-      status: "invalid-password-hash",
+      status,
       isProduction,
       passwordHash,
       parsedPasswordHash: null,

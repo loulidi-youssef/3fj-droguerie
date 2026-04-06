@@ -131,6 +131,10 @@ export const ProductEditForm = ({
         inputName="imageFiles"
         idPrefix={`edit-product-${product.id}`}
       />
+      <p className="-mt-1 text-xs text-slate-500 md:col-span-2">
+        Les images telechargees sont optimisees automatiquement en WebP (thumb 300, medium 800,
+        large 1400).
+      </p>
       <label className="block md:col-span-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
           Chemins images existants (optionnel)
@@ -173,4 +177,3 @@ export const ProductEditForm = ({
     </form>
   );
 };
-
