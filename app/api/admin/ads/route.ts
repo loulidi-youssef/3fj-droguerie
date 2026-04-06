@@ -1,5 +1,9 @@
 ﻿import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  enforceRouteRateLimit,
+  getAdminMutationRateLimitIdentifier,
+} from "@/lib/api-rate-limit";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
 import { createAdminAd } from "@/lib/admin-ads";
 import { parseAdminAdInputFromJson } from "@/lib/admin-ads-validation";
@@ -10,6 +14,16 @@ export async function POST(request: NextRequest) {
   const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
+  }
+
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "admin:ads:create",
+    identifier: getAdminMutationRateLimitIdentifier(request),
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
   }
 
   let payload: Record<string, unknown>;

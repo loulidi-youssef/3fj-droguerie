@@ -1,5 +1,9 @@
 ﻿import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  enforceRouteRateLimit,
+  getAdminMutationRateLimitIdentifier,
+} from "@/lib/api-rate-limit";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
 import { deleteAdminAd, updateAdminAd } from "@/lib/admin-ads";
 import { parseAdminAdInputFromJson } from "@/lib/admin-ads-validation";
@@ -21,6 +25,16 @@ export async function PUT(request: NextRequest, context: AdminAdByIdRouteContext
   const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
+  }
+
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "admin:ads:update",
+    identifier: getAdminMutationRateLimitIdentifier(request),
+    limit: 40,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
   }
 
   const adId = getSafeId(context.params);
@@ -54,10 +68,20 @@ export async function PUT(request: NextRequest, context: AdminAdByIdRouteContext
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_request: NextRequest, context: AdminAdByIdRouteContext) {
+export async function DELETE(request: NextRequest, context: AdminAdByIdRouteContext) {
   const unauthorizedResponse = await requireAdminApiSession();
   if (unauthorizedResponse) {
     return unauthorizedResponse;
+  }
+
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "admin:ads:delete",
+    identifier: getAdminMutationRateLimitIdentifier(request),
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
   }
 
   const adId = getSafeId(context.params);

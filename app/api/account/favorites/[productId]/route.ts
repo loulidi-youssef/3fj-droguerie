@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRouteRateLimit } from "@/lib/api-rate-limit";
 import {
   RequestAuthError,
   getAuthenticatedCustomerContextFromRequest,
@@ -63,6 +64,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
 
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "account:favorites:add",
+    identifier: `user:${authenticatedContext.customer.id}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
+  }
+
   const productId = resolveProductId(params.productId);
   if (!productId) {
     return NextResponse.json({ error: "Produit introuvable." }, { status: 400 });
@@ -114,6 +125,16 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
   if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "account:favorites:remove",
+    identifier: `user:${authenticatedContext.customer.id}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
   }
 
   const productId = resolveProductId(params.productId);

@@ -37,15 +37,20 @@ export async function POST(request: NextRequest, context: TrackAdRouteContext) {
   const sessionKey = typeof payload.session_key === "string" ? payload.session_key : null;
   const ip = getTrackingRequestIp(request);
   const userAgent = getTrackingRequestUserAgent(request);
-  const guarded = guardAdTrackingRequest({
+  const guarded = await guardAdTrackingRequest({
+    request,
     adId,
     eventType: "view",
-    ip,
-    userAgent,
     sessionKey,
   });
 
   if (!guarded.allowed) {
+    if (guarded.reason === "rate_limited_ip" || guarded.reason === "rate_limited_session") {
+      return NextResponse.json(
+        { ok: false, counted: false, error: "Trop de tentatives de tracking." },
+        { status: 429 },
+      );
+    }
     return NextResponse.json({ ok: true, counted: false });
   }
 

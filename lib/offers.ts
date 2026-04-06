@@ -8,6 +8,7 @@ import {
 } from "@/lib/offer-pricing";
 import { getProductsByIds } from "@/lib/products";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { TransactionDataUnavailableError } from "@/lib/transaction-data";
 import type { Offer, OfferDiscountType, Product } from "@/types";
 
 type OfferRow = {
@@ -240,6 +241,57 @@ export const getActiveOffers = async (): Promise<Offer[]> => {
   return sortOffersForStorefront(mapped.filter(isOfferActiveNow));
 };
 
+export const getActiveOffersStrict = async (): Promise<Offer[]> => {
+  const supabase = getSupabaseServerClient();
+
+  if (!supabase) {
+    throw new TransactionDataUnavailableError(
+      "OFFERS_DB_UNAVAILABLE",
+      "Lecture offres indisponible: client base de donnees non configure.",
+    );
+  }
+
+  const fetchOfferRows = async (selectClause: string) => {
+    return supabase
+      .from("offers")
+      .select(selectClause)
+      .eq("is_active", true)
+      .not("product_id", "is", null)
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false })
+      .returns<OfferRow[]>();
+  };
+  const { data, error } = await fetchOfferRows(OFFER_SELECT_WITH_RULES);
+
+  let rows: OfferRow[] | null = data ?? null;
+
+  if (
+    error &&
+    (error.message.includes("discount_type") || error.message.includes("discount_value"))
+  ) {
+    const { data: legacyData, error: legacyError } = await fetchOfferRows(OFFER_SELECT_LEGACY);
+
+    if (legacyError || !legacyData) {
+      throw new TransactionDataUnavailableError(
+        "OFFERS_DB_READ_FAILED",
+        "Impossible de charger les offres actives depuis la base de donnees.",
+      );
+    }
+
+    rows = legacyData;
+  }
+
+  if ((error && !rows) || !rows) {
+    throw new TransactionDataUnavailableError(
+      "OFFERS_DB_READ_FAILED",
+      "Impossible de charger les offres actives depuis la base de donnees.",
+    );
+  }
+
+  const mapped = rows.map(mapOfferRow).filter((offer): offer is Offer => Boolean(offer));
+  return sortOffersForStorefront(mapped.filter(isOfferActiveNow));
+};
+
 export const getFeaturedActiveOffer = async (): Promise<Offer | undefined> => {
   const activeOffers = await getActiveOffers();
   if (activeOffers.length === 0) {
@@ -277,6 +329,36 @@ export const getActiveOfferRulesByProductIds = async (
       discountValue: offer.discountValue,
       legacyDiscountedPrice: offer.legacyDiscountedPrice ?? null,
       discountLabel: offer.discountLabel || formatOfferDiscountLabel(offer.discountType, offer.discountValue),
+    });
+  }
+
+  return rulesByProductId;
+};
+
+export const getActiveOfferRulesByProductIdsStrict = async (
+  productIds: string[],
+): Promise<Map<string, ActiveOfferPricingRule>> => {
+  const uniqueProductIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueProductIds.length === 0) {
+    return new Map();
+  }
+
+  const activeOffers = await getActiveOffersStrict();
+  const productIdSet = new Set(uniqueProductIds);
+  const rulesByProductId = new Map<string, ActiveOfferPricingRule>();
+
+  for (const offer of activeOffers) {
+    if (!productIdSet.has(offer.productId) || rulesByProductId.has(offer.productId)) {
+      continue;
+    }
+
+    rulesByProductId.set(offer.productId, {
+      productId: offer.productId,
+      discountType: offer.discountType,
+      discountValue: offer.discountValue,
+      legacyDiscountedPrice: offer.legacyDiscountedPrice ?? null,
+      discountLabel:
+        offer.discountLabel || formatOfferDiscountLabel(offer.discountType, offer.discountValue),
     });
   }
 

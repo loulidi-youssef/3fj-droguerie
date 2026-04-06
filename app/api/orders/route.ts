@@ -1,14 +1,17 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
-import { getActiveOfferRulesByProductIds } from "@/lib/offers";
+import { getActiveOfferRulesByProductIdsStrict } from "@/lib/offers";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
-import { getProductsByIds } from "@/lib/products";
+import { getProductsByIdsStrict } from "@/lib/products";
+import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 import {
   RequestAuthError,
   getAuthenticatedCustomerFromRequestStrict,
 } from "@/lib/supabase/auth-user";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { TransactionDataUnavailableError } from "@/lib/transaction-data";
 
 type IncomingOrderItem = {
   productId?: string;
@@ -53,11 +56,6 @@ type ParseOrderItemsResult =
       error: string;
     };
 
-type RateLimitResult = {
-  allowed: boolean;
-  retryAfterSeconds: number;
-};
-
 type FulfillmentMethod = "delivery" | "pickup";
 
 const MAX_ORDER_REQUEST_BYTES = 20_000;
@@ -65,10 +63,9 @@ const MAX_DISTINCT_ITEMS_PER_ORDER = 30;
 const MAX_QUANTITY_PER_PRODUCT = 20;
 const MAX_TOTAL_UNITS_PER_ORDER = 200;
 const ORDER_RATE_LIMIT_WINDOW_MS = 60_000;
-const ORDER_RATE_LIMIT_MAX_REQUESTS = 12;
-const RATE_LIMIT_SWEEP_SIZE = 2_000;
-
-const orderRateLimitStore = new Map<string, { count: number; expiresAt: number }>();
+const ORDER_RATE_LIMIT_MAX_REQUESTS = 10;
+const IDEMPOTENCY_DERIVED_WINDOW_MS = 10 * 60 * 1000;
+const MAX_IDEMPOTENCY_KEY_HEADER_LENGTH = 200;
 
 const normalizeFulfillmentMethod = (value: unknown): FulfillmentMethod | null => {
   if (typeof value !== "string") {
@@ -151,63 +148,24 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
   return { ok: true, items: normalizedItems };
 };
 
-const getRateLimitKey = (request: NextRequest): string => {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const firstIp = forwardedFor.split(",")[0]?.trim();
-    if (firstIp) {
-      return firstIp;
-    }
-  }
-
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) {
-    return realIp;
-  }
-
-  const forwarded = request.headers.get("forwarded");
-  if (forwarded) {
-    const match = forwarded.match(/for="?([^;,"]+)"?/i);
-    if (match?.[1]) {
-      return match[1];
-    }
-  }
-
-  const userAgent = request.headers.get("user-agent")?.trim() || "unknown-agent";
-  return `ua:${userAgent.slice(0, 120)}`;
+const toCompactText = (value: string): string => {
+  return value.trim().replace(/\s+/g, " ");
 };
 
-const consumeRateLimit = (key: string): RateLimitResult => {
-  const now = Date.now();
+const sha256 = (value: string): string => {
+  return createHash("sha256").update(value).digest("hex");
+};
 
-  if (orderRateLimitStore.size > RATE_LIMIT_SWEEP_SIZE) {
-    for (const [candidateKey, value] of orderRateLimitStore.entries()) {
-      if (value.expiresAt <= now) {
-        orderRateLimitStore.delete(candidateKey);
-      }
+const sortByProductAndVariant = <T extends { productId: string; variantId: string | null }>(
+  items: T[],
+): T[] => {
+  return [...items].sort((first, second) => {
+    if (first.productId !== second.productId) {
+      return first.productId.localeCompare(second.productId);
     }
-  }
 
-  const currentEntry = orderRateLimitStore.get(key);
-
-  if (!currentEntry || currentEntry.expiresAt <= now) {
-    orderRateLimitStore.set(key, {
-      count: 1,
-      expiresAt: now + ORDER_RATE_LIMIT_WINDOW_MS,
-    });
-    return { allowed: true, retryAfterSeconds: 0 };
-  }
-
-  currentEntry.count += 1;
-
-  if (currentEntry.count > ORDER_RATE_LIMIT_MAX_REQUESTS) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((currentEntry.expiresAt - now) / 1000)),
-    };
-  }
-
-  return { allowed: true, retryAfterSeconds: 0 };
+    return (first.variantId ?? "").localeCompare(second.variantId ?? "");
+  });
 };
 
 export async function POST(request: NextRequest) {
@@ -216,19 +174,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<OrderErrorResponse>(
       { error: "Requete trop volumineuse. Merci de reessayer avec un panier plus simple." },
       { status: 413 },
-    );
-  }
-
-  const rateLimitResult = consumeRateLimit(getRateLimitKey(request));
-  if (!rateLimitResult.allowed) {
-    return NextResponse.json<OrderErrorResponse>(
-      { error: "Trop de tentatives. Merci de patienter quelques secondes." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(rateLimitResult.retryAfterSeconds),
-        },
-      },
     );
   }
 
@@ -299,6 +244,33 @@ export async function POST(request: NextRequest) {
   const { name, phone, address, location } = customerValidation.customer;
   const orderAddress =
     fulfillmentMethod === "pickup" ? "Retrait en magasin" : address;
+  const orderUserId = authenticatedCustomer.id?.trim();
+  if (!orderUserId) {
+    console.error("[api/orders] Missing authenticated user id before order creation.");
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Impossible de lier la commande a votre compte. Merci de vous reconnecter." },
+      { status: 401 },
+    );
+  }
+
+  const rateLimitResult = await consumeSharedRateLimit({
+    scope: "orders:create:user",
+    identifier: `user:${orderUserId}`,
+    limit: ORDER_RATE_LIMIT_MAX_REQUESTS,
+    windowMs: ORDER_RATE_LIMIT_WINDOW_MS,
+    denyOnError: true,
+  });
+  if (!rateLimitResult.allowed) {
+    return NextResponse.json<OrderErrorResponse>(
+      { error: "Trop de tentatives. Merci de patienter quelques secondes." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimitResult.retryAfterSeconds),
+        },
+      },
+    );
+  }
 
   const items = Array.isArray(body.items) ? body.items : [];
   const parsedItems = parseOrderItems(items);
@@ -312,8 +284,36 @@ export async function POST(request: NextRequest) {
   const normalizedItems = parsedItems.items;
 
   const productIds = normalizedItems.map((item) => item.productId);
-  const products = await getProductsByIds(productIds);
-  const activeOfferRulesByProductId = await getActiveOfferRulesByProductIds(productIds);
+  let products: Awaited<ReturnType<typeof getProductsByIdsStrict>>;
+  let activeOfferRulesByProductId: Awaited<
+    ReturnType<typeof getActiveOfferRulesByProductIdsStrict>
+  >;
+  try {
+    [products, activeOfferRulesByProductId] = await Promise.all([
+      getProductsByIdsStrict(productIds),
+      getActiveOfferRulesByProductIdsStrict(productIds),
+    ]);
+  } catch (error) {
+    const errorCode =
+      error instanceof TransactionDataUnavailableError
+        ? error.code
+        : "TRANSACTION_DATA_UNKNOWN_ERROR";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    console.error("[api/orders] Transactional catalog read failed.", {
+      code: errorCode,
+      message: errorMessage,
+    });
+
+    return NextResponse.json<OrderErrorResponse>(
+      {
+        error:
+          "Service temporairement indisponible. Merci de reessayer dans quelques instants.",
+      },
+      { status: 503 },
+    );
+  }
+
   const productById = new Map(products.map((product) => [product.id, product]));
 
   const missingProductIds = productIds.filter((productId) => !productById.has(productId));
@@ -406,6 +406,48 @@ export async function POST(request: NextRequest) {
   const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const deliveryFee = fulfillmentMethod === "pickup" ? 0 : getDeliveryCost(subtotal);
   const total = subtotal + deliveryFee;
+  const normalizedHeaderIdempotencyKey = request.headers.get("idempotency-key")?.trim() ?? "";
+  if (normalizedHeaderIdempotencyKey.length > MAX_IDEMPOTENCY_KEY_HEADER_LENGTH) {
+    return NextResponse.json<OrderErrorResponse>(
+      {
+        error:
+          `L'en-tete Idempotency-Key est trop long (maximum ${MAX_IDEMPOTENCY_KEY_HEADER_LENGTH} caracteres).`,
+      },
+      { status: 400 },
+    );
+  }
+
+  const pricedItemsSnapshot = sortByProductAndVariant(
+    lineItems.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+    })),
+  );
+  const requestFingerprintPayload = {
+    userId: orderUserId,
+    fulfillmentMethod,
+    customer: {
+      name: toCompactText(name),
+      phone: toCompactText(phone),
+      address: toCompactText(orderAddress),
+      location: toCompactText(location),
+    },
+    items: pricedItemsSnapshot,
+    totals: {
+      subtotal,
+      deliveryFee,
+      total,
+    },
+  };
+  const requestFingerprint = sha256(JSON.stringify(requestFingerprintPayload));
+  const requestTimeBucket = Math.floor(Date.now() / IDEMPOTENCY_DERIVED_WINDOW_MS);
+  const idempotencyKey =
+    normalizedHeaderIdempotencyKey.length > 0
+      ? `hdr:${orderUserId}:${sha256(normalizedHeaderIdempotencyKey)}`
+      : `drv:${orderUserId}:${requestTimeBucket}:${sha256(requestFingerprint)}`;
 
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
@@ -415,15 +457,6 @@ export async function POST(request: NextRequest) {
           "Supabase n'est pas configure pour l'ecriture. Ajoutez SUPABASE_SERVICE_ROLE_KEY.",
       },
       { status: 500 },
-    );
-  }
-
-  const orderUserId = authenticatedCustomer.id?.trim();
-  if (!orderUserId) {
-    console.error("[api/orders] Missing authenticated user id before order creation.");
-    return NextResponse.json<OrderErrorResponse>(
-      { error: "Impossible de lier la commande a votre compte. Merci de vous reconnecter." },
-      { status: 401 },
     );
   }
 
@@ -450,6 +483,8 @@ export async function POST(request: NextRequest) {
       p_total: total,
       p_user_id: orderUserId,
       p_fulfillment_method: fulfillmentMethod,
+      p_idempotency_key: idempotencyKey,
+      p_request_fingerprint: requestFingerprint,
       p_items: orderItemsPayload,
     },
   );
@@ -461,6 +496,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json<OrderErrorResponse>(
         { error: "Connexion requise pour confirmer votre commande." },
         { status: 401 },
+      );
+    }
+
+    if (normalizedMessage.includes("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD")) {
+      console.warn("[api/orders] Idempotency key payload mismatch.", {
+        keyPrefix: idempotencyKey.slice(0, 28),
+      });
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error:
+            "Cette tentative de commande utilise une cle d'idempotence deja liee a une autre demande.",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (normalizedMessage.includes("IDEMPOTENCY_KEY_IN_PROGRESS")) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error:
+            "Une commande identique est deja en cours de traitement. Merci de patienter quelques secondes.",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (normalizedMessage.includes("IDEMPOTENCY_KEY_")) {
+      console.error("[api/orders] Idempotency guard failed in database.", {
+        message: createOrderError?.message ?? "unknown",
+      });
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error:
+            "La commande n'a pas pu etre finalisee de facon securisee. Merci de reessayer.",
+        },
+        { status: 503 },
       );
     }
 

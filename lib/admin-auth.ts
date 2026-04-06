@@ -7,6 +7,7 @@ import {
   timingSafeEqual,
 } from "crypto";
 import { cookies, headers } from "next/headers";
+import { getRequestFingerprintHashFromHeaders } from "@/lib/request-client-id";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const ADMIN_SESSION_COOKIE = "3fj-admin-session";
@@ -16,7 +17,6 @@ const SESSION_REFRESH_INTERVAL_SECONDS = 15 * 60;
 const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOGIN_THROTTLE_SWEEP_SIZE = 2_000;
 
 type AdminSessionRow = {
   id: string;
@@ -31,13 +31,6 @@ type AdminLoginAttemptRow = {
   window_started_at: string;
   locked_until: string | null;
   updated_at: string;
-};
-
-type LoginThrottleEntry = {
-  failureCount: number;
-  windowStartedAt: number;
-  lockedUntil: number;
-  updatedAt: number;
 };
 
 type AdminLoginThrottleContext = {
@@ -58,8 +51,6 @@ type AdminLoginFailureResult = {
   retryAfterSeconds: number;
   locked: boolean;
 };
-
-const loginThrottleStore = new Map<string, LoginThrottleEntry>();
 
 const readEnv = (value: string | undefined): string | null => {
   const normalized = value?.trim();
@@ -234,94 +225,7 @@ const isFallbackSignedSessionTokenValid = (token: string): boolean => {
 
 const getRequestFingerprintHash = (): string => {
   const requestHeaders = headers();
-  const forwardedFor = requestHeaders.get("x-forwarded-for");
-  const realIp = requestHeaders.get("x-real-ip");
-  const userAgent = requestHeaders.get("user-agent");
-
-  const ip =
-    forwardedFor?.split(",")[0]?.trim() ||
-    realIp?.trim() ||
-    "unknown-ip";
-  const normalizedUserAgent = (userAgent ?? "unknown-agent").slice(0, 160);
-  const rawFingerprint = `${ip}|${normalizedUserAgent}`;
-  return createHash("sha256").update(rawFingerprint).digest("hex");
-};
-
-const sweepLoginThrottleStore = (now: number): void => {
-  if (loginThrottleStore.size <= LOGIN_THROTTLE_SWEEP_SIZE) {
-    return;
-  }
-
-  for (const [key, entry] of loginThrottleStore.entries()) {
-    const isWindowExpired = now - entry.windowStartedAt > LOGIN_ATTEMPT_WINDOW_MS;
-    const isLockExpired = entry.lockedUntil <= now;
-
-    if (isWindowExpired && isLockExpired) {
-      loginThrottleStore.delete(key);
-    }
-  }
-};
-
-const checkMemoryLoginAllowance = (
-  keyHash: string,
-  now: number,
-): AdminLoginAllowance => {
-  sweepLoginThrottleStore(now);
-
-  const entry = loginThrottleStore.get(keyHash);
-  if (!entry) {
-    return { allowed: true, context: { keyHash } };
-  }
-
-  if (entry.lockedUntil > now) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((entry.lockedUntil - now) / 1000)),
-    };
-  }
-
-  if (now - entry.windowStartedAt > LOGIN_ATTEMPT_WINDOW_MS) {
-    loginThrottleStore.delete(keyHash);
-    return { allowed: true, context: { keyHash } };
-  }
-
-  return { allowed: true, context: { keyHash } };
-};
-
-const recordMemoryLoginFailure = (
-  keyHash: string,
-  now: number,
-): AdminLoginFailureResult => {
-  sweepLoginThrottleStore(now);
-
-  const currentEntry = loginThrottleStore.get(keyHash);
-  const isWithinWindow =
-    currentEntry && now - currentEntry.windowStartedAt <= LOGIN_ATTEMPT_WINDOW_MS;
-
-  const nextFailureCount = isWithinWindow
-    ? currentEntry.failureCount + 1
-    : 1;
-  const nextWindowStart = isWithinWindow ? currentEntry.windowStartedAt : now;
-  const shouldLock = nextFailureCount >= MAX_LOGIN_ATTEMPTS;
-  const lockedUntil = shouldLock ? now + LOGIN_LOCKOUT_MS : 0;
-
-  loginThrottleStore.set(keyHash, {
-    failureCount: nextFailureCount,
-    windowStartedAt: nextWindowStart,
-    lockedUntil,
-    updatedAt: now,
-  });
-
-  return {
-    locked: shouldLock,
-    retryAfterSeconds: shouldLock
-      ? Math.max(1, Math.ceil((lockedUntil - now) / 1000))
-      : 0,
-  };
-};
-
-const clearMemoryLoginFailures = (keyHash: string): void => {
-  loginThrottleStore.delete(keyHash);
+  return getRequestFingerprintHashFromHeaders(requestHeaders);
 };
 
 const getDbLoginAttemptRow = async (
@@ -606,14 +510,22 @@ export const getAdminLoginAllowance = async (): Promise<AdminLoginAllowance> => 
       });
 
       if (!resetResult) {
-        return checkMemoryLoginAllowance(keyHash, now);
+        console.error("[admin-auth] Unable to reset expired admin login throttle window.");
+        return {
+          allowed: false,
+          retryAfterSeconds: 60,
+        };
       }
     }
 
     return { allowed: true, context: { keyHash } };
   }
 
-  return checkMemoryLoginAllowance(keyHash, now);
+  console.error("[admin-auth] Login throttling unavailable: admin_login_attempts storage not accessible.");
+  return {
+    allowed: false,
+    retryAfterSeconds: 60,
+  };
 };
 
 export const registerAdminLoginFailure = async (
@@ -643,7 +555,11 @@ export const registerAdminLoginFailure = async (
     });
 
     if (!persisted) {
-      return recordMemoryLoginFailure(keyHash, now);
+      console.error("[admin-auth] Unable to persist admin login failure increment.");
+      return {
+        locked: true,
+        retryAfterSeconds: 60,
+      };
     }
 
     return {
@@ -654,7 +570,11 @@ export const registerAdminLoginFailure = async (
     };
   }
 
-  return recordMemoryLoginFailure(keyHash, now);
+  console.error("[admin-auth] Unable to persist admin login failure: DB throttling unavailable.");
+  return {
+    locked: true,
+    retryAfterSeconds: 60,
+  };
 };
 
 export const clearAdminLoginFailures = async (
@@ -662,7 +582,7 @@ export const clearAdminLoginFailures = async (
 ): Promise<void> => {
   const clearedFromDb = await clearDbLoginAttemptRow(context.keyHash);
   if (!clearedFromDb) {
-    clearMemoryLoginFailures(context.keyHash);
+    console.error("[admin-auth] Unable to clear admin login failures from DB.");
   }
 };
 

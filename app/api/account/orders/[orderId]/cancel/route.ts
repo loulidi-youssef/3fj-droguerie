@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRouteRateLimit } from "@/lib/api-rate-limit";
 import {
   ORDER_CANCELLATION_WINDOW_MS,
   isOrderCancellable,
@@ -47,6 +48,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   if (!authenticatedContext) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
+  }
+
+  const rateLimit = await enforceRouteRateLimit({
+    scope: "account:orders:cancel",
+    identifier: `user:${authenticatedContext.customer.id}`,
+    limit: 8,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return rateLimit.response;
   }
 
   const orderId = params.orderId?.trim();
