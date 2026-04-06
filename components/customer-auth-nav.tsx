@@ -172,7 +172,7 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
           type="button"
           onClick={closePanel}
           aria-label="Fermer le panneau du compte"
-          className={`absolute inset-0 bg-slate-950/45 transition-opacity duration-300 ${
+          className={`fixed inset-0 bg-slate-950/45 backdrop-blur-[1px] transition-opacity duration-300 ${
             isOpen ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -181,7 +181,7 @@ export const CustomerAuthNav = ({ iconOnly = false }: CustomerAuthNavProps) => {
           role="dialog"
           aria-modal="true"
           aria-label="Mon compte"
-          className={`absolute inset-y-0 right-0 flex h-full w-full max-w-sm flex-col border-l border-slate-200 bg-white p-4 shadow-[-14px_0_42px_rgba(15,23,42,0.2)] transition-transform duration-300 ${
+          className={`fixed inset-y-0 right-0 flex h-[100dvh] w-full flex-col overflow-y-auto border-l border-slate-200 bg-white p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[-14px_0_42px_rgba(15,23,42,0.2)] transition-transform duration-300 will-change-transform ${
             isOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
