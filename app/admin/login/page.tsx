@@ -70,7 +70,9 @@ const loginAdminAction = async (formData: FormData) => {
   try {
     await clearAdminLoginFailures(loginAllowance.context);
     await createAdminSession();
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "unknown-error";
+    console.error("[admin-login] Failed to create admin session.", errorMessage);
     redirect("/admin/login?error=auth-unavailable");
   }
   redirect("/admin/orders");

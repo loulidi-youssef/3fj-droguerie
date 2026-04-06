@@ -120,40 +120,65 @@ export default async function ProductDetailPage({ params }: ProductDetailProps) 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <section className="section-padding">
+      <section className="py-5 sm:py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-          <div className="grid gap-5 sm:gap-8 lg:grid-cols-2">
-            <div>
+          <div className="grid gap-3 sm:gap-8 lg:grid-cols-2">
+            <div className="min-w-0">
               <Image
                 src={product.images[0]}
                 alt={product.name}
                 width={900}
                 height={680}
-                className="aspect-square w-full rounded-xl border border-slate-200 object-cover sm:aspect-[4/3] sm:rounded-2xl"
+                className="aspect-[4/3] w-full rounded-xl border border-slate-200 bg-white object-contain p-2 sm:aspect-[4/3] sm:rounded-2xl sm:object-cover sm:p-0"
               />
-              <div className="mt-2 grid grid-cols-4 gap-2 sm:mt-3 sm:grid-cols-3 sm:gap-3">
-                {product.images.map((image, index) => (
-                  <Image
-                    key={image}
-                    src={image}
-                    alt={`${product.name} vue ${index + 1}`}
-                    width={280}
-                    height={200}
-                    className="aspect-square rounded-lg border border-slate-200 object-cover sm:aspect-[4/3] sm:rounded-xl"
-                  />
-                ))}
+              <div className="mt-2 sm:mt-3">
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {product.images.map((image, index) => (
+                    <Image
+                      key={image}
+                      src={image}
+                      alt={`${product.name} vue ${index + 1}`}
+                      width={96}
+                      height={96}
+                      className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover p-1"
+                    />
+                  ))}
+                </div>
+                <div className="hidden grid-cols-3 gap-3 sm:grid">
+                  {product.images.map((image, index) => (
+                    <Image
+                      key={image}
+                      src={image}
+                      alt={`${product.name} vue ${index + 1}`}
+                      width={280}
+                      height={200}
+                      className="aspect-[4/3] rounded-xl border border-slate-200 object-cover"
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="lg:sticky lg:top-24 lg:self-start">
+            <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
               <ProductDetailPurchasePanel product={product} offerPricing={activeOfferPricing} />
             </div>
           </div>
 
           {relatedProducts.length > 0 ? (
-            <div className="mt-8 sm:mt-12">
-              <h2 className="section-title">Produits similaires</h2>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-6 sm:mt-12">
+              <h2 className="text-[1.2rem] font-extrabold tracking-tight text-brand-blue sm:text-[2rem]">
+                Produits similaires
+              </h2>
+
+              <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {relatedProducts.map((related) => (
+                  <div key={related.id} className="w-[170px] shrink-0">
+                    <ProductCard product={related} variant="listing" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 hidden grid-cols-2 gap-4 sm:grid lg:grid-cols-4">
                 {relatedProducts.map((related) => (
                   <ProductCard key={related.id} product={related} />
                 ))}

@@ -140,6 +140,18 @@ const isSupabaseTableMissingError = (message: string | undefined, tableName: str
   );
 };
 
+const isSupabaseAuthOrPermissionError = (message: string | undefined): boolean => {
+  const normalizedMessage = (message ?? "").toLowerCase();
+  return (
+    normalizedMessage.includes("invalid api key") ||
+    normalizedMessage.includes("invalid jwt") ||
+    normalizedMessage.includes("jwt") ||
+    normalizedMessage.includes("permission denied") ||
+    normalizedMessage.includes("42501") ||
+    normalizedMessage.includes("401")
+  );
+};
+
 const buildFallbackSignedSessionToken = (): string | null => {
   const sessionSecret = getSessionSecret();
   if (!sessionSecret) {
@@ -416,7 +428,13 @@ const issueDbSessionToken = async (): Promise<string | null> => {
       return null;
     }
 
-    console.error("[admin-auth] Unable to issue DB-backed admin session.", error.message);
+    const authHint = isSupabaseAuthOrPermissionError(error.message)
+      ? " Check SUPABASE_SERVICE_ROLE_KEY and restart the server."
+      : "";
+    console.error(
+      `[admin-auth] Unable to issue DB-backed admin session.${authHint}`,
+      error.message,
+    );
     throw new Error("Unable to issue admin session.");
   }
 

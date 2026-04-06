@@ -245,15 +245,15 @@ export const ProductDetailPurchasePanel = ({
     <div>
       <Link
         href={`/produits?categorie=${encodeURIComponent(product.categorySlug)}`}
-        className="text-xs font-semibold uppercase tracking-wide text-brand-orange hover:underline sm:text-sm"
+        className="text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-orange hover:underline sm:text-sm"
       >
         {getCategoryNameBySlug(product.categorySlug)}
       </Link>
-      <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
+      <h1 className="mt-1 text-[1.45rem] font-extrabold leading-tight tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
         {product.name}
       </h1>
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:mt-3 sm:gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-3 sm:gap-2">
         {effectiveOfferPricing ? (
           <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 sm:px-3 sm:py-1 sm:text-xs">
             -{effectiveOfferPricing.savingsPercent}% remise
@@ -271,40 +271,67 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
       </div>
 
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mt-5 sm:rounded-2xl sm:p-5 sm:shadow-[0_10px_24px_rgba(15,42,77,0.08)]">
-        <div className="flex flex-wrap items-end gap-2 sm:gap-3">
-          <p className="text-3xl font-extrabold tracking-tight text-brand-blue sm:text-4xl">
-            {formatDh(displayedPrice)}
-          </p>
-          {displayedPreviousPrice !== null ? (
-            <p className="pb-0.5 text-sm font-semibold text-slate-400 line-through sm:pb-1 sm:text-base">
-              {formatDh(displayedPreviousPrice)}
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_18px_rgba(15,42,77,0.08)] sm:mt-5 sm:rounded-2xl sm:p-5 sm:shadow-[0_10px_24px_rgba(15,42,77,0.08)]">
+        <div className="flex items-end justify-between gap-2 sm:gap-3">
+          <div className="flex min-w-0 flex-wrap items-end gap-1.5 sm:gap-3">
+            <p className="text-[1.9rem] font-extrabold tracking-tight text-brand-blue sm:text-4xl">
+              {formatDh(displayedPrice)}
             </p>
+            {displayedPreviousPrice !== null ? (
+              <p className="pb-0.5 text-xs font-semibold text-slate-400 line-through sm:pb-1 sm:text-base">
+                {formatDh(displayedPreviousPrice)}
+              </p>
+            ) : null}
+          </div>
+          {offerPricing && effectiveOfferPricing ? (
+            <span className="inline-flex shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 sm:hidden">
+              -{effectiveOfferPricing.savingsPercent}%
+            </span>
           ) : null}
         </div>
 
         {offerPricing && effectiveOfferPricing ? (
-          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 sm:mt-3 sm:p-3">
+          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 sm:mt-3 sm:p-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 sm:text-xs">
               Offre active {offerPricing.discountLabel}
             </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700 sm:text-sm">
+            <p className="mt-0.5 text-[11px] font-semibold text-slate-700 sm:mt-1 sm:text-sm">
               Vous economisez {formatDh(effectiveOfferPricing.savingsAmount)} ({effectiveOfferPricing.savingsPercent}%)
             </p>
             {offerEndLabel ? (
-              <p className="mt-1 text-[11px] text-slate-600 sm:text-xs">Valable jusqu'au {offerEndLabel}</p>
+              <p className="mt-0.5 text-[10px] text-slate-600 sm:mt-1 sm:text-xs">Valable jusqu'au {offerEndLabel}</p>
             ) : null}
           </div>
         ) : null}
 
         <p
-          className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-xs ${availability.className}`}
+          className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-xs ${availability.className}`}
         >
           {availability.label}
         </p>
 
+        <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:hidden">
+          <div className="grid grid-cols-3 gap-1.5">
+            <p className="rounded-lg bg-white px-2 py-1 text-center text-[10px] font-semibold text-brand-blue">
+              Paiement livraison
+            </p>
+            <p className="rounded-lg bg-white px-2 py-1 text-center text-[10px] font-semibold text-brand-blue">
+              Produit garanti
+            </p>
+            <p className="rounded-lg bg-white px-2 py-1 text-center text-[10px] font-semibold text-brand-blue">
+              Livraison rapide
+            </p>
+          </div>
+          <p className="mt-2 text-[10px] text-slate-700">
+            Domicile: <span className="font-semibold">{deliveryEstimate}</span>
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-700">
+            Retrait: <span className="font-semibold">{pickupEstimate}</span>
+          </p>
+        </div>
+
         {hasVariants && hasColorOptions ? (
-          <div className="mt-4 sm:mt-5">
+          <div className="mt-3 sm:mt-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Couleur</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5 sm:mt-2 sm:gap-2">
               {colorOptions.map((color) => {
@@ -317,7 +344,7 @@ export const ProductDetailPurchasePanel = ({
                     key={color.key}
                     type="button"
                     onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition sm:px-3 sm:py-1.5 sm:text-sm ${
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none transition sm:px-3 sm:py-1.5 sm:text-sm ${
                       isSelected
                         ? "border-brand-blue bg-brand-blue text-white"
                         : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -332,7 +359,7 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
 
         {hasVariants && hasSizeOptions ? (
-          <div className="mt-3 sm:mt-4">
+          <div className="mt-2.5 sm:mt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Taille</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5 sm:mt-2 sm:gap-2">
               {sizeOptions.map((size) => {
@@ -345,7 +372,7 @@ export const ProductDetailPurchasePanel = ({
                     key={size.key}
                     type="button"
                     onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
-                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-sm ${
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold leading-none transition sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-sm ${
                       isSelected
                         ? "border-brand-blue bg-brand-blue text-white"
                         : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -359,7 +386,7 @@ export const ProductDetailPurchasePanel = ({
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2 sm:mt-6 sm:gap-3">
+        <div className="mt-3.5 flex flex-wrap gap-2 border-t border-slate-100 pt-3 sm:mt-6 sm:gap-3 sm:border-0 sm:pt-0">
           <AddToCartButton
             productId={product.id}
             variantId={selectedVariant?.id}
@@ -370,21 +397,21 @@ export const ProductDetailPurchasePanel = ({
             selectedImage={selectedVariant?.image ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
             label="Commander maintenant"
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-orange px-5 text-sm font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.3)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
-            controlsClassName="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-2 sm:h-14"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-orange px-4 text-xs font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
+            controlsClassName="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-14 sm:rounded-xl"
           />
           <FavoriteButton
             productId={product.id}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70 sm:h-14 sm:w-14"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70 sm:h-14 sm:w-14 sm:rounded-xl"
           />
         </div>
 
-        <p className="mt-1.5 text-[11px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
+        <p className="mt-1 text-[10px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
           Paiement a la livraison disponible. Confirmation rapide par telephone.
         </p>
       </div>
 
-      <div className="mt-3 grid gap-1.5 sm:mt-4 sm:gap-2 sm:grid-cols-3">
+      <div className="mt-3 hidden gap-1.5 sm:mt-4 sm:grid sm:gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-blue">
             Paiement a la livraison
@@ -405,7 +432,7 @@ export const ProductDetailPurchasePanel = ({
         </div>
       </div>
 
-      <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:mt-3 sm:p-4">
+      <div className="mt-2.5 hidden rounded-xl border border-slate-200 bg-slate-50 p-3 sm:mt-3 sm:block sm:p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-brand-blue">
           Livraison et retrait
         </p>
@@ -417,7 +444,7 @@ export const ProductDetailPurchasePanel = ({
         </p>
       </div>
 
-      <p className="mt-3 text-[13px] leading-6 text-slate-700 sm:mt-4 sm:text-[0.95rem] sm:leading-7">{product.description}</p>
+      <p className="mt-3 text-[12px] leading-5 text-slate-700 sm:mt-4 sm:text-[0.95rem] sm:leading-7">{product.description}</p>
 
       <Link
         href="/panier"
@@ -426,26 +453,33 @@ export const ProductDetailPurchasePanel = ({
         Aller au panier
       </Link>
 
-      <div className="h-20 md:hidden" aria-hidden />
+      <div className="h-24 md:hidden" aria-hidden />
 
       <div
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 shadow-[0_-8px_20px_rgba(15,42,77,0.08)] backdrop-blur md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="mx-auto flex max-w-7xl items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-5 sm:py-3">
           <div className="min-w-0 flex-1">
             {offerPricing && effectiveOfferPricing ? (
-              <p className="truncate text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+              <p className="truncate text-[10px] font-bold uppercase tracking-wide text-emerald-700">
                 {offerPricing.discountLabel} - Economie {formatDh(effectiveOfferPricing.savingsAmount)}
               </p>
             ) : (
-              <p className={`text-[11px] font-bold uppercase tracking-wide ${availabilityTextClass}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-wide ${availabilityTextClass}`}>
                 {availability.label}
               </p>
             )}
-            <p className="text-lg font-extrabold leading-tight text-brand-blue sm:text-xl">
-              {formatDh(displayedPrice)}
-            </p>
+            <div className="flex items-end gap-1.5">
+              <p className="text-[1.05rem] font-extrabold leading-tight text-brand-blue sm:text-xl">
+                {formatDh(displayedPrice)}
+              </p>
+              {displayedPreviousPrice !== null ? (
+                <p className="pb-0.5 text-[10px] font-semibold text-slate-400 line-through">
+                  {formatDh(displayedPreviousPrice)}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <AddToCartButton
@@ -457,9 +491,9 @@ export const ProductDetailPurchasePanel = ({
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
-            label="Commander maintenant"
-            className="inline-flex h-10 min-w-[9.5rem] items-center justify-center rounded-xl bg-brand-orange px-4 text-xs font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.3)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:px-5 sm:text-sm"
-            controlsClassName="inline-flex h-10 min-w-[9.5rem] items-center rounded-xl border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem]"
+            label="Commander"
+            className="inline-flex h-9 min-w-[8.5rem] items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
+            controlsClassName="inline-flex h-9 min-w-[8.5rem] items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"
           />
         </div>
       </div>
