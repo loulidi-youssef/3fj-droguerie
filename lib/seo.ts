@@ -41,8 +41,6 @@ export const buildProductJsonLd = ({
   currency = "MAD",
   priceValidUntil = null,
 }: BuildProductJsonLdInput) => {
-  const reviewCount = Math.max(1, Math.round((product.rating || 4) * 8));
-
   return {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -54,13 +52,6 @@ export const buildProductJsonLd = ({
     brand: {
       "@type": "Brand",
       name: businessInfo.brandName,
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: Number(product.rating || 4),
-      reviewCount,
-      bestRating: 5,
-      worstRating: 1,
     },
     offers: {
       "@type": "Offer",
