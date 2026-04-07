@@ -2,7 +2,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { uploadAdminProductImages } from "@/lib/admin-product-images";
 import {
+  type AdminProductsBulkActionType,
   type UpsertAdminProductVariantInput,
+  bulkUpdateAdminProducts,
   createAdminProduct,
   deleteAdminProduct,
   setAdminProductActiveState,
@@ -294,6 +296,59 @@ const redirectWithError = (message: string): never => {
   redirect(`/admin/products?error=${encodeURIComponent(message)}`);
 };
 
+const toRedirectParam = (value: FormDataEntryValue | null): string => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+};
+
+const redirectWithFlashAndFilters = (params: {
+  success?: string;
+  error?: string;
+  category?: string;
+  q?: string;
+  page?: string;
+}): never => {
+  const searchParams = new URLSearchParams();
+
+  if (params.success) {
+    searchParams.set("success", params.success);
+  }
+  if (params.error) {
+    searchParams.set("error", params.error);
+  }
+  if (params.category) {
+    searchParams.set("category", params.category);
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.page) {
+    const parsedPage = Number(params.page);
+    if (Number.isFinite(parsedPage) && parsedPage > 1) {
+      searchParams.set("page", String(Math.floor(parsedPage)));
+    }
+  }
+
+  const query = searchParams.toString();
+  redirect(query ? `/admin/products?${query}` : "/admin/products");
+};
+
+const parseBulkActionType = (value: string): AdminProductsBulkActionType | null => {
+  if (
+    value === "status:active" ||
+    value === "status:inactive" ||
+    value === "stock:set" ||
+    value === "price:set"
+  ) {
+    return value;
+  }
+
+  return null;
+};
+
 const getUploadedImageFiles = (formData: FormData): File[] => {
   return formData
     .getAll("imageFiles")
@@ -443,4 +498,72 @@ export const deleteProductAction = async (formData: FormData): Promise<void> => 
   revalidatePath("/offres");
   revalidatePath("/");
   redirectWithSuccess("Produit supprime.");
+};
+
+export const bulkUpdateProductsAction = async (formData: FormData): Promise<void> => {
+  "use server";
+
+  await requireAdminProductsSession();
+
+  const selectedProductIds = formData
+    .getAll("selectedProductIds")
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const rawActionType = toRedirectParam(formData.get("bulkActionType"));
+  const category = toRedirectParam(formData.get("returnCategory"));
+  const q = toRedirectParam(formData.get("returnSearchQuery"));
+  const page = toRedirectParam(formData.get("returnPage"));
+  const parsedActionType = parseBulkActionType(rawActionType);
+
+  if (!parsedActionType) {
+    return redirectWithFlashAndFilters({
+      error: "Action bulk invalide.",
+      category,
+      q,
+      page,
+    });
+  }
+
+  const rawNumericValue = toRedirectParam(formData.get("bulkNumericValue"));
+  const numericValue = rawNumericValue ? parseDecimalInput(rawNumericValue) : null;
+
+  if (
+    (parsedActionType === "stock:set" || parsedActionType === "price:set") &&
+    (numericValue === null || !Number.isFinite(numericValue))
+  ) {
+    return redirectWithFlashAndFilters({
+      error: "Valeur numerique invalide pour cette action.",
+      category,
+      q,
+      page,
+    });
+  }
+
+  const result = await bulkUpdateAdminProducts({
+    productIds: selectedProductIds,
+    actionType: parsedActionType,
+    numericValue,
+  });
+
+  if (!result.ok) {
+    return redirectWithFlashAndFilters({
+      error: result.error ?? "Mise a jour bulk impossible.",
+      category,
+      q,
+      page,
+    });
+  }
+
+  revalidatePath("/admin/products");
+  revalidatePath("/produits");
+  revalidatePath("/offres");
+  revalidatePath("/");
+
+  return redirectWithFlashAndFilters({
+    success: `${result.updatedCount} produit(s) mis a jour.`,
+    category,
+    q,
+    page,
+  });
 };

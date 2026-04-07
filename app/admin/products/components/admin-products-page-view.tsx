@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AdminProductActionNotifications } from "@/components/admin-product-action-notifications";
 import { ProductCreateForm } from "@/app/admin/products/components/product-create-form";
+import { ProductsBulkActions } from "@/app/admin/products/components/products-bulk-actions";
 import { ProductsList } from "@/app/admin/products/components/products-list";
 import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 import type { ProductsGroup } from "@/app/admin/products/lib/page-data";
@@ -11,15 +12,20 @@ type LogoutAction = () => void | Promise<void>;
 type AdminProductsPageViewProps = {
   productsCount: number;
   filteredProductsCount: number;
+  currentPageProductsCount: number;
   groupedProducts: ProductsGroup[];
   categoryOptions: string[];
   sortedCategoryEntries: Array<[string, number]>;
   selectedCategory: string;
   searchQuery: string;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
   successMessage: string;
   errorMessage: string;
   logoutAdminAction: LogoutAction;
   createProductAction: FormAction;
+  bulkUpdateProductsAction: FormAction;
   updateProductAction: FormAction;
   toggleProductActiveAction: FormAction;
   deleteProductAction: FormAction;
@@ -28,30 +34,58 @@ type AdminProductsPageViewProps = {
 export const AdminProductsPageView = ({
   productsCount,
   filteredProductsCount,
+  currentPageProductsCount,
   groupedProducts,
   categoryOptions,
   sortedCategoryEntries,
   selectedCategory,
   searchQuery,
+  currentPage,
+  totalPages,
+  pageSize,
   successMessage,
   errorMessage,
   logoutAdminAction,
   createProductAction,
+  bulkUpdateProductsAction,
   updateProductAction,
   toggleProductActiveAction,
   deleteProductAction,
 }: AdminProductsPageViewProps) => {
-  const buildProductsHref = (category: string): string => {
+  const buildProductsHref = (options?: { category?: string; page?: number }): string => {
     const params = new URLSearchParams();
+    const category = options?.category ?? selectedCategory;
+    const page = options?.page ?? 1;
+
     if (category) {
       params.set("category", category);
     }
     if (searchQuery.trim()) {
       params.set("q", searchQuery.trim());
     }
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+
     const query = params.toString();
     return query ? `/admin/products?${query}` : "/admin/products";
   };
+
+  const paginationWindow = 2;
+  const visiblePageStart = Math.max(1, currentPage - paginationWindow);
+  const visiblePageEnd = Math.min(totalPages, currentPage + paginationWindow);
+  const visiblePages = Array.from(
+    { length: visiblePageEnd - visiblePageStart + 1 },
+    (_, index) => visiblePageStart + index,
+  );
+  const firstItemIndex =
+    filteredProductsCount === 0
+      ? 0
+      : (currentPage - 1) * pageSize + 1;
+  const lastItemIndex =
+    filteredProductsCount === 0
+      ? 0
+      : Math.min(firstItemIndex + currentPageProductsCount - 1, filteredProductsCount);
 
   return (
     <section className="bg-brand-light py-12">
@@ -171,7 +205,7 @@ export const AdminProductsPageView = ({
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Link
-              href={buildProductsHref("")}
+              href={buildProductsHref({ category: "", page: 1 })}
               className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                 !selectedCategory
                   ? "border-brand-blue bg-brand-blue text-white"
@@ -183,7 +217,7 @@ export const AdminProductsPageView = ({
             {sortedCategoryEntries.map(([categorySlug, total]) => (
               <Link
                 key={categorySlug}
-                href={buildProductsHref(categorySlug)}
+                href={buildProductsHref({ category: categorySlug, page: 1 })}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   selectedCategory === categorySlug
                     ? "border-brand-blue bg-brand-blue text-white"
@@ -209,6 +243,13 @@ export const AdminProductsPageView = ({
               Astuce: choisissez une categorie pour modifier les produits plus vite.
             </p>
           )}
+          <p className="mt-2 text-xs text-slate-600">
+            Resultats:{" "}
+            <span className="font-semibold">
+              {firstItemIndex}-{lastItemIndex}
+            </span>{" "}
+            sur <span className="font-semibold">{filteredProductsCount}</span>.
+          </p>
         </div>
 
         <datalist id="admin-category-options">
@@ -221,11 +262,68 @@ export const AdminProductsPageView = ({
 
         <ProductCreateForm createProductAction={createProductAction} />
 
+        <ProductsBulkActions
+          bulkUpdateProductsAction={bulkUpdateProductsAction}
+          filteredProductsCount={filteredProductsCount}
+          currentPageProductsCount={currentPageProductsCount}
+          selectedCategory={selectedCategory}
+          searchQuery={searchQuery}
+          currentPage={currentPage}
+        />
+
+        {totalPages > 1 ? (
+          <nav
+            className="mb-4 flex flex-wrap items-center justify-center gap-2"
+            aria-label="Pagination produits admin"
+          >
+            <Link
+              href={buildProductsHref({ page: Math.max(1, currentPage - 1) })}
+              aria-disabled={currentPage <= 1}
+              className={`inline-flex h-9 items-center rounded-lg border px-3 text-sm font-semibold transition ${
+                currentPage <= 1
+                  ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+            >
+              Precedent
+            </Link>
+
+            {visiblePages.map((pageNumber) => (
+              <Link
+                key={pageNumber}
+                href={buildProductsHref({ page: pageNumber })}
+                aria-current={pageNumber === currentPage ? "page" : undefined}
+                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition ${
+                  pageNumber === currentPage
+                    ? "border-brand-blue bg-brand-blue text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+                }`}
+              >
+                {pageNumber}
+              </Link>
+            ))}
+
+            <Link
+              href={buildProductsHref({ page: Math.min(totalPages, currentPage + 1) })}
+              aria-disabled={currentPage >= totalPages}
+              className={`inline-flex h-9 items-center rounded-lg border px-3 text-sm font-semibold transition ${
+                currentPage >= totalPages
+                  ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+            >
+              Suivant
+            </Link>
+          </nav>
+        ) : null}
+
         <ProductsList
           productsCount={productsCount}
           filteredProductsCount={filteredProductsCount}
+          currentPageProductsCount={currentPageProductsCount}
           groupedProducts={groupedProducts}
           selectedCategory={selectedCategory}
+          searchQuery={searchQuery}
           updateProductAction={updateProductAction}
           toggleProductActiveAction={toggleProductActiveAction}
           deleteProductAction={deleteProductAction}

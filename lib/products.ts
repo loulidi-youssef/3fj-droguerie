@@ -43,6 +43,27 @@ export type ProductSearchSuggestion = {
   name: string;
 };
 
+export type ProductListingSortOption =
+  | "defaut"
+  | "prix-asc"
+  | "prix-desc"
+  | "nouveaux";
+
+export type ProductListingQueryInput = {
+  categorySlug?: string | null;
+  searchQuery?: string | null;
+  sort?: ProductListingSortOption;
+  page?: number;
+  pageSize?: number;
+};
+
+export type ProductListingResult = {
+  products: Product[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+};
+
 const mapProductRow = (row: ProductRow): Product => ({
   id: row.id,
   slug: row.slug,
@@ -168,6 +189,142 @@ const getFallbackProductSearchSuggestions = (): ProductSearchSuggestion[] => {
   }));
 };
 
+const DEFAULT_PRODUCTS_PAGE_SIZE = 24;
+const MAX_PRODUCTS_PAGE_SIZE = 60;
+
+const normalizeListingSort = (
+  sort: ProductListingSortOption | undefined,
+): ProductListingSortOption => {
+  if (
+    sort === "prix-asc" ||
+    sort === "prix-desc" ||
+    sort === "nouveaux"
+  ) {
+    return sort;
+  }
+
+  return "defaut";
+};
+
+const normalizeListingPage = (page: number | undefined): number => {
+  if (!Number.isFinite(page) || !page || page < 1) {
+    return 1;
+  }
+
+  return Math.floor(page);
+};
+
+const normalizeListingPageSize = (pageSize: number | undefined): number => {
+  if (!Number.isFinite(pageSize) || !pageSize || pageSize < 1) {
+    return DEFAULT_PRODUCTS_PAGE_SIZE;
+  }
+
+  return Math.min(MAX_PRODUCTS_PAGE_SIZE, Math.floor(pageSize));
+};
+
+const sortProductsForListing = (
+  products: Product[],
+  sort: ProductListingSortOption,
+): Product[] => {
+  const sortable = [...products];
+
+  if (sort === "prix-asc") {
+    sortable.sort((first, second) => first.price - second.price);
+    return sortable;
+  }
+
+  if (sort === "prix-desc") {
+    sortable.sort((first, second) => second.price - first.price);
+    return sortable;
+  }
+
+  if (sort === "nouveaux") {
+    sortable.sort((first, second) => {
+      const firstTime = first.createdAt ? new Date(first.createdAt).getTime() : 0;
+      const secondTime = second.createdAt ? new Date(second.createdAt).getTime() : 0;
+      return secondTime - firstTime;
+    });
+    return sortable;
+  }
+
+  sortable.sort((first, second) => first.name.localeCompare(second.name, "fr"));
+  return sortable;
+};
+
+const getFallbackProductsListingResult = (
+  input: ProductListingQueryInput,
+): ProductListingResult => {
+  const normalizedCategory = input.categorySlug?.trim().toLowerCase() ?? "";
+  const normalizedQuery = input.searchQuery?.trim().toLowerCase() ?? "";
+  const normalizedSort = normalizeListingSort(input.sort);
+  const requestedPage = normalizeListingPage(input.page);
+  const pageSize = normalizeListingPageSize(input.pageSize);
+
+  const filtered = getFallbackProducts().filter((product) => {
+    const matchesCategory = normalizedCategory
+      ? product.categorySlug.trim().toLowerCase() === normalizedCategory
+      : true;
+    const matchesSearch = normalizedQuery
+      ? product.name.toLowerCase().includes(normalizedQuery)
+      : true;
+    return matchesCategory && matchesSearch;
+  });
+
+  const sorted = sortProductsForListing(filtered, normalizedSort);
+  const totalCount = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const products = sorted.slice(pageStart, pageStart + pageSize);
+
+  return {
+    products,
+    totalCount,
+    totalPages,
+    currentPage,
+  };
+};
+
+const runSupabaseProductsListingQuery = async (
+  supabase: SupabaseClient,
+  input: {
+    categorySlug: string;
+    searchQuery: string;
+    sort: ProductListingSortOption;
+    page: number;
+    pageSize: number;
+  },
+) => {
+  let query = supabase
+    .from("products")
+    .select(PRODUCT_SELECT, { count: "exact" })
+    .eq("is_active", true);
+
+  if (input.categorySlug) {
+    query = query.eq("category_slug", input.categorySlug);
+  }
+
+  if (input.searchQuery) {
+    query = query.ilike("name", `%${input.searchQuery}%`);
+  }
+
+  if (input.sort === "prix-asc") {
+    query = query.order("price", { ascending: true }).order("name", { ascending: true });
+  } else if (input.sort === "prix-desc") {
+    query = query.order("price", { ascending: false }).order("name", { ascending: true });
+  } else if (input.sort === "nouveaux") {
+    query = query
+      .order("created_at", { ascending: false, nullsFirst: false })
+      .order("name", { ascending: true });
+  } else {
+    query = query.order("name", { ascending: true });
+  }
+
+  const from = (input.page - 1) * input.pageSize;
+  const to = from + input.pageSize - 1;
+  return query.range(from, to);
+};
+
 export const getAllProductSearchSuggestions = async (): Promise<
   ProductSearchSuggestion[]
 > => {
@@ -213,6 +370,82 @@ export const getAllProducts = async (): Promise<Product[]> => {
 
   const mapped = data.map((row) => mapProductRow(row as ProductRow));
   return withVariants(mapped);
+};
+
+export const getProductsListing = async (
+  input: ProductListingQueryInput,
+): Promise<ProductListingResult> => {
+  const normalizedCategorySlug = input.categorySlug?.trim().toLowerCase() ?? "";
+  const normalizedSearchQuery = input.searchQuery?.trim() ?? "";
+  const normalizedSort = normalizeListingSort(input.sort);
+  const requestedPage = normalizeListingPage(input.page);
+  const pageSize = normalizeListingPageSize(input.pageSize);
+  const supabase = getSupabaseServerClient();
+
+  if (!supabase) {
+    return getFallbackProductsListingResult({
+      categorySlug: normalizedCategorySlug,
+      searchQuery: normalizedSearchQuery,
+      sort: normalizedSort,
+      page: requestedPage,
+      pageSize,
+    });
+  }
+
+  const firstAttempt = await runSupabaseProductsListingQuery(supabase, {
+    categorySlug: normalizedCategorySlug,
+    searchQuery: normalizedSearchQuery,
+    sort: normalizedSort,
+    page: requestedPage,
+    pageSize,
+  });
+
+  if (firstAttempt.error || !firstAttempt.data) {
+    return getFallbackProductsListingResult({
+      categorySlug: normalizedCategorySlug,
+      searchQuery: normalizedSearchQuery,
+      sort: normalizedSort,
+      page: requestedPage,
+      pageSize,
+    });
+  }
+
+  const totalCount = Math.max(0, firstAttempt.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+  let listingRows: ProductRow[] = firstAttempt.data as ProductRow[];
+
+  if (currentPage !== requestedPage) {
+    const fallbackPageQuery = await runSupabaseProductsListingQuery(supabase, {
+      categorySlug: normalizedCategorySlug,
+      searchQuery: normalizedSearchQuery,
+      sort: normalizedSort,
+      page: currentPage,
+      pageSize,
+    });
+
+    if (fallbackPageQuery.error || !fallbackPageQuery.data) {
+      return getFallbackProductsListingResult({
+        categorySlug: normalizedCategorySlug,
+        searchQuery: normalizedSearchQuery,
+        sort: normalizedSort,
+        page: requestedPage,
+        pageSize,
+      });
+    }
+
+    listingRows = fallbackPageQuery.data as ProductRow[];
+  }
+
+  const mappedProducts = listingRows.map((row) => mapProductRow(row));
+  const products = await withVariants(mappedProducts);
+
+  return {
+    products,
+    totalCount,
+    totalPages,
+    currentPage,
+  };
 };
 
 export const getAllProductsStrict = async (): Promise<Product[]> => {

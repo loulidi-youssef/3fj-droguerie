@@ -1,4 +1,5 @@
 import {
+  bulkUpdateProductsAction,
   createProductAction,
   deleteProductAction,
   logoutAdminAction,
@@ -45,17 +46,22 @@ export default async function AdminProductsPage({
 
   return (
     <AdminProductsPageView
-      productsCount={pageData.products.length}
-      filteredProductsCount={pageData.filteredProducts.length}
+      productsCount={pageData.productsCount}
+      filteredProductsCount={pageData.filteredProductsCount}
+      currentPageProductsCount={pageData.currentPageProductsCount}
       groupedProducts={pageData.groupedProducts}
       categoryOptions={pageData.categoryOptions}
       sortedCategoryEntries={pageData.sortedCategoryEntries}
       selectedCategory={pageData.selectedCategory}
       searchQuery={pageData.searchQuery}
+      currentPage={pageData.currentPage}
+      totalPages={pageData.totalPages}
+      pageSize={pageData.pageSize}
       successMessage={pageData.successMessage}
       errorMessage={pageData.errorMessage}
       logoutAdminAction={logoutAdminAction}
       createProductAction={createProductAction}
+      bulkUpdateProductsAction={bulkUpdateProductsAction}
       updateProductAction={updateProductAction}
       toggleProductActiveAction={toggleProductActiveAction}
       deleteProductAction={deleteProductAction}

@@ -21,6 +21,20 @@ export const ProductItem = ({
 }: ProductItemProps) => {
   return (
     <details className="rounded-2xl bg-white p-5 shadow-card">
+      <div className="mb-3 flex justify-end">
+        <label className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            name="selectedProductIds"
+            value={product.id}
+            form="admin-products-bulk-form"
+            data-admin-product-select="true"
+            aria-label={`Selectionner ${product.name}`}
+          />
+          Selectionner
+        </label>
+      </div>
+
       <summary className="cursor-pointer list-none">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div>

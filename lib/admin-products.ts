@@ -67,6 +67,42 @@ type AdminActionResult = {
   error?: string;
 };
 
+export type AdminProductsQueryInput = {
+  categorySlug?: string | null;
+  searchQuery?: string | null;
+};
+
+export type AdminProductsPaginatedQueryInput = AdminProductsQueryInput & {
+  page?: number;
+  pageSize?: number;
+};
+
+export type AdminProductsPaginatedResult = {
+  products: AdminProduct[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+};
+
+export type AdminProductsBulkActionType =
+  | "status:active"
+  | "status:inactive"
+  | "stock:set"
+  | "price:set";
+
+export type AdminProductsBulkUpdateInput = {
+  productIds: string[];
+  actionType: AdminProductsBulkActionType;
+  numericValue?: number | null;
+};
+
+export type AdminProductsBulkUpdateResult = {
+  ok: boolean;
+  updatedCount: number;
+  error?: string;
+};
+
 const toNullableTrimmed = (value: string | null | undefined): string | null => {
   if (typeof value !== "string") {
     return null;
@@ -113,6 +149,90 @@ const normalizeDatabaseError = (
   }
 
   return fallbackMessage;
+};
+
+const normalizeAdminProductsQueryInput = (input?: AdminProductsQueryInput) => {
+  const categorySlug = input?.categorySlug?.trim().toLowerCase() ?? "";
+  const searchQuery = (input?.searchQuery?.trim() ?? "")
+    .replace(/[,%()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    categorySlug,
+    searchQuery,
+  };
+};
+
+const DEFAULT_ADMIN_PRODUCTS_PAGE_SIZE = 30;
+const MAX_ADMIN_PRODUCTS_PAGE_SIZE = 50;
+
+const normalizePaginationPage = (page: number | undefined): number => {
+  if (!Number.isFinite(page) || !page || page < 1) {
+    return 1;
+  }
+
+  return Math.floor(page);
+};
+
+const normalizePaginationPageSize = (pageSize: number | undefined): number => {
+  if (!Number.isFinite(pageSize) || !pageSize || pageSize < 1) {
+    return DEFAULT_ADMIN_PRODUCTS_PAGE_SIZE;
+  }
+
+  return Math.min(MAX_ADMIN_PRODUCTS_PAGE_SIZE, Math.floor(pageSize));
+};
+
+const applyAdminProductsFilters = (
+  query: any,
+  input?: AdminProductsQueryInput,
+) => {
+  const normalizedInput = normalizeAdminProductsQueryInput(input);
+  let filtered = query;
+
+  if (normalizedInput.categorySlug) {
+    filtered = filtered.eq("category_slug", normalizedInput.categorySlug);
+  }
+
+  if (normalizedInput.searchQuery) {
+    filtered = filtered.or(
+      `name.ilike.%${normalizedInput.searchQuery}%,slug.ilike.%${normalizedInput.searchQuery}%,id.ilike.%${normalizedInput.searchQuery}%`,
+    );
+  }
+
+  return filtered;
+};
+
+const attachVariantsToAdminProducts = async (
+  supabaseAdmin: SupabaseAdminClient,
+  products: AdminProduct[],
+): Promise<AdminProduct[]> => {
+  const productIds = products.map((product) => String(product.id));
+  const variantsByProductId = new Map<string, AdminProductVariant[]>();
+
+  if (productIds.length > 0) {
+    const { data: variantsData, error: variantsError } = await supabaseAdmin
+      .from("product_variants")
+      .select("*")
+      .in("product_id", productIds)
+      .order("created_at", { ascending: true });
+
+    if (!variantsError && variantsData) {
+      for (const variant of variantsData as AdminProductVariant[]) {
+        const existing = variantsByProductId.get(variant.product_id) ?? [];
+        variantsByProductId.set(variant.product_id, [...existing, variant]);
+      }
+    }
+  }
+
+  return products.map((product) => ({
+    ...product,
+    stock:
+      typeof (product as { stock?: unknown }).stock === "number"
+        ? ((product as { stock: number }).stock ?? 0)
+        : 0,
+    variants: variantsByProductId.get(product.id) ?? [],
+  }));
 };
 
 const replaceAdminProductVariants = async (
@@ -211,52 +331,286 @@ const replaceAdminProductVariants = async (
   return { ok: true };
 };
 
-export const getAdminProducts = async (): Promise<AdminProduct[]> => {
+export const getAdminProducts = async (
+  queryInput?: AdminProductsQueryInput,
+): Promise<AdminProduct[]> => {
   const supabaseAdmin = getSupabaseAdminClient();
 
   if (!supabaseAdmin) {
     return [];
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .order("updated_at", { ascending: false });
+  const query = applyAdminProductsFilters(
+    supabaseAdmin
+      .from("products")
+      .select("*")
+      .order("updated_at", { ascending: false }),
+    queryInput,
+  );
+
+  const { data, error } = await query;
 
   if (error || !data) {
     return [];
   }
 
-  const productIds = data.map((product) => String((product as { id: string }).id));
-  const variantsByProductId = new Map<string, AdminProductVariant[]>();
+  return attachVariantsToAdminProducts(supabaseAdmin, data as AdminProduct[]);
+};
 
-  if (productIds.length > 0) {
-    const { data: variantsData, error: variantsError } = await supabaseAdmin
-      .from("product_variants")
-      .select("*")
-      .in("product_id", productIds)
-      .order("created_at", { ascending: true });
+export const getAdminProductsPaginated = async (
+  queryInput?: AdminProductsPaginatedQueryInput,
+): Promise<AdminProductsPaginatedResult> => {
+  const supabaseAdmin = getSupabaseAdminClient();
+  const requestedPage = normalizePaginationPage(queryInput?.page);
+  const pageSize = normalizePaginationPageSize(queryInput?.pageSize);
 
-    if (!variantsError && variantsData) {
-      for (const variant of variantsData as AdminProductVariant[]) {
-        const existing = variantsByProductId.get(variant.product_id) ?? [];
-        variantsByProductId.set(variant.product_id, [...existing, variant]);
-      }
-    }
+  if (!supabaseAdmin) {
+    return {
+      products: [],
+      totalCount: 0,
+      totalPages: 1,
+      currentPage: 1,
+      pageSize,
+    };
   }
 
-  return data.map((product) => {
-    const normalizedProduct = product as AdminProduct;
+  const runPageQuery = async (page: number) => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
+    return applyAdminProductsFilters(
+      supabaseAdmin
+        .from("products")
+        .select("*", { count: "exact" })
+        .order("updated_at", { ascending: false })
+        .range(from, to),
+      queryInput,
+    );
+  };
+
+  const firstResult = await runPageQuery(requestedPage);
+  if (firstResult.error || !firstResult.data) {
     return {
-      ...normalizedProduct,
-      stock:
-        typeof (product as { stock?: unknown }).stock === "number"
-          ? ((product as { stock: number }).stock ?? 0)
-          : 0,
-      variants: variantsByProductId.get(normalizedProduct.id) ?? [],
+      products: [],
+      totalCount: 0,
+      totalPages: 1,
+      currentPage: 1,
+      pageSize,
     };
-  });
+  }
+
+  const totalCount = Math.max(0, firstResult.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+
+  let pageRows = firstResult.data as AdminProduct[];
+  if (currentPage !== requestedPage) {
+    const fallbackResult = await runPageQuery(currentPage);
+    if (fallbackResult.error || !fallbackResult.data) {
+      return {
+        products: [],
+        totalCount: 0,
+        totalPages: 1,
+        currentPage: 1,
+        pageSize,
+      };
+    }
+    pageRows = fallbackResult.data as AdminProduct[];
+  }
+
+  const products = await attachVariantsToAdminProducts(supabaseAdmin, pageRows);
+
+  return {
+    products,
+    totalCount,
+    totalPages,
+    currentPage,
+    pageSize,
+  };
+};
+
+export const getAdminProductsCategoryCounts = async (): Promise<Map<string, number>> => {
+  const supabaseAdmin = getSupabaseAdminClient();
+
+  if (!supabaseAdmin) {
+    return new Map();
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("category_slug")
+    .order("updated_at", { ascending: false });
+
+  if (error || !data) {
+    return new Map();
+  }
+
+  const counts = new Map<string, number>();
+  for (const row of data as Array<{ category_slug: string }>) {
+    const slug = row.category_slug?.trim().toLowerCase();
+    if (!slug) {
+      continue;
+    }
+    counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  }
+
+  return counts;
+};
+
+const parseUniqueProductIds = (productIds: string[]): string[] => {
+  return [...new Set(productIds.map((value) => value.trim()).filter(Boolean))];
+};
+
+export const bulkUpdateAdminProducts = async (
+  input: AdminProductsBulkUpdateInput,
+): Promise<AdminProductsBulkUpdateResult> => {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: "Supabase admin non configure.",
+    };
+  }
+
+  const productIds = parseUniqueProductIds(input.productIds);
+  if (productIds.length === 0) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: "Selection vide. Choisissez au moins un produit.",
+    };
+  }
+
+  const actionType = input.actionType;
+  if (
+    actionType !== "status:active" &&
+    actionType !== "status:inactive" &&
+    actionType !== "stock:set" &&
+    actionType !== "price:set"
+  ) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: "Action bulk invalide.",
+    };
+  }
+
+  if (actionType === "status:active" || actionType === "status:inactive") {
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .update({ is_active: actionType === "status:active" })
+      .in("id", productIds)
+      .select("id");
+
+    if (error) {
+      return {
+        ok: false,
+        updatedCount: 0,
+        error: normalizeDatabaseError(
+          error.message,
+          "Mise a jour bulk du statut impossible.",
+        ),
+      };
+    }
+
+    const updatedCount = data?.length ?? 0;
+    if (updatedCount !== productIds.length) {
+      return {
+        ok: false,
+        updatedCount,
+        error:
+          "Mise a jour partielle detectee. Rafraichissez la page et reessayez.",
+      };
+    }
+
+    return { ok: true, updatedCount };
+  }
+
+  if (!Number.isFinite(input.numericValue)) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: "Valeur numerique manquante pour l'action bulk.",
+    };
+  }
+
+  if (actionType === "stock:set") {
+    const normalizedStock = Math.floor(input.numericValue!);
+    if (normalizedStock < 0) {
+      return {
+        ok: false,
+        updatedCount: 0,
+        error: "Le stock doit etre superieur ou egal a 0.",
+      };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .update({ stock: normalizedStock })
+      .in("id", productIds)
+      .select("id");
+
+    if (error) {
+      return {
+        ok: false,
+        updatedCount: 0,
+        error: normalizeDatabaseError(
+          error.message,
+          "Mise a jour bulk du stock impossible.",
+        ),
+      };
+    }
+
+    const updatedCount = data?.length ?? 0;
+    if (updatedCount !== productIds.length) {
+      return {
+        ok: false,
+        updatedCount,
+        error:
+          "Mise a jour partielle detectee. Rafraichissez la page et reessayez.",
+      };
+    }
+
+    return { ok: true, updatedCount };
+  }
+
+  const normalizedPrice = roundDhAmount(input.numericValue!);
+  if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: "Le prix doit etre superieur a 0.",
+    };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .update({ price: normalizedPrice })
+    .in("id", productIds)
+    .select("id");
+
+  if (error) {
+    return {
+      ok: false,
+      updatedCount: 0,
+      error: normalizeDatabaseError(
+        error.message,
+        "Mise a jour bulk du prix impossible.",
+      ),
+    };
+  }
+
+  const updatedCount = data?.length ?? 0;
+  if (updatedCount !== productIds.length) {
+    return {
+      ok: false,
+      updatedCount,
+      error: "Mise a jour partielle detectee. Rafraichissez la page et reessayez.",
+    };
+  }
+
+  return { ok: true, updatedCount };
 };
 
 export const createAdminProduct = async (

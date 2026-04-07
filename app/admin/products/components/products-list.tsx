@@ -7,8 +7,10 @@ type FormAction = (formData: FormData) => void | Promise<void>;
 type ProductsListProps = {
   productsCount: number;
   filteredProductsCount: number;
+  currentPageProductsCount: number;
   groupedProducts: ProductsGroup[];
   selectedCategory: string;
+  searchQuery: string;
   updateProductAction: FormAction;
   toggleProductActiveAction: FormAction;
   deleteProductAction: FormAction;
@@ -17,8 +19,10 @@ type ProductsListProps = {
 export const ProductsList = ({
   productsCount,
   filteredProductsCount,
+  currentPageProductsCount,
   groupedProducts,
   selectedCategory,
+  searchQuery,
   updateProductAction,
   toggleProductActiveAction,
   deleteProductAction,
@@ -33,10 +37,15 @@ export const ProductsList = ({
 
   return (
     <div className="space-y-6">
-      {filteredProductsCount === 0 ? (
+      {filteredProductsCount === 0 || currentPageProductsCount === 0 ? (
         <div className="rounded-2xl bg-white p-6 shadow-card">
           <p className="text-sm text-slate-600">
-            Aucun produit dans la categorie {formatCategoryLabel(selectedCategory)}.
+            {selectedCategory
+              ? `Aucun produit dans la categorie ${formatCategoryLabel(selectedCategory)}.`
+              : "Aucun produit ne correspond a vos filtres."}
+            {searchQuery.trim()
+              ? ` Recherche: "${searchQuery.trim()}".`
+              : ""}
           </p>
         </div>
       ) : null}

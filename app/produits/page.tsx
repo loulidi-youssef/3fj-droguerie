@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MobileProductsFilters } from "@/components/mobile-products-filters";
 import { ProductCard } from "@/components/product-card";
 import { categories, getCategoryBySlug } from "@/data/categories";
-import { getAllProducts } from "@/lib/products";
+import { getProductsListing } from "@/lib/products";
 import { buildSocialMetadata } from "@/lib/seo";
 
 type ProductSortOption = "defaut" | "prix-asc" | "prix-desc" | "nouveaux";
@@ -97,52 +97,29 @@ export async function generateMetadata({
 }
 
 export default async function ProduitsPage({ searchParams }: ProductsPageProps) {
-  const products = await getAllProducts();
-
   const selectedCategory = getSingleSearchParam(searchParams.categorie)
     .trim()
     .toLowerCase();
   const rawQuery = getSingleSearchParam(searchParams.q).trim();
-  const query = rawQuery.toLowerCase();
   const sort = normalizeSort(getSingleSearchParam(searchParams.tri));
   const requestedPage = normalizePage(getSingleSearchParam(searchParams.page));
-
-  const filteredByCategory = selectedCategory
-    ? products.filter((product) => product.categorySlug === selectedCategory)
-    : products;
-
-  const filteredProducts = query
-    ? filteredByCategory.filter((product) =>
-        product.name.toLowerCase().includes(query),
-      )
-    : filteredByCategory;
-
-  const sortedProducts = [...filteredProducts];
-
-  if (sort === "prix-asc") {
-    sortedProducts.sort((first, second) => first.price - second.price);
-  } else if (sort === "prix-desc") {
-    sortedProducts.sort((first, second) => second.price - first.price);
-  } else if (sort === "nouveaux") {
-    sortedProducts.sort((first, second) => {
-      const firstTime = first.createdAt ? new Date(first.createdAt).getTime() : 0;
-      const secondTime = second.createdAt ? new Date(second.createdAt).getTime() : 0;
-      return secondTime - firstTime;
-    });
-  }
+  const listing = await getProductsListing({
+    categorySlug: selectedCategory || null,
+    searchQuery: rawQuery || null,
+    sort,
+    page: requestedPage,
+    pageSize: PRODUCTS_PER_PAGE,
+  });
 
   const activeCategoryName = selectedCategory
     ? getCategoryBySlug(selectedCategory)?.name
     : undefined;
   const hasActiveFilters = Boolean(selectedCategory || rawQuery || sort !== "defaut");
-  const totalResults = sortedProducts.length;
-  const totalPages = Math.max(1, Math.ceil(totalResults / PRODUCTS_PER_PAGE));
-  const currentPage = Math.min(requestedPage, totalPages);
+  const totalResults = listing.totalCount;
+  const totalPages = listing.totalPages;
+  const currentPage = listing.currentPage;
   const pageStartIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
-  const paginatedProducts = sortedProducts.slice(
-    pageStartIndex,
-    pageStartIndex + PRODUCTS_PER_PAGE,
-  );
+  const paginatedProducts = listing.products;
   const firstItemIndex = totalResults === 0 ? 0 : pageStartIndex + 1;
   const lastItemIndex =
     totalResults === 0 ? 0 : Math.min(pageStartIndex + paginatedProducts.length, totalResults);
@@ -339,7 +316,7 @@ export default async function ProduitsPage({ searchParams }: ProductsPageProps) 
               </p>
             ) : null}
 
-            {query ? (
+            {rawQuery ? (
               <p className="hidden text-slate-700 md:block">
                 Resultat de recherche pour: <span className="font-semibold text-brand-blue">{rawQuery}</span>
               </p>
