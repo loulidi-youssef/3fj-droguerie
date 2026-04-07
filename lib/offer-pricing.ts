@@ -1,4 +1,5 @@
 import type { OfferDiscountType } from "@/types";
+import { formatDh, roundDhAmount } from "@/lib/currency";
 
 export type OfferPricing = {
   originalPrice: number;
@@ -14,11 +15,7 @@ export type OfferUnitPricingRule = {
 };
 
 const roundCurrency = (value: number): number => {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.round(value));
+  return Math.max(0, roundDhAmount(value));
 };
 
 export const isOfferDiscountType = (value: string): value is OfferDiscountType => {
@@ -53,7 +50,7 @@ export const formatOfferDiscountLabel = (
     return `-${value}%`;
   }
 
-  return `-${roundCurrency(normalizedValue)} DH`;
+  return `-${formatDh(normalizedValue)}`;
 };
 
 export const calculateOfferPricing = (
@@ -69,7 +66,7 @@ export const calculateOfferPricing = (
       ? (basePrice * normalizedDiscountValue) / 100
       : normalizedDiscountValue;
   const savingsAmount = Math.min(basePrice, roundCurrency(rawSavings));
-  const discountedPrice = Math.max(0, basePrice - savingsAmount);
+  const discountedPrice = roundCurrency(basePrice - savingsAmount);
   const savingsPercent =
     basePrice > 0 ? Math.round((savingsAmount / basePrice) * 100) : 0;
 

@@ -19,7 +19,7 @@ export const AdminProductActionNotifications = ({
       return;
     }
 
-    showToast(successMessage);
+    showToast(successMessage, { variant: "success" });
   }, [showToast, successMessage]);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export const AdminProductActionNotifications = ({
       return;
     }
 
-    showToast(errorMessage, { durationMs: 4200 });
+    showToast(errorMessage, { durationMs: 4200, variant: "error" });
   }, [errorMessage, showToast]);
 
   return null;

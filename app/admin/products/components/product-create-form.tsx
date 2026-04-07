@@ -1,5 +1,6 @@
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
 import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 
@@ -69,8 +70,9 @@ export const ProductCreateForm = ({ createProductAction }: ProductCreateFormProp
           <input
             type="number"
             name="price"
-            min="1"
-            step="1"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
             required
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
@@ -145,12 +147,11 @@ export const ProductCreateForm = ({ createProductAction }: ProductCreateFormProp
           <span className="text-sm text-slate-700">Produit actif</span>
         </label>
         <div className="md:col-span-2">
-          <button
-            type="submit"
+          <FormSubmitButton
+            idleLabel="Ajouter produit"
+            pendingLabel="Ajout en cours..."
             className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
-          >
-            Ajouter produit
-          </button>
+          />
         </div>
       </form>
     </details>

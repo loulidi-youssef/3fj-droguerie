@@ -9,6 +9,7 @@ import {
   updateAdminProduct,
 } from "@/lib/admin-products";
 import { clearAdminSession } from "@/lib/admin-auth";
+import { parseDecimalInput, roundDhAmount } from "@/lib/currency";
 import {
   normalizeSlug,
   parseImages,
@@ -50,10 +51,7 @@ type ParsedVariantsJson =
     };
 
 const toNumber = (rawValue: FormDataEntryValue | null): number => {
-  if (typeof rawValue !== "string") {
-    return Number.NaN;
-  }
-  return Number(rawValue.trim());
+  return parseDecimalInput(rawValue);
 };
 
 const toNullableString = (value: unknown): string | null => {
@@ -147,13 +145,14 @@ const parseProductVariantsJson = (
     ].join("::");
     duplicateBuckets.set(duplicateKey, (duplicateBuckets.get(duplicateKey) ?? 0) + 1);
 
-    const price = Number(record.price);
+    const price = parseDecimalInput(record.price);
     if (!Number.isFinite(price) || price <= 0) {
       return {
         ok: false,
         error: `Variante #${index + 1}: prix invalide.`,
       };
     }
+    const normalizedPrice = roundDhAmount(price);
 
     const stock = Number(record.stock);
     if (!Number.isFinite(stock) || stock < 0) {
@@ -167,11 +166,15 @@ const parseProductVariantsJson = (
     const previousPrice =
       previousPriceRaw === null || previousPriceRaw === undefined || previousPriceRaw === ""
         ? null
-        : Number(previousPriceRaw);
+        : parseDecimalInput(previousPriceRaw);
+    const normalizedPreviousPrice =
+      typeof previousPrice === "number" && Number.isFinite(previousPrice)
+        ? roundDhAmount(previousPrice)
+        : null;
 
     if (
       typeof previousPrice === "number" &&
-      (!Number.isFinite(previousPrice) || previousPrice <= price)
+      (!Number.isFinite(previousPrice) || normalizedPreviousPrice === null || normalizedPreviousPrice <= normalizedPrice)
     ) {
       return {
         ok: false,
@@ -183,8 +186,8 @@ const parseProductVariantsJson = (
       id: toNullableString(record.id) ?? undefined,
       color,
       size,
-      price: Math.round(price),
-      previousPrice: typeof previousPrice === "number" ? Math.round(previousPrice) : null,
+      price: normalizedPrice,
+      previousPrice: normalizedPreviousPrice,
       stock: Math.round(stock),
       sku: toNullableString(record.sku),
       image: toNullableString(record.image),
@@ -272,7 +275,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
       name,
       shortDescription,
       description,
-      price: Math.round(price),
+      price: roundDhAmount(price),
       categorySlug,
       stock: Math.round(stock),
       rating,
@@ -441,4 +444,3 @@ export const deleteProductAction = async (formData: FormData): Promise<void> => 
   revalidatePath("/");
   redirectWithSuccess("Produit supprime.");
 };
-

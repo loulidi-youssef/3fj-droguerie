@@ -16,7 +16,7 @@ import {
   type CheckoutFieldErrors,
   validateCheckoutCustomer,
 } from "@/lib/checkout-validation";
-import { formatDh } from "@/lib/currency";
+import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getAmountForFreeDelivery, getDeliveryCost } from "@/lib/delivery";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
@@ -206,10 +206,10 @@ export default function PanierPage() {
   );
 
   const missingProductsCount = items.length - detailedItems.length;
-  const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const subtotal = roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0));
   const deliveryCost =
-    fulfillmentMethod === "pickup" ? 0 : getDeliveryCost(subtotal);
-  const total = subtotal + deliveryCost;
+    fulfillmentMethod === "pickup" ? 0 : roundDhAmount(getDeliveryCost(subtotal));
+  const total = roundDhAmount(subtotal + deliveryCost);
   const amountForFreeDelivery =
     fulfillmentMethod === "pickup" ? 0 : getAmountForFreeDelivery(subtotal);
   const freeDeliveryTarget = subtotal + amountForFreeDelivery;

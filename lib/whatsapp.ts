@@ -1,4 +1,5 @@
 import { businessInfo } from "@/data/business";
+import { formatDh, roundDhAmount } from "@/lib/currency";
 
 type WhatsAppLineItem = {
   name: string;
@@ -46,7 +47,7 @@ export const buildProductWhatsAppLink = (
 
   const priceLine =
     typeof options?.unitPrice === "number" && Number.isFinite(options.unitPrice) && options.unitPrice > 0
-      ? `Prix affiche: ${options.unitPrice} DH`
+      ? `Prix affiche: ${formatDh(options.unitPrice)}`
       : null;
 
   const message = [
@@ -68,10 +69,12 @@ export const buildCartWhatsAppLink = (
   options?: CartWhatsAppOptions,
 ): string => {
   const lines = items.map(
-    (item) => `- ${item.name} x${item.quantity} (${item.unitPrice} DH)`,
+    (item) => `- ${item.name} x${item.quantity} (${formatDh(item.unitPrice)})`,
   );
 
-  const total = subtotal + deliveryCost;
+  const normalizedSubtotal = roundDhAmount(subtotal);
+  const normalizedDeliveryCost = roundDhAmount(deliveryCost);
+  const total = roundDhAmount(normalizedSubtotal + normalizedDeliveryCost);
   const fulfillmentLine =
     options?.fulfillmentMethod === "pickup"
       ? "Mode de reception: Retrait en magasin"
@@ -93,9 +96,9 @@ export const buildCartWhatsAppLink = (
     "Je souhaite passer la commande suivante:",
     ...lines,
     "",
-    `Sous-total: ${subtotal} DH`,
-    `Livraison: ${deliveryCost} DH`,
-    `Total: ${total} DH`,
+    `Sous-total: ${formatDh(normalizedSubtotal)}`,
+    `Livraison: ${formatDh(normalizedDeliveryCost)}`,
+    `Total: ${formatDh(total)}`,
     "",
     "Merci de confirmer la commande sur WhatsApp.",
   ].join("\n");

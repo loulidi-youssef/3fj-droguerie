@@ -1,4 +1,5 @@
 import { formatDh } from "@/lib/currency";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import type { AdminProduct } from "@/lib/admin-products";
 import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 import { ProductEditForm } from "@/app/admin/products/components/product-edit-form";
@@ -72,27 +73,24 @@ export const ProductItem = ({
           <form action={toggleProductActiveAction}>
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="nextActive" value={product.is_active ? "false" : "true"} />
-            <button
-              type="submit"
+            <FormSubmitButton
+              idleLabel={product.is_active ? "Desactiver" : "Activer"}
+              pendingLabel="Mise a jour..."
               className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              {product.is_active ? "Desactiver" : "Activer"}
-            </button>
+            />
           </form>
 
           <form action={deleteProductAction}>
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="productSlug" value={product.slug} />
-            <button
-              type="submit"
+            <FormSubmitButton
+              idleLabel="Supprimer"
+              pendingLabel="Suppression..."
               className="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700"
-            >
-              Supprimer
-            </button>
+            />
           </form>
         </div>
       </div>
     </details>
   );
 };
-

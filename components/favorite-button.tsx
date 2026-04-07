@@ -25,7 +25,9 @@ export const FavoriteButton = ({ productId, className }: FavoriteButtonProps) =>
     const result = await toggleFavorite(productId, currentPath);
 
     if (result.requiresAuth) {
-      showToast(result.error ?? "Veuillez vous connecter pour ajouter aux favoris");
+      showToast(result.error ?? "Veuillez vous connecter pour ajouter aux favoris", {
+        variant: "error",
+      });
       if (result.loginPath) {
         window.setTimeout(() => {
           window.location.href = result.loginPath!;
@@ -35,7 +37,9 @@ export const FavoriteButton = ({ productId, className }: FavoriteButtonProps) =>
     }
 
     if (!result.ok) {
-      showToast(result.error ?? "Action impossible pour le moment.");
+      showToast(result.error ?? "Action impossible pour le moment.", {
+        variant: "error",
+      });
       return;
     }
 

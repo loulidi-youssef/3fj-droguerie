@@ -9,7 +9,7 @@ import {
   fetchCartProductsLookup,
   type CartProductsLookup,
 } from "@/lib/cart-display";
-import { formatDh } from "@/lib/currency";
+import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
@@ -116,10 +116,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   );
 
   const subtotal = useMemo(
-    () => detailedItems.reduce((sum, item) => sum + item.lineTotal, 0),
+    () => roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0)),
     [detailedItems],
   );
-  const estimatedDeliveryCost = getDeliveryCost(subtotal);
+  const estimatedDeliveryCost = roundDhAmount(getDeliveryCost(subtotal));
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
       name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,

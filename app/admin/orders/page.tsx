@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import {
   clearAdminSession,
   hasValidAdminSession,
@@ -440,8 +441,9 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                                   <input type="hidden" name="statusFilter" value={selectedStatus} />
                                   <input type="hidden" name="dateFrom" value={dateFrom} />
                                   <input type="hidden" name="dateTo" value={dateTo} />
-                                  <button
-                                    type="submit"
+                                  <FormSubmitButton
+                                    idleLabel={action.label}
+                                    pendingLabel="Mise a jour..."
                                     className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
                                       action.intent === "primary"
                                         ? "bg-brand-blue text-white"
@@ -449,9 +451,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                                           ? "bg-rose-600 text-white"
                                           : "border border-slate-300 bg-white text-slate-700"
                                     }`}
-                                  >
-                                    {action.label}
-                                  </button>
+                                  />
                                 </form>
                               ))
                             )}

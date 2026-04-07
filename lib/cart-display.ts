@@ -1,4 +1,5 @@
 import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
+import { roundDhAmount } from "@/lib/currency";
 import type { CartItem, Product } from "@/types";
 
 type ProductsApiResponse = {
@@ -134,12 +135,11 @@ export const buildDetailedCartItems = (
           effectivePricing.originalPrice > effectivePricing.discountedPrice
             ? effectivePricing.originalPrice
             : null,
-        unitPrice: effectivePricing.discountedPrice,
-        lineTotal: effectivePricing.discountedPrice * item.quantity,
+        unitPrice: roundDhAmount(effectivePricing.discountedPrice),
+        lineTotal: roundDhAmount(effectivePricing.discountedPrice * item.quantity),
         variantLabel: variantLabelParts.join(" | "),
         lineKey: `${item.productId}::${item.variantId ?? "base"}`,
       };
     })
     .filter((item): item is DetailedCartItem => item !== null);
 };
-

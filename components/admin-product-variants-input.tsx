@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { parseDecimalInput } from "@/lib/currency";
 
 type AdminProductVariantsInputVariant = {
   id?: string | null;
@@ -66,7 +67,7 @@ const isNumericFieldValid = (value: string): boolean => {
     return false;
   }
 
-  return Number.isFinite(Number(value));
+  return Number.isFinite(parseDecimalInput(value));
 };
 
 const isRowCompletelyEmpty = (row: VariantRow): boolean => {
@@ -162,7 +163,7 @@ export const AdminProductVariantsInput = ({
       if (!price) {
         errors.push("Le prix est obligatoire.");
       } else {
-        const numericPrice = Number(price);
+        const numericPrice = parseDecimalInput(price);
         if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
           errors.push("Le prix doit etre un nombre superieur a 0.");
         }
@@ -354,8 +355,8 @@ export const AdminProductVariantsInput = ({
                       </span>
                       <input
                         type="number"
-                        min="1"
-                        step="1"
+                        min="0.01"
+                        step="0.01"
                         value={row.price}
                         onChange={(event) => updateRow(row.key, { price: event.target.value })}
                         className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
@@ -369,8 +370,8 @@ export const AdminProductVariantsInput = ({
                       </span>
                       <input
                         type="number"
-                        min="1"
-                        step="1"
+                        min="0.01"
+                        step="0.01"
                         value={row.previousPrice}
                         onChange={(event) =>
                           updateRow(row.key, { previousPrice: event.target.value })
@@ -433,7 +434,7 @@ export const AdminProductVariantsInput = ({
 
                   {priceInvalid || stockInvalid || previousPriceInvalid ? (
                     <p className="mt-2 text-xs font-medium text-rose-700">
-                      Verifiez les nombres: prix et stock doivent etre numeriques. Ancien prix est optionnel.
+                      Verifiez les nombres: prix (decimaux acceptes) et stock doivent etre numeriques.
                     </p>
                   ) : null}
                   {rowErrors.length > 0 ? (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import {
   clearAdminSession,
   hasValidAdminSession,
@@ -345,8 +346,9 @@ export default async function AdminOrderDetailPage({
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="status" value={action.status} />
                   <input type="hidden" name="fulfillmentMethod" value={fulfillmentMethod} />
-                  <button
-                    type="submit"
+                  <FormSubmitButton
+                    idleLabel={action.label}
+                    pendingLabel="Mise a jour..."
                     className={`w-full rounded-xl px-3 py-2 text-sm font-semibold ${
                       action.intent === "primary"
                         ? "bg-brand-blue text-white"
@@ -354,9 +356,7 @@ export default async function AdminOrderDetailPage({
                           ? "bg-rose-600 text-white"
                           : "border border-slate-300 bg-white text-slate-700"
                     }`}
-                  >
-                    {action.label}
-                  </button>
+                  />
                 </form>
               ))}
             </div>
@@ -380,12 +380,11 @@ export default async function AdminOrderDetailPage({
                   ))}
                 </select>
               </label>
-              <button
-                type="submit"
+              <FormSubmitButton
+                idleLabel="Mettre a jour"
+                pendingLabel="Mise a jour..."
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
-              >
-                Mettre a jour
-              </button>
+              />
             </form>
 
             <form action={saveOrderNoteAction} className="mt-4 border-t border-slate-200 pt-4">
@@ -402,12 +401,11 @@ export default async function AdminOrderDetailPage({
                   className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
                 />
               </label>
-              <button
-                type="submit"
+              <FormSubmitButton
+                idleLabel="Enregistrer note"
+                pendingLabel="Enregistrement..."
                 className="mt-2 w-full rounded-xl bg-brand-blue px-3 py-2 text-sm font-semibold text-white"
-              >
-                Enregistrer note
-              </button>
+              />
             </form>
           </aside>
         </div>

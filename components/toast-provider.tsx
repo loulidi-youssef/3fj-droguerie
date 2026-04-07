@@ -13,6 +13,7 @@ import {
 type ToastItem = {
   id: number;
   message: string;
+  variant: ToastVariant;
   primaryAction?: ToastAction;
   secondaryAction?: ToastAction;
 };
@@ -25,15 +26,39 @@ type ToastAction = {
 
 type ToastOptions = {
   durationMs?: number;
+  variant?: ToastVariant;
   primaryAction?: ToastAction;
   secondaryAction?: ToastAction;
 };
+
+type ToastVariant = "success" | "error" | "info";
 
 type ToastContextValue = {
   showToast: (message: string, options?: ToastOptions) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+
+const TOAST_VARIANT_STYLES: Record<
+  ToastVariant,
+  {
+    container: string;
+    primaryButton: string;
+  }
+> = {
+  success: {
+    container: "border-emerald-200 text-emerald-700",
+    primaryButton: "bg-emerald-600 text-white hover:bg-emerald-700",
+  },
+  error: {
+    container: "border-rose-200 text-rose-700",
+    primaryButton: "bg-rose-600 text-white hover:bg-rose-700",
+  },
+  info: {
+    container: "border-sky-200 text-sky-700",
+    primaryButton: "bg-sky-600 text-white hover:bg-sky-700",
+  },
+};
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
@@ -53,6 +78,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       {
         id,
         message,
+        variant: options?.variant ?? "success",
         primaryAction: options?.primaryAction,
         secondaryAction: options?.secondaryAction,
       },
@@ -89,7 +115,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className="pointer-events-auto animate-fade-in-up rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-700 shadow-lg"
+              className={`pointer-events-auto animate-fade-in-up rounded-2xl border bg-white px-4 py-3 text-sm font-semibold shadow-lg ${TOAST_VARIANT_STYLES[toast.variant].container}`}
             >
               <p>{toast.message}</p>
 
@@ -99,7 +125,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
                     <button
                       type="button"
                       onClick={() => handleActionClick(toast.id, toast.primaryAction)}
-                      className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                      className={`inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition-colors ${TOAST_VARIANT_STYLES[toast.variant].primaryButton}`}
                     >
                       {toast.primaryAction.label}
                     </button>

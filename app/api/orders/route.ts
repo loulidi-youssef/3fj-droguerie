@@ -4,6 +4,7 @@ import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getActiveOfferRulesByProductIdsStrict } from "@/lib/offers";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
+import { roundDhAmount } from "@/lib/currency";
 import { getProductsByIdsStrict } from "@/lib/products";
 import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 import {
@@ -370,7 +371,9 @@ export async function POST(request: NextRequest) {
     // including variant prices when a variant is chosen.
     const baseUnitPrice = selectedVariant ? selectedVariant.price : product.price;
     const offerRule = activeOfferRulesByProductId.get(product.id);
-    const unitPrice = calculateEffectiveUnitPricing(baseUnitPrice, offerRule).discountedPrice;
+    const unitPrice = roundDhAmount(
+      calculateEffectiveUnitPricing(baseUnitPrice, offerRule).discountedPrice,
+    );
     const stock = selectedVariant?.stock ?? product.stock;
 
     if (typeof stock === "number" && item.quantity > stock) {
@@ -399,13 +402,14 @@ export async function POST(request: NextRequest) {
       productName,
       quantity: item.quantity,
       unitPrice,
-      lineTotal: unitPrice * item.quantity,
+      lineTotal: roundDhAmount(unitPrice * item.quantity),
     });
   }
 
-  const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
-  const deliveryFee = fulfillmentMethod === "pickup" ? 0 : getDeliveryCost(subtotal);
-  const total = subtotal + deliveryFee;
+  const subtotal = roundDhAmount(lineItems.reduce((sum, item) => sum + item.lineTotal, 0));
+  const deliveryFee =
+    fulfillmentMethod === "pickup" ? 0 : roundDhAmount(getDeliveryCost(subtotal));
+  const total = roundDhAmount(subtotal + deliveryFee);
   const normalizedHeaderIdempotencyKey = request.headers.get("idempotency-key")?.trim() ?? "";
   if (normalizedHeaderIdempotencyKey.length > MAX_IDEMPOTENCY_KEY_HEADER_LENGTH) {
     return NextResponse.json<OrderErrorResponse>(

@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { roundDhAmount } from "@/lib/currency";
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
 
@@ -148,10 +149,12 @@ const replaceAdminProductVariants = async (
 
     usedVariantIds.add(safeVariantId);
 
-    const normalizedPrice = Math.round(variant.price);
+    const normalizedPrice = roundDhAmount(variant.price);
+    const requestedPreviousPrice =
+      typeof variant.previousPrice === "number" ? roundDhAmount(variant.previousPrice) : null;
     const normalizedPreviousPrice =
-      typeof variant.previousPrice === "number" && variant.previousPrice > normalizedPrice
-        ? Math.round(variant.previousPrice)
+      requestedPreviousPrice !== null && requestedPreviousPrice > normalizedPrice
+        ? requestedPreviousPrice
         : null;
 
     return {
@@ -273,7 +276,7 @@ export const createAdminProduct = async (
     name: input.name.trim(),
     short_description: input.shortDescription.trim(),
     description: input.description.trim(),
-    price: input.price,
+    price: roundDhAmount(input.price),
     category_slug: input.categorySlug.trim(),
     stock: input.stock,
     rating: input.rating,
@@ -319,7 +322,7 @@ export const updateAdminProduct = async (
       name: input.name.trim(),
       short_description: input.shortDescription.trim(),
       description: input.description.trim(),
-      price: input.price,
+      price: roundDhAmount(input.price),
       category_slug: input.categorySlug.trim(),
       stock: input.stock,
       rating: input.rating,

@@ -1,5 +1,6 @@
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
 import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import type { AdminProduct } from "@/lib/admin-products";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
@@ -75,8 +76,9 @@ export const ProductEditForm = ({
         <input
           type="number"
           name="price"
-          min="1"
-          step="1"
+          min="0.01"
+          step="0.01"
+          inputMode="decimal"
           required
           defaultValue={product.price}
           className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
@@ -167,12 +169,11 @@ export const ProductEditForm = ({
       </label>
 
       <div className="flex flex-wrap items-center gap-2 md:col-span-2">
-        <button
-          type="submit"
+        <FormSubmitButton
+          idleLabel="Enregistrer modifications"
+          pendingLabel="Enregistrement..."
           className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
-        >
-          Enregistrer modifications
-        </button>
+        />
       </div>
     </form>
   );
