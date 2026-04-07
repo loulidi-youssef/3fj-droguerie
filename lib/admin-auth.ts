@@ -19,6 +19,10 @@ const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const MIN_SESSION_SECRET_LENGTH = 16;
 const MIN_PRODUCTION_SESSION_SECRET_LENGTH = 32;
+const MIN_PBKDF2_ITERATIONS = 100_000;
+const MAX_PBKDF2_ITERATIONS = 1_000_000;
+const PBKDF2_DIGEST_HEX_LENGTH = 64;
+const PBKDF2_MIN_SALT_LENGTH = 8;
 
 const loggedAdminAuthConfigMessages = new Set<string>();
 
@@ -62,6 +66,16 @@ type ParsedPbkdf2PasswordHash = {
   expectedDigest: string;
 };
 
+type Pbkdf2PasswordHashParseResult =
+  | {
+      ok: true;
+      value: ParsedPbkdf2PasswordHash;
+    }
+  | {
+      ok: false;
+      reason: string;
+    };
+
 type AdminAuthConfigStatus =
   | "ok"
   | "missing-password"
@@ -77,13 +91,42 @@ type ResolvedAdminAuthConfig = {
   isProduction: boolean;
   passwordHash: string | null;
   parsedPasswordHash: ParsedPbkdf2PasswordHash | null;
+  invalidPasswordHashReason: string | null;
   plaintextPassword: string | null;
   sessionSecret: string | null;
 };
 
+const stripOptionalWrappingQuotes = (value: string): string => {
+  if (value.length < 2) {
+    return value;
+  }
+
+  const startsWithDoubleQuote = value.startsWith("\"") && value.endsWith("\"");
+  const startsWithSingleQuote = value.startsWith("'") && value.endsWith("'");
+  if (!startsWithDoubleQuote && !startsWithSingleQuote) {
+    return value;
+  }
+
+  return value.slice(1, -1).trim();
+};
+
 const readEnv = (value: string | undefined): string | null => {
   const normalized = value?.trim();
-  return normalized ? normalized : null;
+  if (!normalized) {
+    return null;
+  }
+
+  const unwrapped = stripOptionalWrappingQuotes(normalized);
+  if (!unwrapped) {
+    return null;
+  }
+
+  const sanitized = unwrapped.trim();
+  if (!sanitized) {
+    return null;
+  }
+
+  return sanitized;
 };
 
 const getConfiguredAdminPasswordHash = (): string | null => {
@@ -115,32 +158,72 @@ const logAdminAuthConfigMessageOnce = (
 
 const parsePbkdf2PasswordHash = (
   configuredHash: string,
-): ParsedPbkdf2PasswordHash | null => {
+): Pbkdf2PasswordHashParseResult => {
   // Expected format: pbkdf2_sha256$<iterations>$<salt>$<hex_digest>
-  const [scheme, iterationsValue, salt, expectedHexDigest] = configuredHash.split("$");
-  if (
-    scheme !== "pbkdf2_sha256" ||
-    !iterationsValue ||
-    !salt ||
-    !expectedHexDigest
-  ) {
-    return null;
+  const splitParts = configuredHash.split("$");
+  if (splitParts.length !== 4) {
+    const missingSeparatorHint =
+      configuredHash.startsWith("pbkdf2_sha256") && !configuredHash.includes("$")
+        ? " The value appears truncated; ensure '$' separators are preserved when setting the env var."
+        : "";
+    return {
+      ok: false,
+      reason:
+        "Expected exactly four '$'-separated segments: pbkdf2_sha256$<iterations>$<salt>$<hex_digest>." +
+        missingSeparatorHint,
+    };
+  }
+
+  const [scheme, iterationsValue, saltValue, expectedHexDigestValue] = splitParts;
+  if (scheme !== "pbkdf2_sha256") {
+    return {
+      ok: false,
+      reason: "Unsupported scheme. Expected pbkdf2_sha256.",
+    };
   }
 
   const iterations = Number(iterationsValue);
-  if (!Number.isInteger(iterations) || iterations < 10_000 || iterations > 1_000_000) {
-    return null;
+  if (
+    !Number.isInteger(iterations) ||
+    iterations < MIN_PBKDF2_ITERATIONS ||
+    iterations > MAX_PBKDF2_ITERATIONS
+  ) {
+    return {
+      ok: false,
+      reason: `Iterations must be an integer between ${MIN_PBKDF2_ITERATIONS} and ${MAX_PBKDF2_ITERATIONS}.`,
+    };
   }
 
-  const expectedDigest = expectedHexDigest.trim().toLowerCase();
-  if (!/^[a-f0-9]{32,256}$/i.test(expectedDigest) || expectedDigest.length % 2 !== 0) {
-    return null;
+  const salt = saltValue.trim();
+  if (!salt || salt.length < PBKDF2_MIN_SALT_LENGTH) {
+    return {
+      ok: false,
+      reason: `Salt is too short. Use at least ${PBKDF2_MIN_SALT_LENGTH} characters.`,
+    };
+  }
+
+  const expectedDigest = expectedHexDigestValue.trim().toLowerCase();
+  if (!/^[a-f0-9]+$/i.test(expectedDigest)) {
+    return {
+      ok: false,
+      reason: "Digest must be lowercase/uppercase hex.",
+    };
+  }
+
+  if (expectedDigest.length !== PBKDF2_DIGEST_HEX_LENGTH) {
+    return {
+      ok: false,
+      reason: `Digest must be ${PBKDF2_DIGEST_HEX_LENGTH} hex characters (sha256).`,
+    };
   }
 
   return {
-    iterations,
-    salt,
-    expectedDigest,
+    ok: true,
+    value: {
+      iterations,
+      salt,
+      expectedDigest,
+    },
   };
 };
 
@@ -152,6 +235,16 @@ const deriveSessionSecret = (input: string): string => {
   return createHash("sha256")
     .update(`3fj-admin-session|${input}`)
     .digest("hex");
+};
+
+const formatInvalidPasswordHashMessage = (
+  baseMessage: string,
+  reason: string | null,
+): string => {
+  if (!reason) {
+    return baseMessage;
+  }
+  return `${baseMessage} Reason: ${reason}`;
 };
 
 const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
@@ -179,7 +272,10 @@ const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
       logAdminAuthConfigMessageOnce(
         "error",
         "prod-invalid-password-hash",
-        "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+        formatInvalidPasswordHashMessage(
+          "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+          config.invalidPasswordHashReason,
+        ),
       );
       return;
     }
@@ -230,7 +326,10 @@ const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
     logAdminAuthConfigMessageOnce(
       "warn",
       "dev-invalid-password-hash",
-      "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+      formatInvalidPasswordHashMessage(
+        "ADMIN_ACCESS_PASSWORD_HASH is present but invalid. Expected pbkdf2_sha256$<iterations>$<salt>$<hex_digest>.",
+        config.invalidPasswordHashReason,
+      ),
     );
     return;
   }
@@ -262,7 +361,15 @@ const logAdminAuthConfigStatus = (config: ResolvedAdminAuthConfig): void => {
 const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
   const isProduction = isProductionEnvironment();
   const passwordHash = getConfiguredAdminPasswordHash();
-  const parsedPasswordHash = passwordHash ? parsePbkdf2PasswordHash(passwordHash) : null;
+  const parsedPasswordHashResult = passwordHash
+    ? parsePbkdf2PasswordHash(passwordHash)
+    : null;
+  const parsedPasswordHash =
+    parsedPasswordHashResult?.ok ? parsedPasswordHashResult.value : null;
+  const invalidPasswordHashReason =
+    parsedPasswordHashResult && !parsedPasswordHashResult.ok
+      ? parsedPasswordHashResult.reason
+      : null;
   const plaintextPassword = getConfiguredAdminPassword();
   const explicitSessionSecret = readEnv(process.env.ADMIN_SESSION_SECRET);
 
@@ -275,6 +382,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash: null,
+      invalidPasswordHashReason,
       plaintextPassword,
       sessionSecret: null,
     };
@@ -289,6 +397,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
         isProduction,
         passwordHash,
         parsedPasswordHash,
+        invalidPasswordHashReason,
         plaintextPassword,
         sessionSecret: null,
       };
@@ -302,6 +411,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
         isProduction,
         passwordHash,
         parsedPasswordHash,
+        invalidPasswordHashReason,
         plaintextPassword,
         sessionSecret: null,
       };
@@ -315,6 +425,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
         isProduction,
         passwordHash,
         parsedPasswordHash,
+        invalidPasswordHashReason,
         plaintextPassword: null,
         sessionSecret: null,
       };
@@ -328,6 +439,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
         isProduction,
         passwordHash,
         parsedPasswordHash,
+        invalidPasswordHashReason,
         plaintextPassword: null,
         sessionSecret: null,
       };
@@ -340,6 +452,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash,
+      invalidPasswordHashReason,
       plaintextPassword: null,
       sessionSecret: explicitSessionSecret,
     };
@@ -353,6 +466,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash,
+      invalidPasswordHashReason,
       plaintextPassword,
       sessionSecret: null,
     };
@@ -366,6 +480,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash,
+      invalidPasswordHashReason,
       plaintextPassword,
       sessionSecret: explicitSessionSecret,
     };
@@ -379,6 +494,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash,
+      invalidPasswordHashReason,
       plaintextPassword,
       sessionSecret: null,
     };
@@ -392,6 +508,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
       isProduction,
       passwordHash,
       parsedPasswordHash,
+      invalidPasswordHashReason,
       plaintextPassword,
       sessionSecret: null,
     };
@@ -404,6 +521,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
     isProduction,
     passwordHash,
     parsedPasswordHash,
+    invalidPasswordHashReason,
     plaintextPassword,
     sessionSecret: null,
   };
@@ -414,6 +532,7 @@ const resolveAdminAuthConfig = (): ResolvedAdminAuthConfig => {
     isProduction,
     passwordHash,
     parsedPasswordHash,
+    invalidPasswordHashReason,
     plaintextPassword,
     sessionSecret: deriveSessionSecret(secretSeed),
   };

@@ -17,6 +17,9 @@ ADMIN_SESSION_SECRET=<long_random_secret_at_least_32_chars>
 Rules:
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
 - `ADMIN_ACCESS_PASSWORD_HASH` must be `pbkdf2_sha256$<iterations>$<salt>$<hex_digest>` (bcrypt is not supported).
+- Generate hash locally with `npm run admin:hash -- "your-plain-admin-password"`.
+- Verify hash locally with `npm run admin:hash -- --verify "your-plain-admin-password" 'pbkdf2_sha256$...'`.
+- If your shell expands `$`, keep the hash in single quotes.
 - Set `ADMIN_ACCESS_PASSWORD_HASH` only (do not set deprecated `ADMIN_ACCESS_PASSWORD` / `ADMIN_PASSWORD` in production).
 - Use a strong random `ADMIN_SESSION_SECRET` (32+ characters).
 

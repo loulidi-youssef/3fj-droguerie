@@ -43,6 +43,11 @@ ADMIN_SESSION_SECRET=<long_random_secret_at_least_32_chars>
 # Development only fallback:
 # ADMIN_ACCESS_PASSWORD=...
 ```
+3. Generate `ADMIN_ACCESS_PASSWORD_HASH` locally with:
+   - `npm run admin:hash -- "your-plain-admin-password"`
+4. Optional local verification:
+   - `npm run admin:hash -- --verify "your-plain-admin-password" 'pbkdf2_sha256$...'`
+5. If your shell expands `$`, keep the hash in single quotes.
 
 ## 5. Run project
 1. `npm run dev`
@@ -60,7 +65,7 @@ ADMIN_SESSION_SECRET=<long_random_secret_at_least_32_chars>
 1. In Supabase, open `Authentication` -> `Providers` and keep `Email` enabled.
 2. Open `Authentication` -> `URL Configuration` and add your site URL.
 3. Test `/register`, `/login`, and `/compte/commandes` from your app.
-4. Logged-in checkout should create orders with `user_id`; guest checkout keeps `user_id` as null.
+4. Checkout currently requires authentication and creates orders linked to `user_id`.
 
 ## Notes
 - Delivery rules are still in code:

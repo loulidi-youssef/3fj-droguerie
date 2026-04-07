@@ -8,6 +8,7 @@ import {
   RequestAuthError,
   getAuthenticatedCustomerContextFromRequest,
 } from "@/lib/supabase/auth-user";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type OrderRow = {
   id: string;
@@ -100,14 +101,23 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     Date.now() - ORDER_CANCELLATION_WINDOW_MS,
   ).toISOString();
 
-  const { data: cancelledOrder, error: cancelError } = await authenticatedContext.supabase
-    .from("orders")
-    .update({ status: "cancelled" })
-    .eq("id", orderId)
-    .eq("status", "new")
-    .gte("created_at", cancellationBoundaryIso)
-    .select("id")
-    .maybeSingle();
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return NextResponse.json(
+      { error: "Annulation impossible pour le moment." },
+      { status: 500 },
+    );
+  }
+
+  const { data: cancelledOrder, error: cancelError } = await supabaseAdmin.rpc(
+    "cancel_order_and_restore_stock_atomic",
+    {
+      p_order_id: orderId,
+      p_user_id: authenticatedContext.customer.id,
+      p_cancellation_boundary: cancellationBoundaryIso,
+      p_allowed_statuses: ["new"],
+    },
+  );
 
   if (cancelError) {
     return NextResponse.json(

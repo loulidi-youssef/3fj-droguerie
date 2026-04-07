@@ -258,6 +258,24 @@ export const updateAdminOrderStatus = async (
     return false;
   }
 
+  if (status === "cancelled") {
+    const { data, error } = await supabaseAdmin.rpc(
+      "cancel_order_and_restore_stock_atomic",
+      {
+        p_order_id: orderId,
+        p_user_id: null,
+        p_cancellation_boundary: null,
+        p_allowed_statuses: ["new", "confirmed", "preparing", "ready"],
+      },
+    );
+
+    if (error) {
+      return false;
+    }
+
+    return data === true;
+  }
+
   const { error } = await supabaseAdmin.from("orders").update({ status }).eq("id", orderId);
 
   return !error;
