@@ -76,6 +76,12 @@ export const AdminProductsPageView = ({
               Voir commandes
             </Link>
             <Link
+              href="/admin/products/import"
+              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
+            >
+              Import CSV
+            </Link>
+            <Link
               href="/admin/offres"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >

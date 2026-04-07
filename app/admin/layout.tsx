@@ -53,6 +53,9 @@ export default async function AdminLayout({
               <Link href="/admin/products" className="admin-nav-link">
                 Produits
               </Link>
+              <Link href="/admin/products/import" className="admin-nav-link">
+                Import CSV
+              </Link>
               <Link href="/admin/offres" className="admin-nav-link">
                 Offres
               </Link>
