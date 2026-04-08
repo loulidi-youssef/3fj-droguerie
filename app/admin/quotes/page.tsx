@@ -222,6 +222,12 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
           >
             Retour dashboard
           </Link>
+          <Link
+            href="/admin/quotes/analytics"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+          >
+            Voir analytics
+          </Link>
         </div>
 
         <div className="mb-4 grid gap-3 md:grid-cols-4">
@@ -408,4 +414,3 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
     </section>
   );
 }
-
