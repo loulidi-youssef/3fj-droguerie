@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import {
+  AdminIconBulk,
+  AdminIconInfo,
+} from "@/app/admin/products/components/admin-products-icons";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 
@@ -143,16 +147,24 @@ export const ProductsBulkActions = ({
   }
 
   return (
-    <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Operations bulk
-      </p>
-      <p className="mt-1 text-sm text-slate-700">
-        Selection actuelle: <span className="font-semibold">{selectedCount}</span> /{" "}
-        {currentPageProductsCount} produit(s) sur cette page.
-      </p>
-      <p className="mt-1 text-xs text-slate-500">
-        Total filtres: {filteredProductsCount} produit(s).
+    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,42,77,0.07)] sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <AdminIconBulk className="h-4 w-4" />
+            Operations en lot
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Appliquez une action unique a plusieurs produits selectionnes.
+          </p>
+        </div>
+        <p className="rounded-full border border-brand-blue/20 bg-brand-blue/5 px-3 py-1 text-xs font-semibold text-brand-blue">
+          Selection: {selectedCount} / {currentPageProductsCount}
+        </p>
+      </div>
+
+      <p className="mt-2 text-xs text-slate-500">
+        Total des produits filtres: {filteredProductsCount}
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -163,13 +175,13 @@ export const ProductsBulkActions = ({
             onChange={(event) => applySelectAll(event.target.checked)}
             aria-label="Selectionner tout le resultat courant"
           />
-          Tout selectionner (resultat courant)
+          Tout selectionner (page)
         </label>
 
         <button
           type="button"
           onClick={() => applySelectAll(false)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
         >
           Vider la selection
         </button>
@@ -179,55 +191,63 @@ export const ProductsBulkActions = ({
         id="admin-products-bulk-form"
         action={bulkUpdateProductsAction}
         onSubmit={handleSubmit}
-        className="mt-3 grid gap-2 md:grid-cols-[1.2fr_1fr_auto]"
+        className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3.5"
       >
         <input type="hidden" name="returnCategory" value={selectedCategory} />
         <input type="hidden" name="returnSearchQuery" value={searchQuery} />
         <input type="hidden" name="returnPage" value={String(currentPage)} />
 
-        <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Action
-          </span>
-          <select
-            name="bulkActionType"
-            value={bulkActionType}
-            onChange={(event) => setBulkActionType(event.target.value as BulkActionType)}
-            className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700"
-          >
-            <option value="status:active">Activer produits</option>
-            <option value="status:inactive">Desactiver produits</option>
-            <option value="stock:set">Definir stock</option>
-            <option value="price:set">Definir prix</option>
-          </select>
-        </label>
+        <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_auto] lg:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Action
+            </span>
+            <select
+              name="bulkActionType"
+              value={bulkActionType}
+              onChange={(event) => setBulkActionType(event.target.value as BulkActionType)}
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700"
+            >
+              <option value="status:active">Activer produits</option>
+              <option value="status:inactive">Desactiver produits</option>
+              <option value="stock:set">Definir stock</option>
+              <option value="price:set">Definir prix</option>
+            </select>
+          </label>
 
-        <label className="block">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {numericInputLabel}
-          </span>
-          <input
-            type="number"
-            name="bulkNumericValue"
-            value={bulkNumericValue}
-            onChange={(event) => setBulkNumericValue(event.target.value)}
-            min={bulkActionType === "price:set" ? "0.01" : "0"}
-            step={bulkActionType === "price:set" ? "0.01" : "1"}
-            inputMode="decimal"
-            disabled={!requiresNumericValue}
-            placeholder={requiresNumericValue ? "Entrez une valeur" : "Non requis"}
-            className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
-        </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {numericInputLabel}
+            </span>
+            <input
+              type="number"
+              name="bulkNumericValue"
+              value={bulkNumericValue}
+              onChange={(event) => setBulkNumericValue(event.target.value)}
+              min={bulkActionType === "price:set" ? "0.01" : "0"}
+              step={bulkActionType === "price:set" ? "0.01" : "1"}
+              inputMode="decimal"
+              disabled={!requiresNumericValue}
+              placeholder={requiresNumericValue ? "Entrez une valeur" : "Non requis"}
+              className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+            />
+          </label>
 
-        <div className="flex items-end">
-          <FormSubmitButton
-            idleLabel="Appliquer en lot"
-            pendingLabel="Mise a jour..."
-            className="h-10 w-full rounded-xl bg-brand-blue px-4 text-sm font-semibold text-white md:w-auto"
-          />
+          <div className="flex items-end">
+            <FormSubmitButton
+              idleLabel="Appliquer en lot"
+              pendingLabel="Mise a jour..."
+              className="h-11 w-full rounded-xl bg-brand-blue px-5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(15,42,77,0.2)] md:w-auto"
+            />
+          </div>
         </div>
+
+        <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <AdminIconInfo className="h-3.5 w-3.5" />
+          Les actions en lot demandent une confirmation avant application.
+        </p>
       </form>
     </section>
   );
 };
+

@@ -3,8 +3,11 @@ import { AdminProductActionNotifications } from "@/components/admin-product-acti
 import { ProductCreateForm } from "@/app/admin/products/components/product-create-form";
 import { ProductsBulkActions } from "@/app/admin/products/components/products-bulk-actions";
 import { ProductsList } from "@/app/admin/products/components/products-list";
-import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
+import { AdminProductsFiltersCard } from "@/app/admin/products/components/admin-products-filters-card";
+import { AdminProductsHeader } from "@/app/admin/products/components/admin-products-header";
+import { AdminProductsOverviewMetrics } from "@/app/admin/products/components/admin-products-overview-metrics";
 import type { ProductsGroup } from "@/app/admin/products/lib/page-data";
+import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 type LogoutAction = () => void | Promise<void>;
@@ -78,179 +81,66 @@ export const AdminProductsPageView = ({
     { length: visiblePageEnd - visiblePageStart + 1 },
     (_, index) => visiblePageStart + index,
   );
+
   const firstItemIndex =
-    filteredProductsCount === 0
-      ? 0
-      : (currentPage - 1) * pageSize + 1;
+    filteredProductsCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const lastItemIndex =
     filteredProductsCount === 0
       ? 0
       : Math.min(firstItemIndex + currentPageProductsCount - 1, filteredProductsCount);
 
+  const currentPageProducts = groupedProducts.flatMap((group) => group.products);
+  const activeProductsOnPage = currentPageProducts.filter((product) => product.is_active).length;
+  const lowStockProductsOnPage = currentPageProducts.filter((product) => product.stock <= 5).length;
+  const productsWithBulkPricingOnPage = currentPageProducts.filter(
+    (product) => product.bulk_price_tiers.length > 0,
+  ).length;
+
   return (
     <section className="bg-brand-light py-12">
-      <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
+      <div className="mx-auto max-w-7xl space-y-5 px-4 sm:px-5 lg:px-6">
         <AdminProductActionNotifications
           successMessage={successMessage}
           errorMessage={errorMessage}
         />
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold text-brand-blue">Admin produits</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Ajoutez, modifiez, desactivez ou supprimez les produits.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/orders"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir commandes
-            </Link>
-            <Link
-              href="/admin/products/import"
-              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
-            >
-              Import CSV
-            </Link>
-            <Link
-              href="/admin/offres"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir offres
-            </Link>
-            <Link
-              href="/admin/customers"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir clients
-            </Link>
-            <Link
-              href="/admin/blog"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir blog
-            </Link>
-            <Link
-              href="/admin/reviews"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Voir avis
-            </Link>
-            <form action={logoutAdminAction}>
-              <button
-                type="submit"
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-              >
-                Deconnexion
-              </button>
-            </form>
-          </div>
-        </div>
+        <AdminProductsHeader logoutAdminAction={logoutAdminAction} />
 
         {successMessage ? (
           <div
             role="status"
             aria-live="polite"
-            className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800"
+            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800"
           >
-            <p className="text-sm font-bold">Succes</p>
+            <p className="text-xs font-bold uppercase tracking-wide">Succes</p>
             <p className="mt-1 text-sm font-medium">{successMessage}</p>
           </div>
         ) : null}
 
         {errorMessage ? (
-          <p className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
             {errorMessage}
           </p>
         ) : null}
 
-        <div className="mb-6 rounded-2xl bg-white p-4 shadow-card">
-          <form method="get" action="/admin/products" className="mb-3">
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Recherche produit
-              </span>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <input
-                  type="search"
-                  name="q"
-                  defaultValue={searchQuery}
-                  placeholder="Nom, slug ou ID produit"
-                  className="min-w-[220px] flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
-                />
-                {selectedCategory ? (
-                  <input type="hidden" name="category" value={selectedCategory} />
-                ) : null}
-                <button
-                  type="submit"
-                  className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Rechercher
-                </button>
-                <Link
-                  href="/admin/products"
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-                >
-                  Reinitialiser
-                </Link>
-              </div>
-            </label>
-          </form>
+        <AdminProductsOverviewMetrics
+          filteredProductsCount={filteredProductsCount}
+          currentPageProductsCount={currentPageProductsCount}
+          activeProductsOnPage={activeProductsOnPage}
+          lowStockProductsOnPage={lowStockProductsOnPage}
+          productsWithBulkPricingOnPage={productsWithBulkPricingOnPage}
+        />
 
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Organisation par categorie
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Link
-              href={buildProductsHref({ category: "", page: 1 })}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                !selectedCategory
-                  ? "border-brand-blue bg-brand-blue text-white"
-                  : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
-              }`}
-            >
-              Toutes ({productsCount})
-            </Link>
-            {sortedCategoryEntries.map(([categorySlug, total]) => (
-              <Link
-                key={categorySlug}
-                href={buildProductsHref({ category: categorySlug, page: 1 })}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  selectedCategory === categorySlug
-                    ? "border-brand-blue bg-brand-blue text-white"
-                    : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
-                }`}
-              >
-                {formatCategoryLabel(categorySlug)} ({total})
-              </Link>
-            ))}
-          </div>
-          {selectedCategory ? (
-            <p className="mt-2 text-xs text-slate-600">
-              Filtre actif:{" "}
-              <span className="font-semibold">{formatCategoryLabel(selectedCategory)}</span>
-            </p>
-          ) : null}
-          {searchQuery.trim() ? (
-            <p className="mt-2 text-xs text-slate-600">
-              Recherche active: <span className="font-semibold">{searchQuery.trim()}</span>
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-slate-600">
-              Astuce: choisissez une categorie pour modifier les produits plus vite.
-            </p>
-          )}
-          <p className="mt-2 text-xs text-slate-600">
-            Resultats:{" "}
-            <span className="font-semibold">
-              {firstItemIndex}-{lastItemIndex}
-            </span>{" "}
-            sur <span className="font-semibold">{filteredProductsCount}</span>.
-          </p>
-        </div>
+        <AdminProductsFiltersCard
+          productsCount={productsCount}
+          filteredProductsCount={filteredProductsCount}
+          selectedCategory={selectedCategory}
+          searchQuery={searchQuery}
+          sortedCategoryEntries={sortedCategoryEntries}
+          firstItemIndex={firstItemIndex}
+          lastItemIndex={lastItemIndex}
+          buildProductsHref={buildProductsHref}
+        />
 
         <datalist id="admin-category-options">
           {categoryOptions.map((categorySlug) => (
@@ -273,7 +163,7 @@ export const AdminProductsPageView = ({
 
         {totalPages > 1 ? (
           <nav
-            className="mb-4 flex flex-wrap items-center justify-center gap-2"
+            className="flex flex-wrap items-center justify-center gap-2"
             aria-label="Pagination produits admin"
           >
             <Link
