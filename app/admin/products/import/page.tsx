@@ -10,7 +10,7 @@ export default async function AdminProductsImportPage() {
     return (
       <section className="bg-brand-light py-12">
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-card">
-          <h1 className="text-2xl font-extrabold text-brand-blue">Import produits (CSV)</h1>
+          <h1 className="text-2xl font-extrabold text-brand-blue">Import produits (CSV/XLSX)</h1>
           <p className="mt-3 text-sm text-slate-700">
             Configurez
             <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
@@ -32,7 +32,7 @@ export default async function AdminProductsImportPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-brand-blue">Import produits en masse</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Workflow additionnel: televersement CSV, apercu avec validation, puis import securise.
+              Workflow: upload CSV/XLSX, apercu clair, validation humaine, puis import securise.
             </p>
           </div>
           <Link

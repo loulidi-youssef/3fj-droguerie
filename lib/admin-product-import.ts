@@ -2,7 +2,7 @@ import { categories } from "@/data/categories";
 import { parseDecimalInput, roundDhAmount } from "@/lib/currency";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-export const PRODUCT_IMPORT_SUPPORTED_FORMATS = ["csv", "json"] as const;
+export const PRODUCT_IMPORT_SUPPORTED_FORMATS = ["csv", "xlsx"] as const;
 export type ProductImportFormat = (typeof PRODUCT_IMPORT_SUPPORTED_FORMATS)[number];
 
 export const PRODUCT_IMPORT_CSV_COLUMNS = [
@@ -17,23 +17,9 @@ export const PRODUCT_IMPORT_CSV_COLUMNS = [
   "is_active",
 ] as const;
 
-type ProductImportCsvColumn = (typeof PRODUCT_IMPORT_CSV_COLUMNS)[number];
+export type ProductImportCsvColumn = (typeof PRODUCT_IMPORT_CSV_COLUMNS)[number];
 
-const REQUIRED_PRODUCT_IMPORT_COLUMNS = new Set<ProductImportCsvColumn>(
-  PRODUCT_IMPORT_CSV_COLUMNS,
-);
-
-const PRODUCT_IMPORT_MAX_FILE_SIZE_BYTES = 2_000_000;
-const PRODUCT_IMPORT_MAX_ROWS = 5_000;
-const DEFAULT_PRODUCT_RATING = 4.5;
-const PRODUCT_IMPORT_EXCEL_SHEET_NAME = "Produits";
-const PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME = "Instructions";
-const PRODUCT_IMPORT_TEMPLATE_CATEGORIES = [
-  "outillage",
-  "peinture",
-  "electricite",
-  "construction",
-] as const;
+type ProductImportRawRow = Record<ProductImportCsvColumn, string>;
 
 type ProductImportNormalizedRow = {
   name: string;
@@ -49,10 +35,11 @@ type ProductImportNormalizedRow = {
 
 type ProductImportRowOutput = {
   rowNumber: number;
-  raw: Record<ProductImportCsvColumn, string>;
+  raw: ProductImportRawRow;
   normalized: ProductImportNormalizedRow | null;
   errors: string[];
   warnings: string[];
+  invalidColumns: ProductImportCsvColumn[];
   isValid: boolean;
 };
 
@@ -69,6 +56,9 @@ export type ProductImportPreviewResult = {
   summary: ProductImportSummary;
   headerErrors: string[];
   rows: ProductImportRowOutput[];
+  notices: string[];
+  skippedEmptyRows: number;
+  detectedDelimiter?: "," | ";";
 };
 
 export type ProductImportFailedRow = {
@@ -89,51 +79,102 @@ export type ProductImportCommitResult = {
   duplicateRowsDuringInsert: number;
 };
 
+export type ProductImportUploadedFile = {
+  fileName: string;
+  fileBuffer: Buffer;
+};
+
 type ParseCsvResult =
   | {
       ok: true;
       rows: string[][];
+      delimiter: "," | ";";
     }
   | {
       ok: false;
       error: string;
     };
 
+type ParsedInputRow = {
+  rowNumber: number;
+  cells: string[];
+};
+
+type ParsedProductImportInput = {
+  format: ProductImportFormat;
+  headerRow: string[];
+  dataRows: ParsedInputRow[];
+  notices: string[];
+  detectedDelimiter?: "," | ";";
+};
+
 type WorkingProductImportRow = {
   rowNumber: number;
-  raw: Record<ProductImportCsvColumn, string>;
+  raw: ProductImportRawRow;
   normalized: ProductImportNormalizedRow | null;
   errors: Set<string>;
   warnings: Set<string>;
+  invalidColumns: Set<ProductImportCsvColumn>;
 };
 
 type ProductImportTemplateRow = Record<ProductImportCsvColumn, string>;
 
-const normalizeSlugLikeValue = (rawValue: string): string => {
-  return rawValue
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+type BuildWorkingRowResult = {
+  workingRow: WorkingProductImportRow;
+  usesOldPrice: boolean;
 };
+
+const REQUIRED_PRODUCT_IMPORT_COLUMNS = new Set<ProductImportCsvColumn>(
+  PRODUCT_IMPORT_CSV_COLUMNS,
+);
+
+const PRODUCT_IMPORT_MAX_FILE_SIZE_BYTES = 8_000_000;
+const PRODUCT_IMPORT_MAX_ROWS = 5_000;
+const DEFAULT_PRODUCT_RATING = 4.5;
+const PRODUCT_IMPORT_EXCEL_SHEET_NAME = "Produits";
+const PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME = "Instructions";
+const PRODUCT_IMPORT_TEMPLATE_CATEGORIES = [
+  "outillage",
+  "peinture",
+  "electricite",
+  "construction",
+] as const;
+
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const stripUtf8Bom = (value: string): string => value.replace(/^\uFEFF/, "");
 
 const normalizeCellValue = (rawValue: string | undefined): string => {
   return typeof rawValue === "string" ? rawValue.trim() : "";
 };
 
+const normalizeHeaderValue = (headerValue: string): string => {
+  return stripUtf8Bom(normalizeCellValue(headerValue)).toLowerCase();
+};
+
+const normalizeSlugValue = (rawValue: string): string => {
+  return normalizeCellValue(rawValue).toLowerCase();
+};
+
 const parseBooleanCellValue = (rawValue: string): boolean | null => {
-  const normalized = rawValue.trim().toLowerCase();
+  const normalized = normalizeCellValue(rawValue).toLowerCase();
   if (!normalized) {
     return true;
   }
 
-  if (["true", "1", "yes", "oui", "on", "active"].includes(normalized)) {
+  if (
+    ["true", "1", "yes", "oui", "on", "active", "actif", "vrai"].includes(
+      normalized,
+    )
+  ) {
     return true;
   }
 
-  if (["false", "0", "no", "non", "off", "inactive"].includes(normalized)) {
+  if (
+    ["false", "0", "no", "non", "off", "inactive", "inactif", "faux"].includes(
+      normalized,
+    )
+  ) {
     return false;
   }
 
@@ -193,8 +234,26 @@ const normalizeDatabaseImportError = (message: string | undefined): string => {
   return "Erreur base de donnees lors de l'insertion.";
 };
 
+const detectCsvDelimiter = (rawCsvText: string): "," | ";" => {
+  const lines = rawCsvText.split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      continue;
+    }
+
+    const semicolonCount = (trimmedLine.match(/;/g) ?? []).length;
+    const commaCount = (trimmedLine.match(/,/g) ?? []).length;
+    return semicolonCount > commaCount ? ";" : ",";
+  }
+
+  return ",";
+};
+
 const parseCsv = (rawCsvText: string): ParseCsvResult => {
-  const csvText = rawCsvText.replace(/^\uFEFF/, "");
+  const csvText = stripUtf8Bom(rawCsvText);
+  const delimiter = detectCsvDelimiter(csvText);
   const rows: string[][] = [];
   let currentField = "";
   let currentRow: string[] = [];
@@ -204,10 +263,10 @@ const parseCsv = (rawCsvText: string): ParseCsvResult => {
     const char = csvText[index];
 
     if (insideQuotes) {
-      if (char === "\"") {
+      if (char === '"') {
         const nextChar = csvText[index + 1];
-        if (nextChar === "\"") {
-          currentField += "\"";
+        if (nextChar === '"') {
+          currentField += '"';
           index += 1;
           continue;
         }
@@ -219,12 +278,12 @@ const parseCsv = (rawCsvText: string): ParseCsvResult => {
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       insideQuotes = true;
       continue;
     }
 
-    if (char === ",") {
+    if (char === delimiter) {
       currentRow.push(currentField);
       currentField = "";
       continue;
@@ -253,9 +312,7 @@ const parseCsv = (rawCsvText: string): ParseCsvResult => {
   }
 
   currentRow.push(currentField);
-  if (currentRow.some((cell) => cell.trim().length > 0)) {
-    rows.push(currentRow);
-  }
+  rows.push(currentRow);
 
   if (rows.length === 0) {
     return {
@@ -267,6 +324,7 @@ const parseCsv = (rawCsvText: string): ParseCsvResult => {
   return {
     ok: true,
     rows,
+    delimiter,
   };
 };
 
@@ -277,19 +335,25 @@ const getHeaderIndexMap = (
   indexByColumn: Map<ProductImportCsvColumn, number>;
 } => {
   const normalizedHeaderToIndex = new Map<string, number>();
+  const headerErrors: string[] = [];
+
   for (const [index, headerCell] of headerRow.entries()) {
-    const normalizedHeader = headerCell.trim().toLowerCase();
+    const normalizedHeader = normalizeHeaderValue(headerCell);
     if (!normalizedHeader) {
       continue;
     }
 
-    if (!normalizedHeaderToIndex.has(normalizedHeader)) {
-      normalizedHeaderToIndex.set(normalizedHeader, index);
+    if (normalizedHeaderToIndex.has(normalizedHeader)) {
+      if (REQUIRED_PRODUCT_IMPORT_COLUMNS.has(normalizedHeader as ProductImportCsvColumn)) {
+        headerErrors.push(`Colonne dupliquee: ${normalizedHeader}`);
+      }
+      continue;
     }
+
+    normalizedHeaderToIndex.set(normalizedHeader, index);
   }
 
   const indexByColumn = new Map<ProductImportCsvColumn, number>();
-  const headerErrors: string[] = [];
 
   for (const column of REQUIRED_PRODUCT_IMPORT_COLUMNS) {
     const index = normalizedHeaderToIndex.get(column);
@@ -297,26 +361,26 @@ const getHeaderIndexMap = (
       headerErrors.push(`Colonne manquante: ${column}`);
       continue;
     }
+
     indexByColumn.set(column, index);
   }
 
   return { headerErrors, indexByColumn };
 };
 
-const buildWorkingRow = (
-  csvRow: string[],
-  rowNumber: number,
+const readRawRowByColumn = (
+  cells: string[],
   indexByColumn: Map<ProductImportCsvColumn, number>,
-): WorkingProductImportRow => {
+): ProductImportRawRow => {
   const readCell = (column: ProductImportCsvColumn): string => {
     const index = indexByColumn.get(column);
     if (typeof index !== "number") {
       return "";
     }
-    return normalizeCellValue(csvRow[index]);
+    return normalizeCellValue(cells[index]);
   };
 
-  const raw: Record<ProductImportCsvColumn, string> = {
+  return {
     name: readCell("name"),
     slug: readCell("slug"),
     description: readCell("description"),
@@ -327,46 +391,75 @@ const buildWorkingRow = (
     image_url: readCell("image_url"),
     is_active: readCell("is_active"),
   };
+};
 
-  const errors = new Set<string>();
-  const warnings = new Set<string>();
+const isRawRowEmpty = (raw: ProductImportRawRow): boolean => {
+  return PRODUCT_IMPORT_CSV_COLUMNS.every((column) => normalizeCellValue(raw[column]).length === 0);
+};
 
-  const name = raw.name.trim();
+const createWorkingRowScaffold = (
+  rowNumber: number,
+  raw: ProductImportRawRow,
+): WorkingProductImportRow => ({
+  rowNumber,
+  raw,
+  normalized: null,
+  errors: new Set<string>(),
+  warnings: new Set<string>(),
+  invalidColumns: new Set<ProductImportCsvColumn>(),
+});
+
+const addRowError = (
+  row: WorkingProductImportRow,
+  error: string,
+  invalidColumn?: ProductImportCsvColumn,
+): void => {
+  row.errors.add(error);
+  if (invalidColumn) {
+    row.invalidColumns.add(invalidColumn);
+  }
+};
+
+const buildWorkingRow = (
+  raw: ProductImportRawRow,
+  rowNumber: number,
+): BuildWorkingRowResult => {
+  const row = createWorkingRowScaffold(rowNumber, raw);
+
+  const name = normalizeCellValue(raw.name);
   if (!name) {
-    errors.add("Nom requis.");
+    addRowError(row, "Nom manquant.", "name");
   }
 
-  const slug = normalizeSlugLikeValue(raw.slug);
+  const slug = normalizeSlugValue(raw.slug);
   if (!slug) {
-    errors.add("Slug requis.");
-  } else if (!/^[a-z0-9-]+$/.test(slug)) {
-    errors.add("Slug invalide (lettres minuscules, chiffres, tirets).");
+    addRowError(row, "Slug manquant.", "slug");
+  } else if (!SLUG_PATTERN.test(slug)) {
+    addRowError(row, "Slug invalide (minuscules, chiffres, tirets).", "slug");
   }
 
-  const description = raw.description.trim();
+  const description = normalizeCellValue(raw.description);
   if (!description) {
-    errors.add("Description requise.");
+    addRowError(row, "Description manquante.", "description");
   }
 
   const priceValue = parseDecimalInput(raw.price);
   if (!Number.isFinite(priceValue) || priceValue <= 0) {
-    errors.add("Prix invalide (> 0 attendu).");
+    addRowError(row, "Prix invalide.", "price");
   }
-  const price = roundDhAmount(priceValue);
+  const normalizedPrice = roundDhAmount(priceValue);
 
   let oldPrice: number | null = null;
-  if (raw.old_price) {
+  const hasOldPriceValue = normalizeCellValue(raw.old_price).length > 0;
+  if (hasOldPriceValue) {
     const oldPriceValue = parseDecimalInput(raw.old_price);
     if (!Number.isFinite(oldPriceValue) || oldPriceValue <= 0) {
-      errors.add("old_price invalide (> 0 attendu).");
+      addRowError(row, "old_price invalide.", "old_price");
     } else {
       oldPrice = roundDhAmount(oldPriceValue);
-      if (Number.isFinite(price) && oldPrice <= price) {
-        errors.add("old_price doit etre superieur au prix.");
+      if (Number.isFinite(normalizedPrice) && oldPrice <= normalizedPrice) {
+        addRowError(row, "old_price doit etre superieur au prix.", "old_price");
       }
-      warnings.add(
-        "old_price est valide mais non persiste dans products (colonne absente).",
-      );
     }
   }
 
@@ -376,53 +469,57 @@ const buildWorkingRow = (
     stockValue < 0 ||
     Math.trunc(stockValue) !== stockValue
   ) {
-    errors.add("Stock invalide (entier >= 0 attendu).");
+    addRowError(row, "Stock invalide.", "stock");
   }
-  const stock = Number.isFinite(stockValue) ? Math.trunc(stockValue) : 0;
+  const normalizedStock = Number.isFinite(stockValue) ? Math.trunc(stockValue) : 0;
 
-  const categorySlug = normalizeSlugLikeValue(raw.category);
+  const categorySlug = normalizeSlugValue(raw.category);
   if (!categorySlug) {
-    errors.add("Categorie requise.");
+    addRowError(row, "Categorie manquante.", "category");
+  } else if (!SLUG_PATTERN.test(categorySlug)) {
+    addRowError(
+      row,
+      "Categorie invalide (utilisez minuscules, chiffres et tirets).",
+      "category",
+    );
   }
 
   const imageUrls = parseImageUrlsCell(raw.image_url);
   if (imageUrls.length === 0) {
-    errors.add("image_url requis (au moins une URL ou chemin).");
+    addRowError(row, "image_url manquant.", "image_url");
   } else {
-    const invalidImagePath = imageUrls.find((imageUrl) => !isAcceptedImagePath(imageUrl));
-    if (invalidImagePath) {
-      errors.add(
-        "image_url invalide: utilisez un chemin /images/... ou une URL https://...",
+    const hasInvalidImagePath = imageUrls.some((value) => !isAcceptedImagePath(value));
+    if (hasInvalidImagePath) {
+      addRowError(
+        row,
+        "image_url invalide (utilisez /images/... ou https://...).",
+        "image_url",
       );
     }
   }
 
   const isActive = parseBooleanCellValue(raw.is_active);
   if (isActive === null) {
-    errors.add("is_active invalide (true/false, 1/0, yes/no, oui/non).");
+    addRowError(row, "is_active doit etre true ou false.", "is_active");
   }
 
-  const normalized: ProductImportNormalizedRow | null =
-    errors.size === 0
-      ? {
-          name,
-          slug,
-          description,
-          price,
-          oldPrice,
-          stock,
-          categorySlug,
-          imageUrls,
-          isActive: isActive ?? true,
-        }
-      : null;
+  if (row.errors.size === 0) {
+    row.normalized = {
+      name,
+      slug,
+      description,
+      price: normalizedPrice,
+      oldPrice,
+      stock: normalizedStock,
+      categorySlug,
+      imageUrls,
+      isActive: isActive ?? true,
+    };
+  }
 
   return {
-    rowNumber,
-    raw,
-    normalized,
-    errors,
-    warnings,
+    workingRow: row,
+    usesOldPrice: hasOldPriceValue,
   };
 };
 
@@ -456,9 +553,7 @@ const getExistingProductSlugs = async (slugs: string[]): Promise<Set<string>> =>
     }
 
     for (const entry of data ?? []) {
-      const slug = String((entry as { slug?: string }).slug ?? "")
-        .trim()
-        .toLowerCase();
+      const slug = normalizeSlugValue(String((entry as { slug?: string }).slug ?? ""));
       if (slug) {
         existingSlugs.add(slug);
       }
@@ -469,7 +564,10 @@ const getExistingProductSlugs = async (slugs: string[]): Promise<Set<string>> =>
 };
 
 const getKnownCategorySlugs = async (): Promise<Set<string>> => {
-  const categorySlugs = new Set<string>(categories.map((category) => category.slug));
+  const categorySlugs = new Set<string>(
+    categories.map((category) => normalizeSlugValue(category.slug)).filter(Boolean),
+  );
+
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
     return categorySlugs;
@@ -477,11 +575,11 @@ const getKnownCategorySlugs = async (): Promise<Set<string>> => {
 
   const { data } = await supabaseAdmin.from("products").select("category_slug");
   for (const entry of data ?? []) {
-    const value = String((entry as { category_slug?: string }).category_slug ?? "")
-      .trim()
-      .toLowerCase();
-    if (value) {
-      categorySlugs.add(value);
+    const categorySlug = normalizeSlugValue(
+      String((entry as { category_slug?: string }).category_slug ?? ""),
+    );
+    if (categorySlug) {
+      categorySlugs.add(categorySlug);
     }
   }
 
@@ -489,116 +587,325 @@ const getKnownCategorySlugs = async (): Promise<Set<string>> => {
 };
 
 const toPreviewRows = (rows: WorkingProductImportRow[]): ProductImportRowOutput[] => {
+  const orderedColumns = new Map<ProductImportCsvColumn, number>(
+    PRODUCT_IMPORT_CSV_COLUMNS.map((column, index) => [column, index]),
+  );
+
   return rows.map((row) => ({
     rowNumber: row.rowNumber,
     raw: row.raw,
     normalized: row.normalized,
     errors: [...row.errors],
     warnings: [...row.warnings],
+    invalidColumns: [...row.invalidColumns].sort(
+      (left, right) => (orderedColumns.get(left) ?? 0) - (orderedColumns.get(right) ?? 0),
+    ),
     isValid: row.errors.size === 0 && row.normalized !== null,
   }));
 };
 
-const buildPreviewFromCsv = async (
-  csvText: string,
-): Promise<ProductImportPreviewResult> => {
-  if (!csvText.trim()) {
+const parseCsvInput = (
+  fileBuffer: Buffer,
+):
+  | {
+      ok: true;
+      parsed: ParsedProductImportInput;
+    }
+  | {
+      ok: false;
+      error: string;
+    } => {
+  const rawCsvText = fileBuffer.toString("utf8");
+  if (!rawCsvText.trim()) {
     return {
       ok: false,
-      format: "csv",
-      message: "Ajoutez un fichier CSV avant de continuer.",
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
+      error: "Le fichier CSV est vide.",
     };
   }
 
-  if (csvText.length > PRODUCT_IMPORT_MAX_FILE_SIZE_BYTES) {
-    return {
-      ok: false,
-      format: "csv",
-      message: "Le fichier depasse 2 MB. Decoupez le catalogue en plusieurs imports.",
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
-    };
-  }
-
-  const parsedCsv = parseCsv(csvText);
+  const parsedCsv = parseCsv(rawCsvText);
   if (!parsedCsv.ok) {
     return {
       ok: false,
-      format: "csv",
-      message: parsedCsv.error,
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
+      error: parsedCsv.error,
     };
   }
 
-  const [headerRow, ...dataRows] = parsedCsv.rows;
+  const [headerRow = [], ...dataRows] = parsedCsv.rows;
+  const normalizedHeaderRow = headerRow.map((cell) => normalizeCellValue(cell));
+  if (normalizedHeaderRow.length > 0) {
+    normalizedHeaderRow[0] = stripUtf8Bom(normalizedHeaderRow[0]);
+  }
 
-  if (dataRows.length === 0) {
+  const normalizedDataRows: ParsedInputRow[] = dataRows.map((row, index) => ({
+    rowNumber: index + 2,
+    cells: row.map((cell) => normalizeCellValue(cell)),
+  }));
+
+  const notices: string[] = [];
+  if (parsedCsv.delimiter === ";") {
+    notices.push("Le fichier semble utiliser ';' comme separateur. Il a ete detecte automatiquement.");
+  }
+
+  return {
+    ok: true,
+    parsed: {
+      format: "csv",
+      headerRow: normalizedHeaderRow,
+      dataRows: normalizedDataRows,
+      notices,
+      detectedDelimiter: parsedCsv.delimiter,
+    },
+  };
+};
+
+const parseXlsxInput = async (
+  fileBuffer: Buffer,
+): Promise<
+  | {
+      ok: true;
+      parsed: ParsedProductImportInput;
+    }
+  | {
+      ok: false;
+      error: string;
+    }
+> => {
+  let workbook: import("exceljs").Workbook;
+
+  try {
+    const ExcelJS = await import("exceljs");
+    workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(fileBuffer);
+  } catch {
+    return {
+      ok: false,
+      error: "Impossible de lire ce fichier Excel (.xlsx).",
+    };
+  }
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
+    return {
+      ok: false,
+      error: "Le fichier Excel ne contient aucune feuille.",
+    };
+  }
+
+  const headerWorksheetRow = worksheet.getRow(1);
+  const headerColumnCount = Math.max(
+    PRODUCT_IMPORT_CSV_COLUMNS.length,
+    headerWorksheetRow.cellCount,
+    headerWorksheetRow.actualCellCount,
+  );
+
+  const headerRow: string[] = [];
+  for (let columnNumber = 1; columnNumber <= headerColumnCount; columnNumber += 1) {
+    headerRow.push(normalizeCellValue(headerWorksheetRow.getCell(columnNumber).text));
+  }
+
+  if (headerRow.length > 0) {
+    headerRow[0] = stripUtf8Bom(headerRow[0]);
+  }
+
+  const dataRows: ParsedInputRow[] = [];
+  worksheet.eachRow({ includeEmpty: false }, (row: import("exceljs").Row, rowNumber: number) => {
+    if (rowNumber === 1) {
+      return;
+    }
+
+    const cells: string[] = [];
+    for (let columnNumber = 1; columnNumber <= headerColumnCount; columnNumber += 1) {
+      cells.push(normalizeCellValue(row.getCell(columnNumber).text));
+    }
+
+    dataRows.push({
+      rowNumber,
+      cells,
+    });
+  });
+
+  return {
+    ok: true,
+    parsed: {
+      format: "xlsx",
+      headerRow,
+      dataRows,
+      notices: [
+        `Fichier Excel detecte: feuille utilisee \"${worksheet.name}\" (premiere feuille).`,
+      ],
+    },
+  };
+};
+
+const parseProductImportInput = async (
+  file: ProductImportUploadedFile,
+): Promise<
+  | {
+      ok: true;
+      parsed: ParsedProductImportInput;
+    }
+  | {
+      ok: false;
+      format: ProductImportFormat;
+      error: string;
+    }
+> => {
+  const format = getProductImportFormatFromFileName(file.fileName);
+  if (!format) {
     return {
       ok: false,
       format: "csv",
-      message: "Aucune ligne produit trouvee dans le CSV.",
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
+      error: "Format non supporte. Utilisez un fichier .csv ou .xlsx.",
     };
   }
 
-  if (dataRows.length > PRODUCT_IMPORT_MAX_ROWS) {
+  if (file.fileBuffer.length === 0) {
     return {
       ok: false,
-      format: "csv",
-      message: "Le fichier contient trop de lignes (max 5000 par import).",
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
+      format,
+      error: "Le fichier est vide.",
     };
   }
 
-  const { headerErrors, indexByColumn } = getHeaderIndexMap(headerRow);
+  if (file.fileBuffer.length > PRODUCT_IMPORT_MAX_FILE_SIZE_BYTES) {
+    return {
+      ok: false,
+      format,
+      error: "Le fichier depasse la limite de 8 MB.",
+    };
+  }
+
+  if (format === "xlsx") {
+    const parsedExcel = await parseXlsxInput(file.fileBuffer);
+    if (!parsedExcel.ok) {
+      return {
+        ok: false,
+        format,
+        error: parsedExcel.error,
+      };
+    }
+
+    return {
+      ok: true,
+      parsed: parsedExcel.parsed,
+    };
+  }
+
+  const parsedCsv = parseCsvInput(file.fileBuffer);
+  if (!parsedCsv.ok) {
+    return {
+      ok: false,
+      format,
+      error: parsedCsv.error,
+    };
+  }
+
+  return {
+    ok: true,
+    parsed: parsedCsv.parsed,
+  };
+};
+
+const buildPreviewFromParsedInput = async (
+  parsedInput: ParsedProductImportInput,
+): Promise<ProductImportPreviewResult> => {
+  const { headerErrors, indexByColumn } = getHeaderIndexMap(parsedInput.headerRow);
   if (headerErrors.length > 0) {
     return {
       ok: false,
-      format: "csv",
-      message: "Schema CSV invalide. Corrigez les en-tetes puis relancez l'aperçu.",
+      format: parsedInput.format,
+      message: "Schema invalide: verifiez les en-tetes du fichier.",
       headerErrors,
       rows: [],
+      notices: parsedInput.notices,
+      skippedEmptyRows: 0,
+      detectedDelimiter: parsedInput.detectedDelimiter,
       summary: {
-        totalRows: dataRows.length,
+        totalRows: 0,
         validRows: 0,
-        invalidRows: dataRows.length,
+        invalidRows: 0,
       },
     };
   }
 
-  const workingRows = dataRows.map((dataRow, index) =>
-    buildWorkingRow(dataRow, index + 2, indexByColumn),
-  );
+  if (parsedInput.dataRows.length === 0) {
+    return {
+      ok: false,
+      format: parsedInput.format,
+      message: "Aucune ligne produit detectee.",
+      headerErrors: [],
+      rows: [],
+      notices: parsedInput.notices,
+      skippedEmptyRows: 0,
+      detectedDelimiter: parsedInput.detectedDelimiter,
+      summary: {
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+      },
+    };
+  }
+
+  const workingRows: WorkingProductImportRow[] = [];
+  let skippedEmptyRows = 0;
+  let foundOldPriceValue = false;
+
+  for (const row of parsedInput.dataRows) {
+    const raw = readRawRowByColumn(row.cells, indexByColumn);
+    if (isRawRowEmpty(raw)) {
+      skippedEmptyRows += 1;
+      continue;
+    }
+
+    const working = buildWorkingRow(raw, row.rowNumber);
+    if (working.usesOldPrice) {
+      foundOldPriceValue = true;
+    }
+
+    workingRows.push(working.workingRow);
+  }
+
+  if (workingRows.length === 0) {
+    const notices = [...parsedInput.notices];
+    if (skippedEmptyRows > 0) {
+      notices.push(`${skippedEmptyRows} ligne(s) vide(s) ignoree(s).`);
+    }
+
+    return {
+      ok: false,
+      format: parsedInput.format,
+      message: "Aucune ligne produit utile detectee (lignes vides ignorees).",
+      headerErrors: [],
+      rows: [],
+      notices,
+      skippedEmptyRows,
+      detectedDelimiter: parsedInput.detectedDelimiter,
+      summary: {
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+      },
+    };
+  }
+
+  if (workingRows.length > PRODUCT_IMPORT_MAX_ROWS) {
+    return {
+      ok: false,
+      format: parsedInput.format,
+      message: "Le fichier contient trop de lignes (max 5000 lignes utiles par import).",
+      headerErrors: [],
+      rows: [],
+      notices: parsedInput.notices,
+      skippedEmptyRows,
+      detectedDelimiter: parsedInput.detectedDelimiter,
+      summary: {
+        totalRows: workingRows.length,
+        validRows: 0,
+        invalidRows: workingRows.length,
+      },
+    };
+  }
 
   const slugOccurrences = new Map<string, number[]>();
   for (const row of workingRows) {
@@ -606,9 +913,10 @@ const buildPreviewFromCsv = async (
     if (!slug) {
       continue;
     }
-    const rowsForSlug = slugOccurrences.get(slug) ?? [];
-    rowsForSlug.push(row.rowNumber);
-    slugOccurrences.set(slug, rowsForSlug);
+
+    const occurrences = slugOccurrences.get(slug) ?? [];
+    occurrences.push(row.rowNumber);
+    slugOccurrences.set(slug, occurrences);
   }
 
   for (const row of workingRows) {
@@ -616,9 +924,14 @@ const buildPreviewFromCsv = async (
     if (!slug) {
       continue;
     }
-    const duplicatedRows = slugOccurrences.get(slug) ?? [];
-    if (duplicatedRows.length > 1) {
-      row.errors.add(`Slug duplique dans le fichier (lignes: ${duplicatedRows.join(", ")}).`);
+
+    const duplicateRows = slugOccurrences.get(slug) ?? [];
+    if (duplicateRows.length > 1) {
+      addRowError(
+        row,
+        `Slug duplique dans le fichier (lignes: ${duplicateRows.join(", ")}).`,
+        "slug",
+      );
       row.normalized = null;
     }
   }
@@ -632,38 +945,54 @@ const buildPreviewFromCsv = async (
       if (!slug) {
         continue;
       }
+
       if (existingSlugs.has(slug)) {
-        row.errors.add("Slug deja existant en base.");
+        addRowError(row, "Slug deja existant en base.", "slug");
         row.normalized = null;
       }
     }
   } catch {
     return {
       ok: false,
-      format: "csv",
+      format: parsedInput.format,
       message: "Impossible de verifier les slugs existants pour le moment.",
       headerErrors: [],
       rows: [],
+      notices: parsedInput.notices,
+      skippedEmptyRows,
+      detectedDelimiter: parsedInput.detectedDelimiter,
       summary: {
-        totalRows: dataRows.length,
+        totalRows: workingRows.length,
         validRows: 0,
-        invalidRows: dataRows.length,
+        invalidRows: workingRows.length,
       },
     };
   }
 
-  const knownCategorySlugs = await getKnownCategorySlugs();
-  for (const row of workingRows) {
-    const categorySlug = row.normalized?.categorySlug;
-    if (!categorySlug) {
-      continue;
-    }
+  try {
+    const knownCategorySlugs = await getKnownCategorySlugs();
+    for (const row of workingRows) {
+      const categorySlug = row.normalized?.categorySlug;
+      if (!categorySlug) {
+        continue;
+      }
 
-    if (!knownCategorySlugs.has(categorySlug)) {
-      row.warnings.add(
-        "Categorie nouvelle detectee: le produit sera importe avec ce category slug.",
-      );
+      if (!knownCategorySlugs.has(categorySlug)) {
+        row.warnings.add(
+          "Categorie nouvelle detectee: le produit sera importe avec cette categorie.",
+        );
+      }
     }
+  } catch {
+    // Non bloquant: on garde l'import possible meme si les warnings categories ne peuvent pas etre enrichis.
+  }
+
+  const notices = [...parsedInput.notices];
+  if (skippedEmptyRows > 0) {
+    notices.push(`${skippedEmptyRows} ligne(s) vide(s) ignoree(s).`);
+  }
+  if (foundOldPriceValue) {
+    notices.push("La colonne old_price est validee mais n'est pas encore enregistree dans la base.");
   }
 
   const previewRows = toPreviewRows(workingRows);
@@ -672,13 +1001,16 @@ const buildPreviewFromCsv = async (
 
   return {
     ok: true,
-    format: "csv",
+    format: parsedInput.format,
     message:
       invalidRows > 0
-        ? "Apercu genere avec erreurs. Corrigez les lignes invalides avant import."
-        : "Apercu valide. Vous pouvez lancer l'import.",
+        ? "Apercu genere: corrigez les lignes en erreur avant import."
+        : "Apercu valide: vous pouvez lancer l'import securise.",
     headerErrors: [],
     rows: previewRows,
+    notices,
+    skippedEmptyRows,
+    detectedDelimiter: parsedInput.detectedDelimiter,
     summary: {
       totalRows: previewRows.length,
       validRows,
@@ -694,27 +1026,14 @@ const isDuplicateSlugInsertError = (message: string | undefined): boolean => {
   return message.includes("duplicate key value") || message.includes("products_slug_key");
 };
 
-const commitCsvImport = async (csvText: string): Promise<ProductImportCommitResult> => {
-  const preview = await buildPreviewFromCsv(csvText);
-  if (!preview.ok) {
-    return {
-      ok: false,
-      format: "csv",
-      message: preview.message,
-      totalRows: preview.summary.totalRows,
-      importedCount: 0,
-      skippedCount: preview.summary.totalRows,
-      failedRows: [],
-      invalidRowsBeforeImport: preview.summary.totalRows,
-      duplicateRowsDuringInsert: 0,
-    };
-  }
-
+const commitPreviewRows = async (
+  preview: ProductImportPreviewResult,
+): Promise<ProductImportCommitResult> => {
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
     return {
       ok: false,
-      format: "csv",
+      format: preview.format,
       message: "Supabase admin non configure.",
       totalRows: preview.summary.totalRows,
       importedCount: 0,
@@ -764,18 +1083,15 @@ const commitCsvImport = async (csvText: string): Promise<ProductImportCommitResu
     importedCount += 1;
   }
 
-  const skippedCount =
-    preview.summary.invalidRows + duplicateRowsDuringInsert;
-
-  const failedCount = failedRows.length;
-  const ok = failedCount === 0;
+  const skippedCount = preview.summary.invalidRows + duplicateRowsDuringInsert;
 
   return {
-    ok,
-    format: "csv",
-    message: ok
-      ? "Import termine avec succes."
-      : "Import termine avec des erreurs sur certaines lignes.",
+    ok: failedRows.length === 0,
+    format: preview.format,
+    message:
+      failedRows.length === 0
+        ? "Import termine avec succes."
+        : "Import termine avec des erreurs sur certaines lignes.",
     totalRows: preview.summary.totalRows,
     importedCount,
     skippedCount,
@@ -783,6 +1099,80 @@ const commitCsvImport = async (csvText: string): Promise<ProductImportCommitResu
     invalidRowsBeforeImport: preview.summary.invalidRows,
     duplicateRowsDuringInsert,
   };
+};
+
+export const getProductImportFormatFromFileName = (
+  fileName: string,
+): ProductImportFormat | null => {
+  const normalized = fileName.trim().toLowerCase();
+  if (normalized.endsWith(".csv")) {
+    return "csv";
+  }
+
+  if (normalized.endsWith(".xlsx")) {
+    return "xlsx";
+  }
+
+  return null;
+};
+
+export const buildProductImportPreviewFromFile = async (
+  file: ProductImportUploadedFile,
+): Promise<ProductImportPreviewResult> => {
+  const parsedInput = await parseProductImportInput(file);
+  if (!parsedInput.ok) {
+    return {
+      ok: false,
+      format: parsedInput.format,
+      message: parsedInput.error,
+      headerErrors: [],
+      rows: [],
+      notices: [],
+      skippedEmptyRows: 0,
+      summary: {
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+      },
+    };
+  }
+
+  return buildPreviewFromParsedInput(parsedInput.parsed);
+};
+
+export const commitProductImportFromFile = async (
+  file: ProductImportUploadedFile,
+): Promise<ProductImportCommitResult> => {
+  const preview = await buildProductImportPreviewFromFile(file);
+  if (!preview.ok) {
+    return {
+      ok: false,
+      format: preview.format,
+      message: preview.message,
+      totalRows: preview.summary.totalRows,
+      importedCount: 0,
+      skippedCount: preview.summary.totalRows,
+      failedRows: [],
+      invalidRowsBeforeImport: preview.summary.totalRows,
+      duplicateRowsDuringInsert: 0,
+    };
+  }
+
+  if (preview.summary.validRows === 0) {
+    return {
+      ok: false,
+      format: preview.format,
+      message: "Aucune ligne valide a importer.",
+      totalRows: preview.summary.totalRows,
+      importedCount: 0,
+      skippedCount: preview.summary.totalRows,
+      failedRows: [],
+      invalidRowsBeforeImport: preview.summary.invalidRows,
+      duplicateRowsDuringInsert: 0,
+    };
+  }
+
+  return commitPreviewRows(preview);
 };
 
 export const getProductImportCsvTemplate = (): string => {
@@ -972,19 +1362,14 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
     const maxLength = textValues.reduce((currentMax, value) => {
       return Math.max(currentMax, value.length);
     }, 10);
-    productsSheet.getColumn(columnIndex + 1).width = Math.min(
-      46,
-      Math.max(13, maxLength + 3),
-    );
+    productsSheet.getColumn(columnIndex + 1).width = Math.min(46, Math.max(13, maxLength + 3));
   }
 
   productsSheet.getColumn("D").numFmt = "0.00";
   productsSheet.getColumn("E").numFmt = "0.00";
   productsSheet.getColumn("F").numFmt = "0";
 
-  const instructionsSheet = workbook.addWorksheet(
-    PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME,
-  );
+  const instructionsSheet = workbook.addWorksheet(PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME);
   instructionsSheet.columns = [
     { header: "colonne", key: "column", width: 20 },
     { header: "description", key: "description", width: 38 },
@@ -1001,13 +1386,13 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
     },
     {
       column: "slug",
-      description: "Identifiant unique du produit",
+      description: "Identifiant unique en minuscules avec tirets",
       format: "lettres/chiffres/tirets",
       example: "perceuse-bosch-500w",
     },
     {
       column: "description",
-      description: "Description courte et claire du produit",
+      description: "Description produit",
       format: "Texte requis",
       example: "Perceuse electrique compacte",
     },
@@ -1019,7 +1404,7 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
     },
     {
       column: "old_price",
-      description: "Ancien prix (optionnel)",
+      description: "Ancien prix optionnel",
       format: "Nombre decimal > price",
       example: "999.90",
     },
@@ -1031,8 +1416,8 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
     },
     {
       column: "category",
-      description: "Categorie principale du produit",
-      format: "Liste proposee",
+      description: "Categorie principale",
+      format: "outillage/peinture/electricite/construction",
       example: "outillage",
     },
     {
@@ -1088,48 +1473,6 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
   if (Buffer.isBuffer(rawBuffer)) {
     return rawBuffer;
   }
+
   return Buffer.from(rawBuffer);
-};
-
-export const buildProductImportPreview = async (
-  format: ProductImportFormat,
-  rawPayload: string,
-): Promise<ProductImportPreviewResult> => {
-  if (format === "json") {
-    return {
-      ok: false,
-      format,
-      message: "Le format JSON sera ajoute dans une prochaine iteration. Utilisez CSV pour le moment.",
-      headerErrors: [],
-      rows: [],
-      summary: {
-        totalRows: 0,
-        validRows: 0,
-        invalidRows: 0,
-      },
-    };
-  }
-
-  return buildPreviewFromCsv(rawPayload);
-};
-
-export const commitProductImport = async (
-  format: ProductImportFormat,
-  rawPayload: string,
-): Promise<ProductImportCommitResult> => {
-  if (format === "json") {
-    return {
-      ok: false,
-      format,
-      message: "Le format JSON sera ajoute dans une prochaine iteration. Utilisez CSV pour le moment.",
-      totalRows: 0,
-      importedCount: 0,
-      skippedCount: 0,
-      failedRows: [],
-      invalidRowsBeforeImport: 0,
-      duplicateRowsDuringInsert: 0,
-    };
-  }
-
-  return commitCsvImport(rawPayload);
 };

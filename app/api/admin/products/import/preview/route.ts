@@ -4,22 +4,10 @@ import {
   getAdminMutationRateLimitIdentifier,
 } from "@/lib/api-rate-limit";
 import { requireAdminApiSession } from "@/lib/admin-api-auth";
-import {
-  PRODUCT_IMPORT_SUPPORTED_FORMATS,
-  buildProductImportPreview,
-  type ProductImportFormat,
-} from "@/lib/admin-product-import";
+import { buildProductImportPreviewFromFile } from "@/lib/admin-product-import";
 
 export const dynamic = "force-dynamic";
-
-const isSupportedProductImportFormat = (
-  value: string | undefined,
-): value is ProductImportFormat => {
-  if (!value) {
-    return false;
-  }
-  return PRODUCT_IMPORT_SUPPORTED_FORMATS.includes(value as ProductImportFormat);
-};
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const unauthorizedResponse = await requireAdminApiSession();
@@ -37,26 +25,29 @@ export async function POST(request: NextRequest) {
     return rateLimit.response;
   }
 
-  let payload: Record<string, unknown>;
+  let formData: FormData;
   try {
-    payload = (await request.json()) as Record<string, unknown>;
+    formData = await request.formData();
   } catch {
     return NextResponse.json(
-      { ok: false, error: "Corps de requete JSON invalide." },
+      { ok: false, error: "Requete invalide. Envoyez un fichier CSV ou XLSX." },
       { status: 400 },
     );
   }
 
-  const rawFormat = typeof payload.format === "string" ? payload.format.trim() : "csv";
-  if (!isSupportedProductImportFormat(rawFormat)) {
+  const uploadedFile = formData.get("file");
+  if (!(uploadedFile instanceof File)) {
     return NextResponse.json(
-      { ok: false, error: "Format d'import non supporte." },
+      { ok: false, error: "Fichier manquant. Ajoutez un fichier CSV ou XLSX." },
       { status: 400 },
     );
   }
 
-  const rawPayload = typeof payload.payload === "string" ? payload.payload : "";
-  const preview = await buildProductImportPreview(rawFormat, rawPayload);
+  const fileBuffer = Buffer.from(await uploadedFile.arrayBuffer());
+  const preview = await buildProductImportPreviewFromFile({
+    fileName: uploadedFile.name,
+    fileBuffer,
+  });
 
   return NextResponse.json(preview);
 }
