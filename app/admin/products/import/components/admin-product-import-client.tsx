@@ -62,10 +62,6 @@ type ImportCommitResponse = {
   duplicateRowsDuringInsert: number;
 };
 
-type AdminProductImportClientProps = {
-  csvTemplate: string;
-};
-
 const requiredColumns = [
   "name",
   "slug",
@@ -76,6 +72,80 @@ const requiredColumns = [
   "category",
   "image_url",
   "is_active",
+] as const;
+
+type ProductImportColumn = (typeof requiredColumns)[number];
+
+type PreviewColumn = {
+  key: ProductImportColumn;
+  label: string;
+};
+
+const previewColumns: PreviewColumn[] = requiredColumns.map((column) => ({
+  key: column,
+  label: column,
+}));
+
+const columnHelpRows: Array<{
+  column: ProductImportColumn;
+  description: string;
+  format: string;
+  example: string;
+}> = [
+  {
+    column: "name",
+    description: "Nom du produit",
+    format: "Texte requis",
+    example: "Perceuse Bosch 500W",
+  },
+  {
+    column: "slug",
+    description: "Identifiant unique",
+    format: "minuscules/chiffres/tirets",
+    example: "perceuse-bosch-500w",
+  },
+  {
+    column: "description",
+    description: "Description du produit",
+    format: "Texte requis",
+    example: "Perceuse electrique compacte",
+  },
+  {
+    column: "price",
+    description: "Prix actuel",
+    format: "Nombre decimal > 0",
+    example: "799.90",
+  },
+  {
+    column: "old_price",
+    description: "Ancien prix (optionnel)",
+    format: "Nombre decimal > price",
+    example: "999.90",
+  },
+  {
+    column: "stock",
+    description: "Quantite disponible",
+    format: "Entier >= 0",
+    example: "25",
+  },
+  {
+    column: "category",
+    description: "Categorie produit",
+    format: "Slug categorie",
+    example: "outillage",
+  },
+  {
+    column: "image_url",
+    description: "Chemin image ou URL",
+    format: "/images/... ou https://...",
+    example: "/images/products/perceuse-bosch.jpg",
+  },
+  {
+    column: "is_active",
+    description: "Produit actif",
+    format: "true ou false",
+    example: "true",
+  },
 ];
 
 const readErrorFromResponse = async (response: Response): Promise<string> => {
@@ -91,14 +161,135 @@ const readErrorFromResponse = async (response: Response): Promise<string> => {
   return "Operation impossible pour le moment.";
 };
 
-export const AdminProductImportClient = ({
-  csvTemplate,
-}: AdminProductImportClientProps) => {
+const inferErrorColumns = (row: ImportPreviewRow): Set<ProductImportColumn> => {
+  const problematicColumns = new Set<ProductImportColumn>();
+  for (const error of row.errors) {
+    const normalizedError = error.toLowerCase();
+
+    if (normalizedError.includes("nom")) {
+      problematicColumns.add("name");
+    }
+    if (normalizedError.includes("slug")) {
+      problematicColumns.add("slug");
+    }
+    if (normalizedError.includes("description")) {
+      problematicColumns.add("description");
+    }
+    if (normalizedError.includes("old_price")) {
+      problematicColumns.add("old_price");
+    }
+    if (normalizedError.includes("prix")) {
+      problematicColumns.add("price");
+    }
+    if (normalizedError.includes("stock")) {
+      problematicColumns.add("stock");
+    }
+    if (normalizedError.includes("categorie")) {
+      problematicColumns.add("category");
+    }
+    if (normalizedError.includes("image_url")) {
+      problematicColumns.add("image_url");
+    }
+    if (normalizedError.includes("is_active")) {
+      problematicColumns.add("is_active");
+    }
+  }
+
+  return problematicColumns;
+};
+
+const toFriendlyRowError = (error: string, row: ImportPreviewRow): string => {
+  const normalizedError = error.toLowerCase();
+
+  if (normalizedError.startsWith("prix invalide")) {
+    return !row.raw.price.trim() ? "Prix manquant." : "Prix invalide.";
+  }
+
+  if (normalizedError.startsWith("stock invalide")) {
+    return !row.raw.stock.trim() ? "Stock manquant." : "Stock invalide.";
+  }
+
+  if (normalizedError.startsWith("nom requis")) {
+    return "Nom manquant.";
+  }
+
+  if (normalizedError.startsWith("description requise")) {
+    return "Description manquante.";
+  }
+
+  if (normalizedError.startsWith("categorie requise")) {
+    return "Categorie manquante.";
+  }
+
+  if (normalizedError.startsWith("image_url requis")) {
+    return "Image manquante (image_url requis).";
+  }
+
+  if (normalizedError.startsWith("is_active invalide")) {
+    return "is_active invalide (true/false).";
+  }
+
+  return error;
+};
+
+const getPreviewCellText = (
+  row: ImportPreviewRow,
+  column: ProductImportColumn,
+): string => {
+  if (column === "name") {
+    return row.normalized?.name ?? row.raw.name ?? "";
+  }
+
+  if (column === "slug") {
+    return row.normalized?.slug ?? row.raw.slug ?? "";
+  }
+
+  if (column === "description") {
+    return row.normalized?.description ?? row.raw.description ?? "";
+  }
+
+  if (column === "price") {
+    if (typeof row.normalized?.price === "number") {
+      return row.normalized.price.toFixed(2);
+    }
+    return row.raw.price ?? "";
+  }
+
+  if (column === "old_price") {
+    if (typeof row.normalized?.oldPrice === "number") {
+      return row.normalized.oldPrice.toFixed(2);
+    }
+    return row.raw.old_price ?? "";
+  }
+
+  if (column === "stock") {
+    if (typeof row.normalized?.stock === "number") {
+      return String(row.normalized.stock);
+    }
+    return row.raw.stock ?? "";
+  }
+
+  if (column === "category") {
+    return row.normalized?.categorySlug ?? row.raw.category ?? "";
+  }
+
+  if (column === "image_url") {
+    return row.raw.image_url ?? "";
+  }
+
+  if (row.normalized) {
+    return row.normalized.isActive ? "true" : "false";
+  }
+  return row.raw.is_active ?? "";
+};
+
+export const AdminProductImportClient = () => {
   const [csvPayload, setCsvPayload] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
   const [requestError, setRequestError] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState<"" | "csv" | "xlsx">("");
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [commitResult, setCommitResult] = useState<ImportCommitResponse | null>(null);
 
@@ -204,28 +395,54 @@ export const AdminProductImportClient = ({
     }
   };
 
-  const downloadTemplate = (): void => {
-    const blob = new Blob([csvTemplate], { type: "text/csv;charset=utf-8;" });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = "produits-import-template.csv";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(objectUrl);
+  const downloadTemplate = async (format: "csv" | "xlsx"): Promise<void> => {
+    if (isDownloadingTemplate) {
+      return;
+    }
+
+    setIsDownloadingTemplate(format);
+    setRequestError("");
+
+    try {
+      const response = await fetch(`/api/admin/products/import/template?format=${format}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setRequestError(await readErrorFromResponse(response));
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download =
+        format === "xlsx"
+          ? "produits-import-template.xlsx"
+          : "produits-import-template.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setRequestError("Impossible de telecharger le modele pour le moment.");
+    } finally {
+      setIsDownloadingTemplate("");
+    }
   };
 
   return (
     <div className="space-y-4">
       <article className="rounded-2xl bg-white p-5 shadow-card">
-        <h2 className="text-lg font-bold text-brand-blue">1) Charger le CSV</h2>
+        <h2 className="text-lg font-bold text-brand-blue">1) Charger le fichier d'import</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Format initial supporte: CSV. Le support JSON est prevu ensuite.
+          Importez un CSV puis validez l&apos;apercu avant insertion.
         </p>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="block">
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1.1fr_1fr]">
+          <label className="block rounded-xl border border-slate-200 bg-slate-50 p-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Fichier CSV
             </span>
@@ -235,19 +452,92 @@ export const AdminProductImportClient = ({
               onChange={onFileSelected}
               className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-blue file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
             />
+            <p className="mt-2 text-xs text-slate-500">
+              Chaque colonne correspond a une information produit. Remplissez chaque ligne avec un produit.
+            </p>
           </label>
+
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Schema CSV attendu
+              Modeles de fichier
             </p>
-            <p className="mt-1 text-sm text-slate-700">{requiredColumns.join(", ")}</p>
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-            >
-              Telecharger modele CSV
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => downloadTemplate("csv")}
+                disabled={Boolean(isDownloadingTemplate)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:opacity-70"
+              >
+                {isDownloadingTemplate === "csv"
+                  ? "Telechargement..."
+                  : "Telecharger modele CSV"}
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadTemplate("xlsx")}
+                disabled={Boolean(isDownloadingTemplate)}
+                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 disabled:opacity-70"
+              >
+                {isDownloadingTemplate === "xlsx"
+                  ? "Telechargement..."
+                  : "Telecharger modele Excel (.xlsx)"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-[940px] text-left text-xs text-slate-700">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr>
+                {previewColumns.map((column) => (
+                  <th key={column.key} className="px-3 py-2 font-semibold">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-slate-100 bg-white">
+                <td className="px-3 py-2">Perceuse Bosch 500W</td>
+                <td className="px-3 py-2 font-mono">perceuse-bosch-500w</td>
+                <td className="px-3 py-2">Perceuse electrique compacte</td>
+                <td className="px-3 py-2">799.90</td>
+                <td className="px-3 py-2">999.90</td>
+                <td className="px-3 py-2">25</td>
+                <td className="px-3 py-2">outillage</td>
+                <td className="px-3 py-2">/images/products/perceuse-bosch.jpg</td>
+                <td className="px-3 py-2">true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Aide colonnes
+          </p>
+          <div className="mt-2 overflow-x-auto">
+            <table className="min-w-[880px] text-left text-xs text-slate-700">
+              <thead className="text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-2 py-1.5">Colonne</th>
+                  <th className="px-2 py-1.5">Description</th>
+                  <th className="px-2 py-1.5">Format</th>
+                  <th className="px-2 py-1.5">Exemple</th>
+                </tr>
+              </thead>
+              <tbody>
+                {columnHelpRows.map((helpRow) => (
+                  <tr key={helpRow.column} className="border-t border-slate-200">
+                    <td className="px-2 py-1.5 font-semibold">{helpRow.column}</td>
+                    <td className="px-2 py-1.5">{helpRow.description}</td>
+                    <td className="px-2 py-1.5">{helpRow.format}</td>
+                    <td className="px-2 py-1.5 font-mono text-[11px]">{helpRow.example}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -313,81 +603,83 @@ export const AdminProductImportClient = ({
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="min-w-[1150px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <table className="min-w-[1450px] text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-3 py-2">Ligne</th>
-                  <th className="px-3 py-2">Statut</th>
-                  <th className="px-3 py-2">Nom</th>
-                  <th className="px-3 py-2">Slug</th>
-                  <th className="px-3 py-2">Prix</th>
-                  <th className="px-3 py-2">Stock</th>
-                  <th className="px-3 py-2">Categorie</th>
-                  <th className="px-3 py-2">Actif</th>
-                  <th className="px-3 py-2">Details</th>
+                  <th className="px-2 py-2">Ligne</th>
+                  <th className="px-2 py-2">Statut</th>
+                  {previewColumns.map((column) => (
+                    <th key={column.key} className="px-2 py-2">
+                      {column.label}
+                    </th>
+                  ))}
+                  <th className="px-2 py-2">Erreurs / Avertissements</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((row) => (
-                  <tr
-                    key={row.rowNumber}
-                    className={`border-t border-slate-100 align-top ${
-                      row.isValid ? "bg-white" : "bg-rose-50/40"
-                    }`}
-                  >
-                    <td className="px-3 py-2 font-semibold text-slate-700">{row.rowNumber}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                          row.isValid
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-rose-100 text-rose-700"
-                        }`}
-                      >
-                        {row.isValid ? "Valide" : "Invalide"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">{row.raw.name || "-"}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-700">
-                      {row.normalized?.slug ?? (row.raw.slug || "-")}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {typeof row.normalized?.price === "number"
-                        ? row.normalized.price.toFixed(2)
-                        : row.raw.price || "-"}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {typeof row.normalized?.stock === "number"
-                        ? row.normalized.stock
-                        : row.raw.stock || "-"}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {row.normalized?.categorySlug ?? (row.raw.category || "-")}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {row.normalized ? (row.normalized.isActive ? "Oui" : "Non") : row.raw.is_active || "-"}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      {row.errors.length > 0 ? (
-                        <div className="space-y-1 text-rose-700">
-                          {row.errors.map((error) => (
-                            <p key={`${row.rowNumber}-error-${error}`}>{error}</p>
-                          ))}
-                        </div>
-                      ) : null}
-                      {row.warnings.length > 0 ? (
-                        <div className="mt-1 space-y-1 text-amber-700">
-                          {row.warnings.map((warning) => (
-                            <p key={`${row.rowNumber}-warning-${warning}`}>{warning}</p>
-                          ))}
-                        </div>
-                      ) : null}
-                      {row.errors.length === 0 && row.warnings.length === 0 ? (
-                        <span className="text-emerald-700">Aucune erreur.</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                {preview.rows.map((row) => {
+                  const errorColumns = inferErrorColumns(row);
+
+                  return (
+                    <tr
+                      key={row.rowNumber}
+                      className={`border-t border-slate-100 align-top ${
+                        row.isValid ? "bg-white" : "bg-rose-50/30"
+                      }`}
+                    >
+                      <td className="px-2 py-2 font-semibold text-slate-700">{row.rowNumber}</td>
+                      <td className="px-2 py-2">
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                            row.isValid
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-rose-100 text-rose-700"
+                          }`}
+                        >
+                          {row.isValid ? "Valide" : "Invalide"}
+                        </span>
+                      </td>
+
+                      {previewColumns.map((column) => {
+                        const hasError = errorColumns.has(column.key);
+                        return (
+                          <td
+                            key={`${row.rowNumber}-${column.key}`}
+                            className={`px-2 py-2 ${
+                              hasError
+                                ? "bg-rose-50 font-semibold text-rose-700"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            {getPreviewCellText(row, column.key) || "-"}
+                          </td>
+                        );
+                      })}
+
+                      <td className="px-2 py-2">
+                        {row.errors.length > 0 ? (
+                          <div className="space-y-1 text-rose-700">
+                            {row.errors.map((error) => (
+                              <p key={`${row.rowNumber}-error-${error}`}>
+                                {toFriendlyRowError(error, row)}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        {row.warnings.length > 0 ? (
+                          <div className="mt-1 space-y-1 text-amber-700">
+                            {row.warnings.map((warning) => (
+                              <p key={`${row.rowNumber}-warning-${warning}`}>{warning}</p>
+                            ))}
+                          </div>
+                        ) : null}
+                        {row.errors.length === 0 && row.warnings.length === 0 ? (
+                          <span className="text-emerald-700">Aucune erreur.</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -409,7 +701,7 @@ export const AdminProductImportClient = ({
             </button>
             {!canImport ? (
               <p className="text-sm text-slate-600">
-                L'import est disponible uniquement apres un apercu valide avec au moins une ligne correcte.
+                L&apos;import est disponible uniquement apres un apercu valide avec au moins une ligne correcte.
               </p>
             ) : null}
           </div>
@@ -458,3 +750,4 @@ export const AdminProductImportClient = ({
     </div>
   );
 };
+

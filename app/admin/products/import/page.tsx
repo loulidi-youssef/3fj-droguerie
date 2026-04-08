@@ -4,7 +4,6 @@ import {
   isAdminProductsConfigured,
   requireAdminProductsSession,
 } from "@/app/admin/products/lib/auth";
-import { getProductImportCsvTemplate } from "@/lib/admin-product-import";
 
 export default async function AdminProductsImportPage() {
   if (!isAdminProductsConfigured()) {
@@ -44,7 +43,7 @@ export default async function AdminProductsImportPage() {
           </Link>
         </div>
 
-        <AdminProductImportClient csvTemplate={getProductImportCsvTemplate()} />
+        <AdminProductImportClient />
       </div>
     </section>
   );

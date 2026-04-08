@@ -26,6 +26,14 @@ const REQUIRED_PRODUCT_IMPORT_COLUMNS = new Set<ProductImportCsvColumn>(
 const PRODUCT_IMPORT_MAX_FILE_SIZE_BYTES = 2_000_000;
 const PRODUCT_IMPORT_MAX_ROWS = 5_000;
 const DEFAULT_PRODUCT_RATING = 4.5;
+const PRODUCT_IMPORT_EXCEL_SHEET_NAME = "Produits";
+const PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME = "Instructions";
+const PRODUCT_IMPORT_TEMPLATE_CATEGORIES = [
+  "outillage",
+  "peinture",
+  "electricite",
+  "construction",
+] as const;
 
 type ProductImportNormalizedRow = {
   name: string;
@@ -98,6 +106,8 @@ type WorkingProductImportRow = {
   errors: Set<string>;
   warnings: Set<string>;
 };
+
+type ProductImportTemplateRow = Record<ProductImportCsvColumn, string>;
 
 const normalizeSlugLikeValue = (rawValue: string): string => {
   return rawValue
@@ -776,11 +786,309 @@ const commitCsvImport = async (csvText: string): Promise<ProductImportCommitResu
 };
 
 export const getProductImportCsvTemplate = (): string => {
-  return [
-    PRODUCT_IMPORT_CSV_COLUMNS.join(","),
-    "\"Perceuse Bosch 500W\",\"perceuse-bosch-500w\",\"Perceuse electrique compacte pour bricolage.\",\"799.90\",\"999.90\",\"25\",\"outillage\",\"/images/products/perceuse-bosch.jpg\",\"true\"",
-    "\"Peinture Atlas 20KG\",\"peinture-atlas-20kg\",\"Peinture blanche haute couvrance.\",\"235.00\",\"\",\"60\",\"peinture\",\"/images/products/peinture-atlas.jpg\",\"true\"",
-  ].join("\n");
+  const escapeCsvCell = (value: string): string => {
+    if (!/[",\n\r]/.test(value)) {
+      return value;
+    }
+    return `"${value.replace(/"/g, "\"\"")}"`;
+  };
+
+  const templateRows: ProductImportTemplateRow[] = [
+    {
+      name: "Perceuse Bosch 500W",
+      slug: "perceuse-bosch-500w",
+      description: "Perceuse electrique compacte pour bricolage.",
+      price: "799.90",
+      old_price: "999.90",
+      stock: "25",
+      category: "outillage",
+      image_url: "/images/products/perceuse-bosch.jpg",
+      is_active: "true",
+    },
+    {
+      name: "Peinture Atlas 20KG",
+      slug: "peinture-atlas-20kg",
+      description: "Peinture blanche haute couvrance.",
+      price: "235.00",
+      old_price: "",
+      stock: "60",
+      category: "peinture",
+      image_url: "/images/products/peinture-atlas.jpg",
+      is_active: "true",
+    },
+  ];
+
+  const headerLine = PRODUCT_IMPORT_CSV_COLUMNS.join(",");
+  const rowLines = templateRows.map((row) =>
+    PRODUCT_IMPORT_CSV_COLUMNS.map((column) => escapeCsvCell(row[column])).join(","),
+  );
+
+  return `\uFEFF${[headerLine, ...rowLines].join("\n")}`;
+};
+
+export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "3FJ Admin";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const sampleRows: ProductImportTemplateRow[] = [
+    {
+      name: "Perceuse Bosch 500W",
+      slug: "perceuse-bosch-500w",
+      description: "Perceuse electrique compacte pour bricolage.",
+      price: "799.90",
+      old_price: "999.90",
+      stock: "25",
+      category: "outillage",
+      image_url: "/images/products/perceuse-bosch.jpg",
+      is_active: "true",
+    },
+    {
+      name: "Peinture Atlas 20KG",
+      slug: "peinture-atlas-20kg",
+      description: "Peinture blanche haute couvrance.",
+      price: "235.00",
+      old_price: "",
+      stock: "60",
+      category: "peinture",
+      image_url: "/images/products/peinture-atlas.jpg",
+      is_active: "true",
+    },
+  ];
+
+  const productsSheet = workbook.addWorksheet(PRODUCT_IMPORT_EXCEL_SHEET_NAME, {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+
+  productsSheet.columns = PRODUCT_IMPORT_CSV_COLUMNS.map((column) => ({
+    header: column,
+    key: column,
+    width: 18,
+  }));
+
+  for (const row of sampleRows) {
+    const worksheetRow = productsSheet.addRow({
+      ...row,
+      price: Number.parseFloat(row.price),
+      old_price: row.old_price ? Number.parseFloat(row.old_price) : "",
+      stock: Number.parseInt(row.stock, 10),
+    });
+    worksheetRow.height = 20;
+  }
+
+  const headerRow = productsSheet.getRow(1);
+  headerRow.height = 22;
+  for (let columnNumber = 1; columnNumber <= PRODUCT_IMPORT_CSV_COLUMNS.length; columnNumber += 1) {
+    const cell = headerRow.getCell(columnNumber);
+    cell.font = { bold: true, color: { argb: "FF0F2A4D" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFDCEBFF" },
+    };
+    cell.alignment = { vertical: "middle", horizontal: "left" };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFB6C8E6" } },
+      left: { style: "thin", color: { argb: "FFB6C8E6" } },
+      bottom: { style: "thin", color: { argb: "FFB6C8E6" } },
+      right: { style: "thin", color: { argb: "FFB6C8E6" } },
+    };
+  }
+
+  const borderColor = { argb: "FFE2E8F0" };
+  for (let rowNumber = 2; rowNumber <= 120; rowNumber += 1) {
+    const row = productsSheet.getRow(rowNumber);
+    for (let columnNumber = 1; columnNumber <= PRODUCT_IMPORT_CSV_COLUMNS.length; columnNumber += 1) {
+      const cell = row.getCell(columnNumber);
+      cell.border = {
+        top: { style: "thin", color: borderColor },
+        left: { style: "thin", color: borderColor },
+        bottom: { style: "thin", color: borderColor },
+        right: { style: "thin", color: borderColor },
+      };
+    }
+  }
+
+  const categoryValidationFormula = `"${PRODUCT_IMPORT_TEMPLATE_CATEGORIES.join(",")}"`;
+  for (let rowNumber = 2; rowNumber <= 500; rowNumber += 1) {
+    productsSheet.getCell(`I${rowNumber}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"true,false"'],
+      showErrorMessage: true,
+      errorTitle: "Valeur invalide",
+      error: "is_active doit etre true ou false.",
+    };
+    productsSheet.getCell(`G${rowNumber}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [categoryValidationFormula],
+      showErrorMessage: true,
+      errorTitle: "Categorie invalide",
+      error: "Selectionnez une categorie de la liste.",
+    };
+  }
+
+  productsSheet.addConditionalFormatting({
+    ref: "F2:F500",
+    rules: [
+      {
+        type: "cellIs",
+        operator: "equal",
+        formulae: ["0"],
+        priority: 1,
+        style: {
+          fill: {
+            type: "pattern",
+            pattern: "solid",
+            bgColor: { argb: "FFFEE2E2" },
+            fgColor: { argb: "FFFEE2E2" },
+          },
+          font: { color: { argb: "FFB91C1C" }, bold: true },
+        },
+      },
+      {
+        type: "cellIs",
+        operator: "lessThan",
+        formulae: ["10"],
+        priority: 2,
+        style: {
+          fill: {
+            type: "pattern",
+            pattern: "solid",
+            bgColor: { argb: "FFFFEDD5" },
+            fgColor: { argb: "FFFFEDD5" },
+          },
+          font: { color: { argb: "FF9A3412" }, bold: true },
+        },
+      },
+    ],
+  });
+
+  for (const [columnIndex, column] of PRODUCT_IMPORT_CSV_COLUMNS.entries()) {
+    const textValues = [column, ...sampleRows.map((row) => row[column])];
+    const maxLength = textValues.reduce((currentMax, value) => {
+      return Math.max(currentMax, value.length);
+    }, 10);
+    productsSheet.getColumn(columnIndex + 1).width = Math.min(
+      46,
+      Math.max(13, maxLength + 3),
+    );
+  }
+
+  productsSheet.getColumn("D").numFmt = "0.00";
+  productsSheet.getColumn("E").numFmt = "0.00";
+  productsSheet.getColumn("F").numFmt = "0";
+
+  const instructionsSheet = workbook.addWorksheet(
+    PRODUCT_IMPORT_EXCEL_INSTRUCTIONS_SHEET_NAME,
+  );
+  instructionsSheet.columns = [
+    { header: "colonne", key: "column", width: 20 },
+    { header: "description", key: "description", width: 38 },
+    { header: "format", key: "format", width: 34 },
+    { header: "exemple", key: "example", width: 30 },
+  ];
+
+  const instructions = [
+    {
+      column: "name",
+      description: "Nom du produit",
+      format: "Texte requis",
+      example: "Perceuse Bosch 500W",
+    },
+    {
+      column: "slug",
+      description: "Identifiant unique du produit",
+      format: "lettres/chiffres/tirets",
+      example: "perceuse-bosch-500w",
+    },
+    {
+      column: "description",
+      description: "Description courte et claire du produit",
+      format: "Texte requis",
+      example: "Perceuse electrique compacte",
+    },
+    {
+      column: "price",
+      description: "Prix actuel du produit",
+      format: "Nombre decimal > 0",
+      example: "799.90",
+    },
+    {
+      column: "old_price",
+      description: "Ancien prix (optionnel)",
+      format: "Nombre decimal > price",
+      example: "999.90",
+    },
+    {
+      column: "stock",
+      description: "Quantite disponible",
+      format: "Entier >= 0",
+      example: "25",
+    },
+    {
+      column: "category",
+      description: "Categorie principale du produit",
+      format: "Liste proposee",
+      example: "outillage",
+    },
+    {
+      column: "image_url",
+      description: "Chemin image (/images/...) ou URL https://",
+      format: "Texte requis",
+      example: "/images/products/perceuse-bosch.jpg",
+    },
+    {
+      column: "is_active",
+      description: "Produit visible sur le site",
+      format: "true ou false",
+      example: "true",
+    },
+  ];
+
+  for (const instruction of instructions) {
+    instructionsSheet.addRow(instruction);
+  }
+
+  const instructionsHeaderRow = instructionsSheet.getRow(1);
+  for (let columnNumber = 1; columnNumber <= 4; columnNumber += 1) {
+    const cell = instructionsHeaderRow.getCell(columnNumber);
+    cell.font = { bold: true, color: { argb: "FF0F2A4D" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFDCEBFF" },
+    };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFB6C8E6" } },
+      left: { style: "thin", color: { argb: "FFB6C8E6" } },
+      bottom: { style: "thin", color: { argb: "FFB6C8E6" } },
+      right: { style: "thin", color: { argb: "FFB6C8E6" } },
+    };
+  }
+
+  for (let rowNumber = 2; rowNumber <= instructions.length + 1; rowNumber += 1) {
+    const row = instructionsSheet.getRow(rowNumber);
+    for (let columnNumber = 1; columnNumber <= 4; columnNumber += 1) {
+      const cell = row.getCell(columnNumber);
+      cell.border = {
+        top: { style: "thin", color: borderColor },
+        left: { style: "thin", color: borderColor },
+        bottom: { style: "thin", color: borderColor },
+        right: { style: "thin", color: borderColor },
+      };
+      cell.alignment = { vertical: "top", wrapText: true };
+    }
+  }
+
+  const rawBuffer = await workbook.xlsx.writeBuffer();
+  if (Buffer.isBuffer(rawBuffer)) {
+    return rawBuffer;
+  }
+  return Buffer.from(rawBuffer);
 };
 
 export const buildProductImportPreview = async (
