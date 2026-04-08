@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
+import { useToast } from "@/components/toast-provider";
 import {
   buildDetailedCartItems,
   fetchCartProductsLookup,
@@ -22,6 +23,7 @@ type CartDrawerProps = {
 
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const { items, itemCount, updateQuantity, removeItem } = useCart();
+  const { showToast } = useToast();
   const [cartLookup, setCartLookup] = useState<CartProductsLookup>({
     productsById: {},
     activeOfferRulesByProductId: {},
@@ -114,6 +116,42 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     () => buildDetailedCartItems(items, cartLookup),
     [items, cartLookup],
   );
+
+  useEffect(() => {
+    if (!isOpen || isLoadingProducts || detailedItems.length === 0) {
+      return;
+    }
+
+    const itemsAboveStock = detailedItems.filter(
+      (item) =>
+        item.maxAvailableQuantity !== null && item.quantity > item.maxAvailableQuantity,
+    );
+
+    if (itemsAboveStock.length === 0) {
+      return;
+    }
+
+    for (const item of itemsAboveStock) {
+      const maxAvailableQuantity = item.maxAvailableQuantity;
+      if (maxAvailableQuantity === null) {
+        continue;
+      }
+
+      updateQuantity(
+        item.productId,
+        maxAvailableQuantity,
+        item.variantId,
+        maxAvailableQuantity,
+      );
+    }
+
+    showToast(
+      itemsAboveStock.length === 1
+        ? "Quantite ajustee selon le stock disponible."
+        : `${itemsAboveStock.length} articles ajustes selon le stock disponible.`,
+      { variant: "info", durationMs: 3200 },
+    );
+  }, [detailedItems, isLoadingProducts, isOpen, showToast, updateQuantity]);
 
   const subtotal = useMemo(
     () => roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0)),
@@ -218,6 +256,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
                   },
                 );
+                const hasReachedMaxQuantity =
+                  item.maxAvailableQuantity !== null &&
+                  item.quantity >= item.maxAvailableQuantity;
 
                 return (
                 <article
@@ -265,13 +306,26 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 sm:h-8 sm:w-8 sm:rounded-lg"
+                          onClick={() =>
+                            updateQuantity(
+                              item.productId,
+                              item.quantity + 1,
+                              item.variantId,
+                              item.maxAvailableQuantity ?? undefined,
+                            )
+                          }
+                          disabled={hasReachedMaxQuantity}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 sm:rounded-lg"
                           aria-label={`Augmenter la quantite de ${item.product.name}`}
                         >
                           +
                         </button>
                       </div>
+                      {hasReachedMaxQuantity && item.maxAvailableQuantity !== null && item.maxAvailableQuantity > 0 ? (
+                        <p className="mt-1 text-[10px] font-medium text-amber-700">
+                          Quantite maximale disponible atteinte.
+                        </p>
+                      ) : null}
                     </div>
 
                     <button

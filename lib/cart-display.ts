@@ -19,6 +19,7 @@ export type DetailedCartItem = CartItem & {
   lineTotal: number;
   variantLabel: string;
   lineKey: string;
+  maxAvailableQuantity: number | null;
 };
 
 const LOOKUP_CACHE_TTL_MS = 20_000;
@@ -50,6 +51,39 @@ const toLookupPayload = (payload: ProductsApiResponse): CartProductsLookup => {
     productsById: toProductsById(payload.products ?? []),
     activeOfferRulesByProductId: payload.activeOfferRulesByProductId ?? {},
   };
+};
+
+const normalizeStockQuantity = (value: number | undefined): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor(value));
+};
+
+export const getCartLineMaxAvailableQuantity = (
+  item: Pick<CartItem, "productId" | "variantId">,
+  lookup: CartProductsLookup,
+): number | null => {
+  const product = lookup.productsById[item.productId];
+  if (!product) {
+    return null;
+  }
+
+  if (item.variantId) {
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+      const matchedVariant = product.variants.find((variant) => variant.id === item.variantId);
+      if (!matchedVariant) {
+        return 0;
+      }
+
+      return normalizeStockQuantity(matchedVariant.stock);
+    }
+
+    return 0;
+  }
+
+  return normalizeStockQuantity(product.stock);
 };
 
 export const fetchCartProductsLookup = async (
@@ -120,6 +154,7 @@ export const buildDetailedCartItems = (
         item.variantId && Array.isArray(product.variants)
           ? product.variants.find((variant) => variant.id === item.variantId)
           : undefined;
+      const maxAvailableQuantity = getCartLineMaxAvailableQuantity(item, lookup);
       const baseUnitPrice = selectedVariant?.price ?? product.price;
       const offerRule = lookup.activeOfferRulesByProductId[item.productId];
       const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
@@ -139,6 +174,7 @@ export const buildDetailedCartItems = (
         lineTotal: roundDhAmount(effectivePricing.discountedPrice * item.quantity),
         variantLabel: variantLabelParts.join(" | "),
         lineKey: `${item.productId}::${item.variantId ?? "base"}`,
+        maxAvailableQuantity,
       };
     })
     .filter((item): item is DetailedCartItem => item !== null);

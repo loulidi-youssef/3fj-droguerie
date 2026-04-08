@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
 
@@ -19,6 +19,8 @@ type AddToCartButtonProps = {
   disabled?: boolean;
   disabledLabel?: string;
   compact?: boolean;
+  maxQuantity?: number;
+  maxReachedLabel?: string;
 };
 
 export const AddToCartButton = ({
@@ -36,6 +38,8 @@ export const AddToCartButton = ({
   disabled = false,
   disabledLabel = "Rupture de stock",
   compact = false,
+  maxQuantity,
+  maxReachedLabel = "Quantite maximale disponible atteinte",
 }: AddToCartButtonProps) => {
   const { items, addItem, updateQuantity } = useCart();
   const { showToast } = useToast();
@@ -45,21 +49,58 @@ export const AddToCartButton = ({
       (item) =>
         item.productId === productId && (item.variantId ?? "") === (variantId ?? ""),
     )?.quantity ?? 0;
-  const canIncrement = !disabled;
+  const normalizedMaxQuantity =
+    typeof maxQuantity === "number" && Number.isFinite(maxQuantity)
+      ? Math.max(0, Math.floor(maxQuantity))
+      : null;
+  const isDisabled =
+    disabled || (normalizedMaxQuantity !== null && normalizedMaxQuantity <= 0);
+  const hasReachedMax =
+    normalizedMaxQuantity !== null && currentQuantity >= normalizedMaxQuantity;
+  const canIncrement = !isDisabled && !hasReachedMax;
 
-  const handleAddToCart = () => {
-    if (disabled) {
+  useEffect(() => {
+    if (normalizedMaxQuantity === null || currentQuantity <= normalizedMaxQuantity) {
       return;
     }
 
-    addItem(productId, quantity, {
+    updateQuantity(productId, normalizedMaxQuantity, variantId, normalizedMaxQuantity);
+  }, [
+    currentQuantity,
+    normalizedMaxQuantity,
+    productId,
+    updateQuantity,
+    variantId,
+  ]);
+
+  const handleAddToCart = () => {
+    if (isDisabled) {
+      return;
+    }
+
+    const requestedQuantity = Math.max(1, Math.floor(quantity));
+    const quantityToAdd =
+      normalizedMaxQuantity === null
+        ? requestedQuantity
+        : Math.min(requestedQuantity, Math.max(0, normalizedMaxQuantity - currentQuantity));
+
+    if (quantityToAdd <= 0) {
+      return;
+    }
+
+    addItem(productId, quantityToAdd, {
       variantId,
       selectedColor,
       selectedSize,
       selectedPrice,
       selectedPreviousPrice,
       selectedImage,
-    });
+    }, normalizedMaxQuantity ?? undefined);
+
+    if (quantityToAdd < requestedQuantity) {
+      showToast(maxReachedLabel, { variant: "info" });
+    }
+
     showToast("Produit ajout\u00E9 au panier", {
       primaryAction: {
         label: "Voir panier",
@@ -82,43 +123,54 @@ export const AddToCartButton = ({
     if (!canIncrement) {
       return;
     }
-    updateQuantity(productId, currentQuantity + 1, variantId);
+    updateQuantity(
+      productId,
+      currentQuantity + 1,
+      variantId,
+      normalizedMaxQuantity ?? undefined,
+    );
   };
 
   if (currentQuantity > 0) {
     return (
-      <div
-        className={
-          controlsClassName ??
-          "inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-2"
-        }
-      >
-        <button
-          type="button"
-          onClick={handleDecrease}
-          className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange ${
-            compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
-          }`}
-          aria-label="Diminuer la quantite"
+      <div className="inline-flex flex-col items-start gap-1">
+        <div
+          className={
+            controlsClassName ??
+            "inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-2"
+          }
         >
-          -
-        </button>
-        <span
-          className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-xs sm:text-sm" : "text-base"}`}
-        >
-          {currentQuantity}
-        </span>
-        <button
-          type="button"
-          onClick={handleIncrease}
-          disabled={!canIncrement}
-          className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
-            compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
-          }`}
-          aria-label="Augmenter la quantite"
-        >
-          +
-        </button>
+          <button
+            type="button"
+            onClick={handleDecrease}
+            className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange ${
+              compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
+            }`}
+            aria-label="Diminuer la quantite"
+          >
+            -
+          </button>
+          <span
+            className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-xs sm:text-sm" : "text-base"}`}
+          >
+            {currentQuantity}
+          </span>
+          <button
+            type="button"
+            onClick={handleIncrease}
+            disabled={!canIncrement}
+            className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
+              compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
+            }`}
+            aria-label="Augmenter la quantite"
+          >
+            +
+          </button>
+        </div>
+
+        {hasReachedMax && normalizedMaxQuantity !== null && normalizedMaxQuantity > 0 ? (
+          <p className="text-[10px] font-medium text-amber-700">{maxReachedLabel}</p>
+        ) : null}
       </div>
     );
   }
@@ -127,12 +179,12 @@ export const AddToCartButton = ({
     <button
       type="button"
       onClick={handleAddToCart}
-      disabled={disabled}
+      disabled={isDisabled}
       className={`${className ?? "btn-primary"} ${
         isActive ? "scale-[0.98]" : ""
-      } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+      } ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
     >
-      {disabled ? disabledLabel : label}
+      {isDisabled ? disabledLabel : label}
     </button>
   );
 };

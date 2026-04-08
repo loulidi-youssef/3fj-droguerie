@@ -205,6 +205,42 @@ export default function PanierPage() {
     [items, cartLookup],
   );
 
+  useEffect(() => {
+    if (isProductsLoading || detailedItems.length === 0) {
+      return;
+    }
+
+    const itemsAboveStock = detailedItems.filter(
+      (item) =>
+        item.maxAvailableQuantity !== null && item.quantity > item.maxAvailableQuantity,
+    );
+
+    if (itemsAboveStock.length === 0) {
+      return;
+    }
+
+    for (const item of itemsAboveStock) {
+      const maxAvailableQuantity = item.maxAvailableQuantity;
+      if (maxAvailableQuantity === null) {
+        continue;
+      }
+
+      updateQuantity(
+        item.productId,
+        maxAvailableQuantity,
+        item.variantId,
+        maxAvailableQuantity,
+      );
+    }
+
+    showToast(
+      itemsAboveStock.length === 1
+        ? "Quantite ajustee selon le stock disponible."
+        : `${itemsAboveStock.length} articles ajustes selon le stock disponible.`,
+      { variant: "info", durationMs: 3200 },
+    );
+  }, [detailedItems, isProductsLoading, showToast, updateQuantity]);
+
   const missingProductsCount = items.length - detailedItems.length;
   const subtotal = roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0));
   const deliveryCost =
@@ -433,53 +469,75 @@ export default function PanierPage() {
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
               {detailedItems.length > 0 ? (
-                detailedItems.map((item) => (
-                  <article key={item.lineKey} className="rounded-2xl bg-white p-4 shadow-card">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-bold text-brand-blue">{item.product.name}</h2>
-                        {item.variantLabel ? (
-                          <p className="text-xs font-medium text-slate-500">{item.variantLabel}</p>
-                        ) : null}
-                        <p className="text-sm text-slate-600">
-                          {item.originalUnitPrice ? (
-                            <span className="mr-2 line-through">{formatDh(item.originalUnitPrice)}</span>
+                detailedItems.map((item) => {
+                  const hasReachedMaxQuantity =
+                    item.maxAvailableQuantity !== null &&
+                    item.quantity >= item.maxAvailableQuantity;
+
+                  return (
+                    <article key={item.lineKey} className="rounded-2xl bg-white p-4 shadow-card">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-lg font-bold text-brand-blue">{item.product.name}</h2>
+                          {item.variantLabel ? (
+                            <p className="text-xs font-medium text-slate-500">{item.variantLabel}</p>
                           ) : null}
-                          <span>{formatDh(item.unitPrice)} / unite</span>
+                          <p className="text-sm text-slate-600">
+                            {item.originalUnitPrice ? (
+                              <span className="mr-2 line-through">{formatDh(item.originalUnitPrice)}</span>
+                            ) : null}
+                            <span>{formatDh(item.unitPrice)} / unite</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-full border border-slate-300 text-lg"
+                            onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
+                          >
+                            -
+                          </button>
+                          <span className="min-w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-full border border-slate-300 text-lg disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() =>
+                              updateQuantity(
+                                item.productId,
+                                item.quantity + 1,
+                                item.variantId,
+                                item.maxAvailableQuantity ?? undefined,
+                              )
+                            }
+                            disabled={hasReachedMaxQuantity}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {hasReachedMaxQuantity &&
+                      item.maxAvailableQuantity !== null &&
+                      item.maxAvailableQuantity > 0 ? (
+                        <p className="mt-2 text-xs font-medium text-amber-700">
+                          Quantite maximale disponible atteinte.
                         </p>
-                      </div>
+                      ) : null}
 
-                      <div className="flex items-center gap-2">
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-brand-blue">Total ligne: {formatDh(item.lineTotal)}</p>
                         <button
                           type="button"
-                          className="h-8 w-8 rounded-full border border-slate-300 text-lg"
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
+                          onClick={() => removeItem(item.productId, item.variantId)}
+                          className="text-xs font-semibold text-rose-600 hover:underline"
                         >
-                          -
-                        </button>
-                        <span className="min-w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                        <button
-                          type="button"
-                          className="h-8 w-8 rounded-full border border-slate-300 text-lg"
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
-                        >
-                          +
+                          Supprimer
                         </button>
                       </div>
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-brand-blue">Total ligne: {formatDh(item.lineTotal)}</p>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.productId, item.variantId)}
-                        className="text-xs font-semibold text-rose-600 hover:underline"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  );
+                })
               ) : (
                 <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-card">
                   Chargement des produits...

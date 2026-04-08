@@ -38,6 +38,10 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
   const availability = getProductAvailabilityMeta(product);
   const isOutOfStock = availabilityStatus === "out-of-stock";
   const requiresVariantSelection = (product.variants?.length ?? 0) > 0;
+  const maxAvailableQuantity =
+    typeof product.stock === "number" && Number.isFinite(product.stock)
+      ? Math.max(0, Math.floor(product.stock))
+      : undefined;
   const isHomepageVariant = variant === "homepage";
   const isListingVariant = variant === "listing";
   const reviewCount = Math.max(12, Math.round(product.rating * 8));
@@ -125,6 +129,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
               <AddToCartButton
                 productId={product.id}
                 disabled={isOutOfStock}
+                maxQuantity={maxAvailableQuantity}
                 compact
                 className="inline-flex h-7 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-center text-[9px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-9 sm:text-[11px]"
                 controlsClassName="inline-flex h-7 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 sm:h-9"
@@ -204,6 +209,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
               <AddToCartButton
                 productId={product.id}
                 disabled={isOutOfStock}
+                maxQuantity={maxAvailableQuantity}
                 compact
                 className="inline-flex h-7 w-full items-center justify-center rounded-md bg-brand-orange px-2 text-[9px] font-semibold text-white transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-9 sm:text-[11px]"
                 controlsClassName="inline-flex h-7 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 sm:h-9"
@@ -289,6 +295,7 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
             <AddToCartButton
               productId={product.id}
               disabled={isOutOfStock}
+              maxQuantity={maxAvailableQuantity}
               compact
               className="btn-primary h-10 w-full px-2 text-center text-[11px] sm:h-11 sm:text-sm"
               controlsClassName="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-2 sm:h-11"

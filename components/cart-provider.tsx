@@ -24,8 +24,18 @@ const matchesCartLine = (
 
 type CartContextValue = {
   items: CartItem[];
-  addItem: (productId: string, quantity?: number, selection?: CartItemSelection) => void;
-  updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  addItem: (
+    productId: string,
+    quantity?: number,
+    selection?: CartItemSelection,
+    maxQuantity?: number,
+  ) => void;
+  updateQuantity: (
+    productId: string,
+    quantity: number,
+    variantId?: string,
+    maxQuantity?: number,
+  ) => void;
   removeItem: (productId: string, variantId?: string) => void;
   clearCart: () => void;
   itemCount: number;
@@ -74,6 +84,14 @@ const toNormalizedPositiveNumber = (value: unknown): number | undefined => {
   }
 
   return value;
+};
+
+const normalizeQuantityCap = (value: number | undefined): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return MAX_CART_LINE_QUANTITY;
+  }
+
+  return Math.min(MAX_CART_LINE_QUANTITY, Math.max(0, Math.floor(value)));
 };
 
 const toCartLineKey = (productId: string, variantId?: string): string => {
@@ -197,7 +215,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   }, [items]);
 
   const addItem = useCallback(
-    (productId: string, quantity = 1, selection?: CartItemSelection) => {
+    (
+      productId: string,
+      quantity = 1,
+      selection?: CartItemSelection,
+      maxQuantity?: number,
+    ) => {
       const sanitizedItem = sanitizeCartItem({
         productId,
         quantity,
@@ -213,6 +236,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      const quantityCap = normalizeQuantityCap(maxQuantity);
+      if (quantityCap <= 0) {
+        return;
+      }
+
       setItems((current) => {
         const existing = current.find((item) =>
           matchesCartLine(item, sanitizedItem.productId, sanitizedItem.variantId),
@@ -223,40 +251,58 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             matchesCartLine(item, sanitizedItem.productId, sanitizedItem.variantId)
               ? {
                   ...item,
-                  quantity: Math.min(
-                    item.quantity + sanitizedItem.quantity,
-                    MAX_CART_LINE_QUANTITY,
-                  ),
+                  quantity: Math.min(item.quantity + sanitizedItem.quantity, quantityCap),
                 }
               : item,
           );
         }
 
-        return [...current, sanitizedItem];
+        return [
+          ...current,
+          {
+            ...sanitizedItem,
+            quantity: Math.min(sanitizedItem.quantity, quantityCap),
+          },
+        ];
       });
-  }, []);
+    },
+    [],
+  );
 
-  const updateQuantity = useCallback((productId: string, quantity: number, variantId?: string) => {
-    const normalizedProductId = toNormalizedProductId(productId);
-    if (!normalizedProductId) {
-      return;
-    }
+  const updateQuantity = useCallback(
+    (productId: string, quantity: number, variantId?: string, maxQuantity?: number) => {
+      const normalizedProductId = toNormalizedProductId(productId);
+      if (!normalizedProductId) {
+        return;
+      }
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        setItems((current) =>
+          current.filter((item) => !matchesCartLine(item, normalizedProductId, variantId)),
+        );
+        return;
+      }
+
+      const quantityCap = normalizeQuantityCap(maxQuantity);
+      const safeQuantity = Math.min(quantity, quantityCap);
+
+      if (safeQuantity <= 0) {
+        setItems((current) =>
+          current.filter((item) => !matchesCartLine(item, normalizedProductId, variantId)),
+        );
+        return;
+      }
+
       setItems((current) =>
-        current.filter((item) => !matchesCartLine(item, normalizedProductId, variantId)),
+        current.map((item) =>
+          matchesCartLine(item, normalizedProductId, variantId)
+            ? { ...item, quantity: safeQuantity }
+            : item,
+        ),
       );
-      return;
-    }
-
-    const safeQuantity = Math.min(quantity, MAX_CART_LINE_QUANTITY);
-
-    setItems((current) =>
-      current.map((item) =>
-        matchesCartLine(item, normalizedProductId, variantId) ? { ...item, quantity: safeQuantity } : item,
-      ),
-    );
-  }, []);
+    },
+    [],
+  );
 
   const removeItem = useCallback((productId: string, variantId?: string) => {
     const normalizedProductId = toNormalizedProductId(productId);

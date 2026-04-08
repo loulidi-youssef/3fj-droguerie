@@ -212,6 +212,10 @@ export const ProductDetailPurchasePanel = ({
   const availabilityStatus = getProductAvailabilityStatus(availabilityInput);
   const availability = getProductAvailabilityMeta(availabilityInput);
   const selectedStock = selectedVariant?.stock ?? product.stock;
+  const selectedMaxQuantity =
+    typeof selectedStock === "number" && Number.isFinite(selectedStock)
+      ? Math.max(0, Math.floor(selectedStock))
+      : undefined;
   const lowStockCount =
     typeof selectedStock === "number" && selectedStock > 0 && selectedStock <= 5
       ? selectedStock
@@ -433,6 +437,7 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
+            maxQuantity={selectedMaxQuantity}
             disabled={availabilityStatus === "out-of-stock"}
             label="Commander maintenant"
             className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
@@ -540,6 +545,7 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
+            maxQuantity={selectedMaxQuantity}
             disabled={availabilityStatus === "out-of-stock"}
             label="Commander"
             className="inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg bg-brand-orange px-2.5 text-[10px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
