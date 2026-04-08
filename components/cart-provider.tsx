@@ -9,6 +9,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  DEFAULT_MAX_CART_LINE_QUANTITY,
+  clampQuantityToStock,
+  getMaxAllowedQuantity,
+} from "@/lib/quantity";
 import type { CartItem } from "@/types";
 
 type CartItemSelection = Omit<CartItem, "productId" | "quantity">;
@@ -42,7 +47,7 @@ type CartContextValue = {
 };
 
 const STORAGE_KEY = "3fj-cart";
-const MAX_CART_LINE_QUANTITY = 99;
+const MAX_CART_LINE_QUANTITY = DEFAULT_MAX_CART_LINE_QUANTITY;
 
 const toNormalizedString = (value: unknown): string | undefined => {
   if (typeof value !== "string") {
@@ -71,11 +76,15 @@ const toNormalizedPositiveInteger = (value: unknown): number | null => {
     return null;
   }
 
-  if (value < 1) {
+  const clamped = clampQuantityToStock(value, null, {
+    minQuantity: 1,
+    hardLimit: MAX_CART_LINE_QUANTITY,
+  });
+  if (clamped < 1) {
     return null;
   }
 
-  return Math.min(value, MAX_CART_LINE_QUANTITY);
+  return clamped;
 };
 
 const toNormalizedPositiveNumber = (value: unknown): number | undefined => {
@@ -87,11 +96,7 @@ const toNormalizedPositiveNumber = (value: unknown): number | undefined => {
 };
 
 const normalizeQuantityCap = (value: number | undefined): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return MAX_CART_LINE_QUANTITY;
-  }
-
-  return Math.min(MAX_CART_LINE_QUANTITY, Math.max(0, Math.floor(value)));
+  return getMaxAllowedQuantity(value, MAX_CART_LINE_QUANTITY) ?? MAX_CART_LINE_QUANTITY;
 };
 
 const toCartLineKey = (productId: string, variantId?: string): string => {
@@ -241,6 +246,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      const quantityToAdd = clampQuantityToStock(sanitizedItem.quantity, quantityCap, {
+        minQuantity: 1,
+      });
+
       setItems((current) => {
         const existing = current.find((item) =>
           matchesCartLine(item, sanitizedItem.productId, sanitizedItem.variantId),
@@ -249,9 +258,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         if (existing) {
           return current.map((item) =>
             matchesCartLine(item, sanitizedItem.productId, sanitizedItem.variantId)
-              ? {
+                ? {
                   ...item,
-                  quantity: Math.min(item.quantity + sanitizedItem.quantity, quantityCap),
+                  quantity: Math.min(item.quantity + quantityToAdd, quantityCap),
                 }
               : item,
           );
@@ -261,7 +270,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           ...current,
           {
             ...sanitizedItem,
-            quantity: Math.min(sanitizedItem.quantity, quantityCap),
+            quantity: quantityToAdd,
           },
         ];
       });
@@ -284,7 +293,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const quantityCap = normalizeQuantityCap(maxQuantity);
-      const safeQuantity = Math.min(quantity, quantityCap);
+      const safeQuantity = clampQuantityToStock(quantity, quantityCap, {
+        minQuantity: 1,
+      });
 
       if (safeQuantity <= 0) {
         setItems((current) =>

@@ -33,10 +33,17 @@ export const getProductAvailabilityMeta = (
   product: Pick<Product, "stock" | "isPromo" | "isNew">,
 ): ProductAvailabilityMeta => {
   const status = getProductAvailabilityStatus(product);
+  const normalizedStock =
+    typeof product.stock === "number" && Number.isFinite(product.stock)
+      ? Math.max(0, Math.floor(product.stock))
+      : null;
 
   if (status === "limited") {
     return {
-      label: "Stock limit\u00E9",
+      label:
+        normalizedStock !== null
+          ? `Stock limité (${normalizedStock} restants)`
+          : "Stock limité",
       className: "border-amber-200 bg-amber-50 text-amber-700",
     };
   }

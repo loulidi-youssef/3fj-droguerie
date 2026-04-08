@@ -9,9 +9,11 @@ import { getCategoryNameBySlug } from "@/data/categories";
 import { formatDh } from "@/lib/currency";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import {
-  getProductAvailabilityMeta,
-  getProductAvailabilityStatus,
-} from "@/lib/product-availability";
+  getMaxAllowedQuantity,
+  getStockStatus,
+  getStockStatusClassName,
+  getStockStatusLabel,
+} from "@/lib/quantity";
 import { buildProductWhatsAppLink } from "@/lib/whatsapp";
 import type { OfferDiscountType, Product, ProductVariant } from "@/types";
 
@@ -204,18 +206,11 @@ export const ProductDetailPurchasePanel = ({
         ? product.previousPrice
         : null;
 
-  const availabilityInput = {
-    stock: selectedVariant?.stock ?? product.stock,
-    isPromo: product.isPromo,
-    isNew: product.isNew,
-  };
-  const availabilityStatus = getProductAvailabilityStatus(availabilityInput);
-  const availability = getProductAvailabilityMeta(availabilityInput);
   const selectedStock = selectedVariant?.stock ?? product.stock;
-  const selectedMaxQuantity =
-    typeof selectedStock === "number" && Number.isFinite(selectedStock)
-      ? Math.max(0, Math.floor(selectedStock))
-      : undefined;
+  const availabilityStatus = getStockStatus(selectedStock);
+  const availabilityLabel = getStockStatusLabel(selectedStock);
+  const availabilityClassName = getStockStatusClassName(selectedStock);
+  const selectedMaxQuantity = getMaxAllowedQuantity(selectedStock);
   const lowStockCount =
     typeof selectedStock === "number" && selectedStock > 0 && selectedStock <= 5
       ? selectedStock
@@ -332,9 +327,9 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
 
         <p
-          className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-xs ${availability.className}`}
+          className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-xs ${availabilityClassName}`}
         >
-          {availability.label}
+          {availabilityLabel}
         </p>
 
         {lowStockCount !== null ? (
@@ -437,8 +432,10 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
-            maxQuantity={selectedMaxQuantity}
+            maxQuantity={selectedMaxQuantity ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
+            showBulkButtons
+            bulkStepOptions={[10, 50, 100]}
             label="Commander maintenant"
             className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
             controlsClassName="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-14 sm:rounded-xl"
@@ -522,7 +519,7 @@ export const ProductDetailPurchasePanel = ({
               </p>
             ) : (
               <p className={`text-[10px] font-bold uppercase tracking-wide ${availabilityTextClass}`}>
-                {availability.label}
+                {availabilityLabel}
               </p>
             )}
             <div className="flex items-end gap-1">
@@ -545,8 +542,11 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
-            maxQuantity={selectedMaxQuantity}
+            maxQuantity={selectedMaxQuantity ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
+            allowDirectInput={false}
+            showBulkButtons={false}
+            bulkStepOptions={[10, 50, 100]}
             label="Commander"
             className="inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg bg-brand-orange px-2.5 text-[10px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
             controlsClassName="inline-flex h-8 min-w-[7.6rem] items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"

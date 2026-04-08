@@ -1,5 +1,6 @@
 import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
 import { roundDhAmount } from "@/lib/currency";
+import { getMaxAllowedQuantity } from "@/lib/quantity";
 import type { CartItem, Product } from "@/types";
 
 type ProductsApiResponse = {
@@ -53,14 +54,6 @@ const toLookupPayload = (payload: ProductsApiResponse): CartProductsLookup => {
   };
 };
 
-const normalizeStockQuantity = (value: number | undefined): number | null => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return null;
-  }
-
-  return Math.max(0, Math.floor(value));
-};
-
 export const getCartLineMaxAvailableQuantity = (
   item: Pick<CartItem, "productId" | "variantId">,
   lookup: CartProductsLookup,
@@ -77,13 +70,17 @@ export const getCartLineMaxAvailableQuantity = (
         return 0;
       }
 
-      return normalizeStockQuantity(matchedVariant.stock);
+      return getMaxAllowedQuantity(matchedVariant.stock);
     }
 
     return 0;
   }
 
-  return normalizeStockQuantity(product.stock);
+  if ((product.variants?.length ?? 0) > 0) {
+    return 0;
+  }
+
+  return getMaxAllowedQuantity(product.stock);
 };
 
 export const fetchCartProductsLookup = async (

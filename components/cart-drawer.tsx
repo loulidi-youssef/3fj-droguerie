@@ -14,11 +14,109 @@ import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
+import {
+  clampQuantityToStock,
+  getStockStatusClassName,
+  getStockStatusLabel,
+} from "@/lib/quantity";
+import { useQuantityController } from "@/lib/use-quantity-controller";
 import { buildCartWhatsAppLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
+};
+
+type CartDrawerQuantityControlsProps = {
+  productName: string;
+  quantity: number;
+  maxAvailableQuantity: number | null;
+  onQuantityChange: (nextQuantity: number) => void;
+};
+
+const BULK_STEPS = [10, 50, 100];
+
+const CartDrawerQuantityControls = ({
+  productName,
+  quantity,
+  maxAvailableQuantity,
+  onQuantityChange,
+}: CartDrawerQuantityControlsProps) => {
+  const quantityController = useQuantityController({
+    quantity,
+    stock: maxAvailableQuantity,
+    minQuantity: 1,
+    onQuantityChange,
+  });
+  const stockLabel = getStockStatusLabel(maxAvailableQuantity);
+  const stockClassName = getStockStatusClassName(maxAvailableQuantity);
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center gap-1.5 sm:mt-3 sm:gap-2">
+        <button
+          type="button"
+          onClick={() => quantityController.decrementBy(1)}
+          disabled={!quantityController.canDecrement}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 sm:rounded-lg"
+          aria-label={`Diminuer la quantite de ${productName}`}
+        >
+          -
+        </button>
+        <input
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={quantityController.inputValue}
+          onChange={(event) => quantityController.setInputValue(event.target.value)}
+          onBlur={quantityController.commitInputValue}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              quantityController.commitInputValue();
+            }
+          }}
+          className="inline-flex min-w-10 rounded-md border border-slate-300 bg-white px-2 py-1 text-center text-sm font-bold text-slate-800 outline-none focus:border-brand-orange sm:text-[1.1rem]"
+          aria-label={`Saisir la quantite de ${productName}`}
+          disabled={quantityController.isOutOfStock}
+        />
+        <button
+          type="button"
+          onClick={() => quantityController.incrementBy(1)}
+          disabled={!quantityController.canIncrement}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 sm:rounded-lg"
+          aria-label={`Augmenter la quantite de ${productName}`}
+        >
+          +
+        </button>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {BULK_STEPS.map((step) => (
+          <button
+            key={step}
+            type="button"
+            onClick={() => quantityController.incrementBy(step)}
+            disabled={!quantityController.canIncrement}
+            className="inline-flex h-6 items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-[10px] font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            +{step}
+          </button>
+        ))}
+      </div>
+
+      <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stockClassName}`}>
+        {stockLabel}
+      </p>
+
+      {quantityController.hasReachedMax &&
+      maxAvailableQuantity !== null &&
+      maxAvailableQuantity > 0 ? (
+        <p className="mt-1 text-[10px] font-medium text-amber-700">
+          Quantite maximale disponible atteinte.
+        </p>
+      ) : null}
+    </div>
+  );
 };
 
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
@@ -123,8 +221,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     }
 
     const itemsAboveStock = detailedItems.filter(
-      (item) =>
-        item.maxAvailableQuantity !== null && item.quantity > item.maxAvailableQuantity,
+      (item) => {
+        const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
+          minQuantity: 1,
+          allowZeroWhenOutOfStock: true,
+        });
+        return clampedQuantity !== item.quantity;
+      },
     );
 
     if (itemsAboveStock.length === 0) {
@@ -132,23 +235,23 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     }
 
     for (const item of itemsAboveStock) {
-      const maxAvailableQuantity = item.maxAvailableQuantity;
-      if (maxAvailableQuantity === null) {
-        continue;
-      }
+      const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
+        minQuantity: 1,
+        allowZeroWhenOutOfStock: true,
+      });
 
       updateQuantity(
         item.productId,
-        maxAvailableQuantity,
+        clampedQuantity,
         item.variantId,
-        maxAvailableQuantity,
+        item.maxAvailableQuantity ?? undefined,
       );
     }
 
     showToast(
       itemsAboveStock.length === 1
-        ? "Quantite ajustee selon le stock disponible."
-        : `${itemsAboveStock.length} articles ajustes selon le stock disponible.`,
+        ? "La quantité a été ajustée selon le stock disponible"
+        : `${itemsAboveStock.length} quantités ont été ajustées selon le stock disponible`,
       { variant: "info", durationMs: 3200 },
     );
   }, [detailedItems, isLoadingProducts, isOpen, showToast, updateQuantity]);
@@ -256,9 +359,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     fallbackSrc: PRODUCT_IMAGE_FALLBACK_SRC,
                   },
                 );
-                const hasReachedMaxQuantity =
-                  item.maxAvailableQuantity !== null &&
-                  item.quantity >= item.maxAvailableQuantity;
 
                 return (
                 <article
@@ -292,40 +392,19 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                           {formatDh(item.originalUnitPrice)}
                         </p>
                       ) : null}
-                      <div className="mt-1.5 flex items-center gap-1.5 sm:mt-3 sm:gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 sm:h-8 sm:w-8 sm:rounded-lg"
-                          aria-label={`Diminuer la quantite de ${item.product.name}`}
-                        >
-                          -
-                        </button>
-                        <span className="inline-flex min-w-6 items-center justify-center text-sm font-bold text-slate-800 sm:text-[1.3rem]">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateQuantity(
-                              item.productId,
-                              item.quantity + 1,
-                              item.variantId,
-                              item.maxAvailableQuantity ?? undefined,
-                            )
-                          }
-                          disabled={hasReachedMaxQuantity}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 sm:rounded-lg"
-                          aria-label={`Augmenter la quantite de ${item.product.name}`}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {hasReachedMaxQuantity && item.maxAvailableQuantity !== null && item.maxAvailableQuantity > 0 ? (
-                        <p className="mt-1 text-[10px] font-medium text-amber-700">
-                          Quantite maximale disponible atteinte.
-                        </p>
-                      ) : null}
+                      <CartDrawerQuantityControls
+                        productName={item.product.name}
+                        quantity={item.quantity}
+                        maxAvailableQuantity={item.maxAvailableQuantity}
+                        onQuantityChange={(nextQuantity) =>
+                          updateQuantity(
+                            item.productId,
+                            nextQuantity,
+                            item.variantId,
+                            item.maxAvailableQuantity ?? undefined,
+                          )
+                        }
+                      />
                     </div>
 
                     <button
