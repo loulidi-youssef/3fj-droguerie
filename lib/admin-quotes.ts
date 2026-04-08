@@ -16,6 +16,24 @@ type QuoteRequestRow = {
   anonymous_id: string;
   status: string;
   payload: unknown;
+  contacted_at: string | null;
+  converted_at: string | null;
+  closed_at: string | null;
+  next_action: string | null;
+};
+
+type QuoteRequestFollowUpRow = Pick<
+  QuoteRequestRow,
+  "id" | "status" | "contacted_at" | "converted_at" | "closed_at"
+>;
+
+type QuoteRequestNoteRow = {
+  id: number;
+  quote_request_id: string;
+  content: string;
+  admin_identifier: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type AdminQuoteRequest = {
@@ -26,6 +44,19 @@ export type AdminQuoteRequest = {
   anonymousId: string;
   status: QuoteRequestStatus;
   payload: QuoteRequestPayload;
+  contactedAt: string | null;
+  convertedAt: string | null;
+  closedAt: string | null;
+  nextAction: string | null;
+};
+
+export type AdminQuoteRequestNote = {
+  id: number;
+  quoteRequestId: string;
+  content: string;
+  adminIdentifier: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type QuoteStatusBreakdown = Record<QuoteRequestStatus, number>;
@@ -95,6 +126,18 @@ export const NEXT_QUOTE_STATUSES: Record<QuoteRequestStatus, QuoteRequestStatus[
   closed: [],
 };
 
+const QUOTE_REQUEST_SELECT =
+  "id, created_at, updated_at, user_id, anonymous_id, status, payload, contacted_at, converted_at, closed_at, next_action";
+const MAX_ADMIN_QUOTES_LIMIT = 5000;
+const MAX_ANALYTICS_ROWS = 5000;
+const MAX_TOP_PRODUCTS = 12;
+const MAX_RECENT_ANALYTICS_QUOTES = 30;
+const MAX_QUOTE_NOTES_LIMIT = 200;
+const MAX_NEXT_ACTION_LENGTH = 1000;
+const MAX_QUOTE_NOTE_CONTENT_LENGTH = 2000;
+const MIN_ADMIN_IDENTIFIER_LENGTH = 3;
+const MAX_ADMIN_IDENTIFIER_LENGTH = 120;
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 };
@@ -121,35 +164,76 @@ const toPositiveInteger = (value: unknown): number | null => {
   return normalized;
 };
 
-const toNonNegativeInteger = (value: unknown): number | null => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+const toNonNegativeAmount = (value: unknown): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return null;
   }
 
-  const normalized = Math.round(value);
-  if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    return null;
-  }
-
-  return normalized;
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  return Object.is(rounded, -0) ? 0 : rounded;
 };
 
-const MAX_ADMIN_QUOTES_LIMIT = 5000;
-const MAX_ANALYTICS_ROWS = 5000;
-const MAX_TOP_PRODUCTS = 12;
-const MAX_RECENT_ANALYTICS_QUOTES = 30;
+const toIsoDateTimeOrNull = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
 
-const createEmptyStatusBreakdown = (): QuoteStatusBreakdown => ({
-  new: 0,
-  contacted: 0,
-  converted: 0,
-  closed: 0,
-});
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
 
-const toRoundedRatePercent = (
-  numerator: number,
-  denominator: number,
-): number => {
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+};
+
+const normalizeQuoteNoteContent = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_QUOTE_NOTE_CONTENT_LENGTH) {
+    return null;
+  }
+
+  return trimmed;
+};
+
+const normalizeAdminIdentifier = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (
+    trimmed.length < MIN_ADMIN_IDENTIFIER_LENGTH ||
+    trimmed.length > MAX_ADMIN_IDENTIFIER_LENGTH
+  ) {
+    return null;
+  }
+
+  return trimmed;
+};
+
+const normalizeNextAction = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_NEXT_ACTION_LENGTH) {
+    return null;
+  }
+
+  return trimmed;
+};
+
+const toRoundedRatePercent = (numerator: number, denominator: number): number => {
   if (denominator <= 0) {
     return 0;
   }
@@ -177,7 +261,9 @@ const toIsoDate = (value: Date): string => {
   return value.toISOString().slice(0, 10);
 };
 
-const toRangeBoundIso = (value: string | Date | null | undefined): string | null => {
+const toRangeBoundIso = (
+  value: string | Date | null | undefined,
+): string | null => {
   if (!value) {
     return null;
   }
@@ -219,6 +305,13 @@ const parseDateOnlyToUtcStart = (value: string): Date | null => {
   return parsed;
 };
 
+const createEmptyStatusBreakdown = (): QuoteStatusBreakdown => ({
+  new: 0,
+  contacted: 0,
+  converted: 0,
+  closed: 0,
+});
+
 const normalizePayload = (value: unknown): QuoteRequestPayload | null => {
   if (!isObjectRecord(value)) {
     return null;
@@ -240,8 +333,8 @@ const normalizePayload = (value: unknown): QuoteRequestPayload | null => {
       const productId = toNonEmptyString(item.productId);
       const productName = toNonEmptyString(item.productName);
       const quantity = toPositiveInteger(item.quantity);
-      const estimatedUnitPrice = toNonNegativeInteger(item.estimatedUnitPrice);
-      const estimatedTotal = toNonNegativeInteger(item.estimatedTotal);
+      const estimatedUnitPrice = toNonNegativeAmount(item.estimatedUnitPrice);
+      const estimatedTotal = toNonNegativeAmount(item.estimatedTotal);
 
       if (
         !productId ||
@@ -297,7 +390,53 @@ const normalizePayload = (value: unknown): QuoteRequestPayload | null => {
   };
 };
 
-const applyCreatedAtRange = <T extends { gte: (...args: string[]) => T; lt: (...args: string[]) => T }>(
+const normalizeQuoteRequest = (row: QuoteRequestRow): AdminQuoteRequest | null => {
+  const normalizedStatus = isQuoteRequestStatus(row.status) ? row.status : null;
+  const payload = normalizePayload(row.payload);
+  if (!normalizedStatus || !payload) {
+    return null;
+  }
+
+  const nextActionRaw = toNonEmptyString(row.next_action);
+  const nextAction =
+    nextActionRaw && nextActionRaw.length <= MAX_NEXT_ACTION_LENGTH
+      ? nextActionRaw
+      : null;
+
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    userId: row.user_id,
+    anonymousId: row.anonymous_id,
+    status: normalizedStatus,
+    payload,
+    contactedAt: toIsoDateTimeOrNull(row.contacted_at),
+    convertedAt: toIsoDateTimeOrNull(row.converted_at),
+    closedAt: toIsoDateTimeOrNull(row.closed_at),
+    nextAction,
+  };
+};
+
+const normalizeQuoteNote = (row: QuoteRequestNoteRow): AdminQuoteRequestNote | null => {
+  const content = toNonEmptyString(row.content);
+  if (!content) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    quoteRequestId: row.quote_request_id,
+    content,
+    adminIdentifier: normalizeAdminIdentifier(row.admin_identifier),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
+
+const applyCreatedAtRange = <
+  T extends { gte: (...args: string[]) => T; lt: (...args: string[]) => T },
+>(
   query: T,
   createdFrom: string | Date | null | undefined,
   createdToExclusive: string | Date | null | undefined,
@@ -335,7 +474,6 @@ const countQuoteRequests = async (input?: {
 
   query = applyCreatedAtRange(query, input?.createdFrom, input?.createdToExclusive);
   const { count, error } = await query;
-
   if (error) {
     return 0;
   }
@@ -366,15 +504,11 @@ const getQuoteStatusBreakdownFromCounts = async (input?: {
   return breakdown;
 };
 
-const countStatusesInRequests = (
-  requests: AdminQuoteRequest[],
-): QuoteStatusBreakdown => {
+const countStatusesInRequests = (requests: AdminQuoteRequest[]): QuoteStatusBreakdown => {
   const breakdown = createEmptyStatusBreakdown();
-
   for (const request of requests) {
     breakdown[request.status] += 1;
   }
-
   return breakdown;
 };
 
@@ -397,7 +531,7 @@ export const getAdminQuoteRequests = async (input?: {
 
   let query = supabaseAdmin
     .from("quote_requests")
-    .select("id, created_at, updated_at, user_id, anonymous_id, status, payload")
+    .select(QUOTE_REQUEST_SELECT)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -413,25 +547,151 @@ export const getAdminQuoteRequests = async (input?: {
   }
 
   return (data as QuoteRequestRow[])
-    .map((row) => {
-      const normalizedStatus = isQuoteRequestStatus(row.status) ? row.status : null;
-      const payload = normalizePayload(row.payload);
-
-      if (!normalizedStatus || !payload) {
-        return null;
-      }
-
-      return {
-        id: row.id,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        userId: row.user_id,
-        anonymousId: row.anonymous_id,
-        status: normalizedStatus,
-        payload,
-      };
-    })
+    .map(normalizeQuoteRequest)
     .filter((row): row is AdminQuoteRequest => Boolean(row));
+};
+
+export const getAdminQuoteRequestById = async (
+  quoteRequestId: string,
+): Promise<AdminQuoteRequest | null> => {
+  const normalizedQuoteRequestId = quoteRequestId.trim();
+  if (!normalizedQuoteRequestId) {
+    return null;
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("quote_requests")
+    .select(QUOTE_REQUEST_SELECT)
+    .eq("id", normalizedQuoteRequestId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return normalizeQuoteRequest(data as QuoteRequestRow);
+};
+
+export const getAdminQuoteRequestNotes = async (
+  quoteRequestId: string,
+  input?: { limit?: number },
+): Promise<AdminQuoteRequestNote[]> => {
+  const normalizedQuoteRequestId = quoteRequestId.trim();
+  if (!normalizedQuoteRequestId) {
+    return [];
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return [];
+  }
+
+  const limit =
+    typeof input?.limit === "number" && Number.isFinite(input.limit) && input.limit > 0
+      ? Math.min(MAX_QUOTE_NOTES_LIMIT, Math.floor(input.limit))
+      : 80;
+
+  const { data, error } = await supabaseAdmin
+    .from("quote_request_notes")
+    .select("id, quote_request_id, content, admin_identifier, created_at, updated_at")
+    .eq("quote_request_id", normalizedQuoteRequestId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as QuoteRequestNoteRow[])
+    .map(normalizeQuoteNote)
+    .filter((note): note is AdminQuoteRequestNote => Boolean(note));
+};
+
+export const createAdminQuoteRequestNote = async (input: {
+  quoteRequestId: string;
+  content: string;
+  adminIdentifier?: string | null;
+}): Promise<boolean> => {
+  const normalizedQuoteRequestId = input.quoteRequestId.trim();
+  const normalizedContent = normalizeQuoteNoteContent(input.content);
+  if (!normalizedQuoteRequestId || !normalizedContent) {
+    return false;
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return false;
+  }
+
+  const adminIdentifier = normalizeAdminIdentifier(input.adminIdentifier);
+
+  const { error } = await supabaseAdmin.from("quote_request_notes").insert({
+    quote_request_id: normalizedQuoteRequestId,
+    content: normalizedContent,
+    admin_identifier: adminIdentifier,
+  });
+
+  return !error;
+};
+
+export const updateAdminQuoteRequestNote = async (input: {
+  quoteRequestId: string;
+  noteId: number;
+  content: string;
+}): Promise<boolean> => {
+  const normalizedQuoteRequestId = input.quoteRequestId.trim();
+  const normalizedNoteId = toPositiveInteger(input.noteId);
+  const normalizedContent = normalizeQuoteNoteContent(input.content);
+
+  if (!normalizedQuoteRequestId || normalizedNoteId === null || !normalizedContent) {
+    return false;
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return false;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("quote_request_notes")
+    .update({ content: normalizedContent })
+    .eq("quote_request_id", normalizedQuoteRequestId)
+    .eq("id", normalizedNoteId);
+
+  return !error;
+};
+
+export const updateAdminQuoteRequestNextAction = async (
+  quoteRequestId: string,
+  nextActionInput: string | null,
+): Promise<boolean> => {
+  const normalizedQuoteRequestId = quoteRequestId.trim();
+  if (!normalizedQuoteRequestId) {
+    return false;
+  }
+
+  if (typeof nextActionInput === "string" && nextActionInput.trim().length > MAX_NEXT_ACTION_LENGTH) {
+    return false;
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return false;
+  }
+
+  const nextAction = normalizeNextAction(nextActionInput);
+
+  const { error } = await supabaseAdmin
+    .from("quote_requests")
+    .update({ next_action: nextAction })
+    .eq("id", normalizedQuoteRequestId);
+
+  return !error;
 };
 
 export const resolveQuoteAnalyticsRange = (input: {
@@ -473,11 +733,7 @@ export const resolveQuoteAnalyticsRange = (input: {
     const fromDate = parseDateOnlyToUtcStart(fromRaw);
     const toDate = parseDateOnlyToUtcStart(toRaw);
 
-    if (
-      fromDate &&
-      toDate &&
-      fromDate.getTime() <= toDate.getTime()
-    ) {
+    if (fromDate && toDate && fromDate.getTime() <= toDate.getTime()) {
       const clampedTo = addUtcDays(toDate, 1);
       return {
         key: "custom",
@@ -623,10 +879,7 @@ export const getAdminQuoteAnalytics = async (
 
   const isRangeDatasetTruncated = filteredTotalQuotes > filteredRequests.length;
   const recentQuoteRequests = filteredRequests.slice(0, MAX_RECENT_ANALYTICS_QUOTES);
-  const requestsForChartsAndTopProducts = isRangeDatasetTruncated
-    ? filteredRequests
-    : filteredRequests;
-
+  const requestsForChartsAndTopProducts = filteredRequests;
   const derivedFilteredBreakdown = countStatusesInRequests(requestsForChartsAndTopProducts);
   const dailyActivity = getDailyActivity(requestsForChartsAndTopProducts, range);
   const topProducts = getTopProductsFromRequests(requestsForChartsAndTopProducts);
@@ -670,15 +923,58 @@ export const updateAdminQuoteRequestStatus = async (
   quoteRequestId: string,
   nextStatus: QuoteRequestStatus,
 ): Promise<boolean> => {
+  const normalizedQuoteRequestId = quoteRequestId.trim();
+  if (!normalizedQuoteRequestId) {
+    return false;
+  }
+
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
     return false;
   }
 
+  const { data, error: fetchError } = await supabaseAdmin
+    .from("quote_requests")
+    .select("id, status, contacted_at, converted_at, closed_at")
+    .eq("id", normalizedQuoteRequestId)
+    .maybeSingle();
+
+  if (fetchError || !data) {
+    return false;
+  }
+
+  const current = data as QuoteRequestFollowUpRow;
+  const nowIso = new Date().toISOString();
+  const updatePatch: {
+    status: QuoteRequestStatus;
+    contacted_at?: string;
+    converted_at?: string;
+    closed_at?: string;
+  } = {
+    status: nextStatus,
+  };
+
+  if (nextStatus === "contacted" && !toIsoDateTimeOrNull(current.contacted_at)) {
+    updatePatch.contacted_at = nowIso;
+  }
+
+  if (nextStatus === "converted") {
+    if (!toIsoDateTimeOrNull(current.contacted_at)) {
+      updatePatch.contacted_at = nowIso;
+    }
+    if (!toIsoDateTimeOrNull(current.converted_at)) {
+      updatePatch.converted_at = nowIso;
+    }
+  }
+
+  if (nextStatus === "closed" && !toIsoDateTimeOrNull(current.closed_at)) {
+    updatePatch.closed_at = nowIso;
+  }
+
   const { error } = await supabaseAdmin
     .from("quote_requests")
-    .update({ status: nextStatus })
-    .eq("id", quoteRequestId);
+    .update(updatePatch)
+    .eq("id", normalizedQuoteRequestId);
 
   return !error;
 };

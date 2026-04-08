@@ -129,6 +129,9 @@ const updateQuoteStatusAction = async (formData: FormData) => {
 
   const updated = await updateAdminQuoteRequestStatus(quoteRequestId, nextStatus);
   revalidatePath("/admin/quotes");
+  revalidatePath(`/admin/quotes/${quoteRequestId}`);
+  revalidatePath("/admin/quotes/analytics");
+  revalidatePath("/admin");
 
   if (!updated) {
     redirect(
@@ -376,6 +379,12 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
                         <td className="px-3 py-2">{formatDateTime(request.createdAt)}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap gap-1">
+                            <Link
+                              href={`/admin/quotes/${request.id}`}
+                              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700"
+                            >
+                              Detail
+                            </Link>
                             {nextStatuses.length === 0 ? (
                               <span className="text-xs text-slate-500">Aucune</span>
                             ) : (
