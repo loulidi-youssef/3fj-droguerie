@@ -20,11 +20,12 @@ type QuoteRequestRow = {
   converted_at: string | null;
   closed_at: string | null;
   next_action: string | null;
+  next_action_due_at: string | null;
 };
 
 type QuoteRequestFollowUpRow = Pick<
   QuoteRequestRow,
-  "id" | "status" | "contacted_at" | "converted_at" | "closed_at"
+  "id" | "status" | "contacted_at" | "converted_at" | "closed_at" | "next_action_due_at"
 >;
 
 type QuoteRequestNoteRow = {
@@ -48,6 +49,7 @@ export type AdminQuoteRequest = {
   convertedAt: string | null;
   closedAt: string | null;
   nextAction: string | null;
+  nextActionDueAt: string | null;
 };
 
 export type AdminQuoteRequestNote = {
@@ -126,8 +128,52 @@ export const NEXT_QUOTE_STATUSES: Record<QuoteRequestStatus, QuoteRequestStatus[
   closed: [],
 };
 
+export type QuoteFollowUpRules = {
+  newQuoteOverdueHours: number;
+  contactedQuoteOverdueHours: number;
+};
+
+export type QuoteFollowUpFilter = "all" | "a-traiter" | "en-attente" | "en-retard";
+
+export type QuoteFollowUpCategory = Exclude<QuoteFollowUpFilter, "all"> | "none";
+
+export type QuoteFollowUpSignalReason =
+  | "none"
+  | "new"
+  | "new-overdue"
+  | "contacted-waiting"
+  | "contacted-overdue"
+  | "next-action-today"
+  | "next-action-overdue";
+
+export type QuoteFollowUpSignal = {
+  category: QuoteFollowUpCategory;
+  reason: QuoteFollowUpSignalReason;
+  isOverdue: boolean;
+  isDueToday: boolean;
+};
+
+export type QuoteFollowUpDescriptor = {
+  signal: QuoteFollowUpSignal;
+  label: string;
+};
+
+export const QUOTE_FOLLOW_UP_FILTERS: readonly QuoteFollowUpFilter[] = [
+  "all",
+  "a-traiter",
+  "en-attente",
+  "en-retard",
+];
+
+export const QUOTE_FOLLOW_UP_FILTER_LABEL: Record<QuoteFollowUpFilter, string> = {
+  all: "Tous",
+  "a-traiter": "A traiter",
+  "en-attente": "En attente",
+  "en-retard": "En retard",
+};
+
 const QUOTE_REQUEST_SELECT =
-  "id, created_at, updated_at, user_id, anonymous_id, status, payload, contacted_at, converted_at, closed_at, next_action";
+  "id, created_at, updated_at, user_id, anonymous_id, status, payload, contacted_at, converted_at, closed_at, next_action, next_action_due_at";
 const MAX_ADMIN_QUOTES_LIMIT = 5000;
 const MAX_ANALYTICS_ROWS = 5000;
 const MAX_TOP_PRODUCTS = 12;
@@ -137,6 +183,8 @@ const MAX_NEXT_ACTION_LENGTH = 1000;
 const MAX_QUOTE_NOTE_CONTENT_LENGTH = 2000;
 const MIN_ADMIN_IDENTIFIER_LENGTH = 3;
 const MAX_ADMIN_IDENTIFIER_LENGTH = 120;
+const DEFAULT_NEW_QUOTE_OVERDUE_HOURS = 24;
+const DEFAULT_CONTACTED_QUOTE_OVERDUE_HOURS = 72;
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -189,6 +237,33 @@ const toIsoDateTimeOrNull = (value: unknown): string | null => {
   }
 
   return parsed.toISOString();
+};
+
+const toPositiveHoursOrNull = (value: unknown): number | null => {
+  const normalized = toPositiveInteger(value);
+  return normalized === null ? null : normalized;
+};
+
+export const resolveQuoteFollowUpRules = (
+  input?: Partial<QuoteFollowUpRules>,
+): QuoteFollowUpRules => {
+  const envNewQuoteOverdueHours = toPositiveHoursOrNull(
+    Number.parseInt(process.env.ADMIN_QUOTES_NEW_OVERDUE_HOURS ?? "", 10),
+  );
+  const envContactedQuoteOverdueHours = toPositiveHoursOrNull(
+    Number.parseInt(process.env.ADMIN_QUOTES_CONTACTED_OVERDUE_HOURS ?? "", 10),
+  );
+
+  return {
+    newQuoteOverdueHours:
+      toPositiveHoursOrNull(input?.newQuoteOverdueHours) ??
+      envNewQuoteOverdueHours ??
+      DEFAULT_NEW_QUOTE_OVERDUE_HOURS,
+    contactedQuoteOverdueHours:
+      toPositiveHoursOrNull(input?.contactedQuoteOverdueHours) ??
+      envContactedQuoteOverdueHours ??
+      DEFAULT_CONTACTED_QUOTE_OVERDUE_HOURS,
+  };
 };
 
 const normalizeQuoteNoteContent = (value: unknown): string | null => {
@@ -259,6 +334,229 @@ const addUtcDays = (value: Date, days: number): Date => {
 
 const toIsoDate = (value: Date): string => {
   return value.toISOString().slice(0, 10);
+};
+
+const HOURS_TO_MS = 60 * 60 * 1000;
+
+const isTerminalQuoteStatus = (status: QuoteRequestStatus): boolean => {
+  return status === "converted" || status === "closed";
+};
+
+export const isQuoteFollowUpFilter = (value: string): value is QuoteFollowUpFilter => {
+  return QUOTE_FOLLOW_UP_FILTERS.includes(value as QuoteFollowUpFilter);
+};
+
+const toNowDate = (value: Date | string | null | undefined): Date => {
+  if (!value) {
+    return new Date();
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? new Date() : value;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const toTimestampOrNull = (value: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.getTime();
+};
+
+const getLocalDayBounds = (value: Date): { dayStartMs: number; nextDayStartMs: number } => {
+  const dayStart = new Date(value);
+  dayStart.setHours(0, 0, 0, 0);
+  const nextDayStart = new Date(dayStart);
+  nextDayStart.setDate(nextDayStart.getDate() + 1);
+  return {
+    dayStartMs: dayStart.getTime(),
+    nextDayStartMs: nextDayStart.getTime(),
+  };
+};
+
+const getHoursSinceTimestamp = (
+  timestampMs: number | null,
+  nowMs: number,
+): number | null => {
+  if (timestampMs === null || timestampMs > nowMs) {
+    return null;
+  }
+
+  return (nowMs - timestampMs) / HOURS_TO_MS;
+};
+
+const isQuoteOverdueByStatus = (
+  request: AdminQuoteRequest,
+  rules: QuoteFollowUpRules,
+  nowMs: number,
+): boolean => {
+  if (request.status === "new") {
+    const ageHours = getHoursSinceTimestamp(toTimestampOrNull(request.createdAt), nowMs);
+    return ageHours !== null && ageHours >= rules.newQuoteOverdueHours;
+  }
+
+  if (request.status === "contacted") {
+    const referenceIso = request.contactedAt ?? request.updatedAt ?? request.createdAt;
+    const ageHours = getHoursSinceTimestamp(toTimestampOrNull(referenceIso), nowMs);
+    return ageHours !== null && ageHours >= rules.contactedQuoteOverdueHours;
+  }
+
+  return false;
+};
+
+export const getQuoteFollowUpSignal = (
+  request: AdminQuoteRequest,
+  input?: {
+    now?: Date | string | null;
+    rules?: Partial<QuoteFollowUpRules>;
+  },
+): QuoteFollowUpSignal => {
+  if (isTerminalQuoteStatus(request.status)) {
+    return {
+      category: "none",
+      reason: "none",
+      isOverdue: false,
+      isDueToday: false,
+    };
+  }
+
+  const rules = resolveQuoteFollowUpRules(input?.rules);
+  const now = toNowDate(input?.now);
+  const nowMs = now.getTime();
+
+  const dueAtMs = toTimestampOrNull(request.nextActionDueAt);
+  const hasDueAt = dueAtMs !== null;
+  const isOverdueByNextAction = hasDueAt && dueAtMs < nowMs;
+  const { dayStartMs, nextDayStartMs } = getLocalDayBounds(now);
+  const isDueToday =
+    hasDueAt &&
+    dueAtMs >= dayStartMs &&
+    dueAtMs < nextDayStartMs &&
+    !isOverdueByNextAction;
+
+  const isOverdueByStatus = isQuoteOverdueByStatus(request, rules, nowMs);
+  const isOverdue = isOverdueByNextAction || isOverdueByStatus;
+
+  if (isOverdueByNextAction) {
+    return {
+      category: "en-retard",
+      reason: "next-action-overdue",
+      isOverdue: true,
+      isDueToday: false,
+    };
+  }
+
+  if (isOverdueByStatus && request.status === "new") {
+    return {
+      category: "en-retard",
+      reason: "new-overdue",
+      isOverdue: true,
+      isDueToday: false,
+    };
+  }
+
+  if (isOverdueByStatus && request.status === "contacted") {
+    return {
+      category: "en-retard",
+      reason: "contacted-overdue",
+      isOverdue: true,
+      isDueToday: false,
+    };
+  }
+
+  if (isDueToday) {
+    return {
+      category: "a-traiter",
+      reason: "next-action-today",
+      isOverdue: false,
+      isDueToday: true,
+    };
+  }
+
+  if (request.status === "new") {
+    return {
+      category: "a-traiter",
+      reason: "new",
+      isOverdue: false,
+      isDueToday: false,
+    };
+  }
+
+  if (request.status === "contacted") {
+    return {
+      category: "en-attente",
+      reason: "contacted-waiting",
+      isOverdue,
+      isDueToday: false,
+    };
+  }
+
+  return {
+    category: "none",
+    reason: "none",
+    isOverdue: false,
+    isDueToday: false,
+  };
+};
+
+export const isQuoteInFollowUpFilter = (
+  request: AdminQuoteRequest,
+  filter: QuoteFollowUpFilter,
+  input?: {
+    now?: Date | string | null;
+    rules?: Partial<QuoteFollowUpRules>;
+  },
+): boolean => {
+  if (filter === "all") {
+    return true;
+  }
+
+  return getQuoteFollowUpSignal(request, input).category === filter;
+};
+
+export const describeQuoteFollowUp = (
+  request: AdminQuoteRequest,
+  input?: {
+    now?: Date | string | null;
+    rules?: Partial<QuoteFollowUpRules>;
+  },
+): QuoteFollowUpDescriptor => {
+  const signal = getQuoteFollowUpSignal(request, input);
+
+  if (signal.reason === "next-action-overdue") {
+    return { signal, label: "En retard" };
+  }
+
+  if (signal.reason === "next-action-today") {
+    return { signal, label: "A rappeler aujourd'hui" };
+  }
+
+  if (signal.reason === "new-overdue") {
+    return { signal, label: "Nouveau en retard" };
+  }
+
+  if (signal.reason === "contacted-overdue") {
+    return { signal, label: "Relance en retard" };
+  }
+
+  if (signal.reason === "new") {
+    return { signal, label: "A traiter" };
+  }
+
+  if (signal.reason === "contacted-waiting") {
+    return { signal, label: "En attente" };
+  }
+
+  return { signal, label: "Aucune relance" };
 };
 
 const toRangeBoundIso = (
@@ -402,6 +700,7 @@ const normalizeQuoteRequest = (row: QuoteRequestRow): AdminQuoteRequest | null =
     nextActionRaw && nextActionRaw.length <= MAX_NEXT_ACTION_LENGTH
       ? nextActionRaw
       : null;
+  const nextActionDueAt = toIsoDateTimeOrNull(row.next_action_due_at);
 
   return {
     id: row.id,
@@ -415,6 +714,7 @@ const normalizeQuoteRequest = (row: QuoteRequestRow): AdminQuoteRequest | null =
     convertedAt: toIsoDateTimeOrNull(row.converted_at),
     closedAt: toIsoDateTimeOrNull(row.closed_at),
     nextAction,
+    nextActionDueAt,
   };
 };
 
@@ -551,6 +851,69 @@ export const getAdminQuoteRequests = async (input?: {
     .filter((row): row is AdminQuoteRequest => Boolean(row));
 };
 
+type QuoteFollowUpListInput = {
+  quotes?: AdminQuoteRequest[];
+  limit?: number;
+  now?: Date | string | null;
+  rules?: Partial<QuoteFollowUpRules>;
+};
+
+const getFollowUpSourceQuotes = async (
+  input?: QuoteFollowUpListInput,
+): Promise<AdminQuoteRequest[]> => {
+  if (Array.isArray(input?.quotes)) {
+    return input.quotes;
+  }
+
+  const limit =
+    typeof input?.limit === "number" && Number.isFinite(input.limit) && input.limit > 0
+      ? input.limit
+      : 600;
+
+  return getAdminQuoteRequests({
+    status: "all",
+    limit,
+  });
+};
+
+export const getOverdueQuotes = async (
+  input?: QuoteFollowUpListInput,
+): Promise<AdminQuoteRequest[]> => {
+  const source = await getFollowUpSourceQuotes(input);
+  return source.filter(
+    (request) =>
+      getQuoteFollowUpSignal(request, {
+        now: input?.now,
+        rules: input?.rules,
+      }).category === "en-retard",
+  );
+};
+
+export const getTodayFollowUps = async (
+  input?: QuoteFollowUpListInput,
+): Promise<AdminQuoteRequest[]> => {
+  const source = await getFollowUpSourceQuotes(input);
+  return source.filter((request) =>
+    getQuoteFollowUpSignal(request, {
+      now: input?.now,
+      rules: input?.rules,
+    }).reason === "next-action-today",
+  );
+};
+
+export const getQuotesNeedingFollowUp = async (
+  input?: QuoteFollowUpListInput,
+): Promise<AdminQuoteRequest[]> => {
+  const source = await getFollowUpSourceQuotes(input);
+  return source.filter((request) => {
+    const signal = getQuoteFollowUpSignal(request, {
+      now: input?.now,
+      rules: input?.rules,
+    });
+    return signal.category === "a-traiter" || signal.category === "en-retard";
+  });
+};
+
 export const getAdminQuoteRequestById = async (
   quoteRequestId: string,
 ): Promise<AdminQuoteRequest | null> => {
@@ -669,6 +1032,7 @@ export const updateAdminQuoteRequestNote = async (input: {
 export const updateAdminQuoteRequestNextAction = async (
   quoteRequestId: string,
   nextActionInput: string | null,
+  nextActionDueAtInput: string | null,
 ): Promise<boolean> => {
   const normalizedQuoteRequestId = quoteRequestId.trim();
   if (!normalizedQuoteRequestId) {
@@ -685,10 +1049,15 @@ export const updateAdminQuoteRequestNextAction = async (
   }
 
   const nextAction = normalizeNextAction(nextActionInput);
+  const nextActionDueAt = toIsoDateTimeOrNull(nextActionDueAtInput);
+  const hasDueAtInput = typeof nextActionDueAtInput === "string" && nextActionDueAtInput.trim().length > 0;
+  if (hasDueAtInput && !nextActionDueAt) {
+    return false;
+  }
 
   const { error } = await supabaseAdmin
     .from("quote_requests")
-    .update({ next_action: nextAction })
+    .update({ next_action: nextAction, next_action_due_at: nextActionDueAt })
     .eq("id", normalizedQuoteRequestId);
 
   return !error;
@@ -935,7 +1304,7 @@ export const updateAdminQuoteRequestStatus = async (
 
   const { data, error: fetchError } = await supabaseAdmin
     .from("quote_requests")
-    .select("id, status, contacted_at, converted_at, closed_at")
+    .select("id, status, contacted_at, converted_at, closed_at, next_action_due_at")
     .eq("id", normalizedQuoteRequestId)
     .maybeSingle();
 
@@ -950,6 +1319,7 @@ export const updateAdminQuoteRequestStatus = async (
     contacted_at?: string;
     converted_at?: string;
     closed_at?: string;
+    next_action_due_at?: string | null;
   } = {
     status: nextStatus,
   };
@@ -969,6 +1339,10 @@ export const updateAdminQuoteRequestStatus = async (
 
   if (nextStatus === "closed" && !toIsoDateTimeOrNull(current.closed_at)) {
     updatePatch.closed_at = nowIso;
+  }
+
+  if (nextStatus === "converted" || nextStatus === "closed") {
+    updatePatch.next_action_due_at = null;
   }
 
   const { error } = await supabaseAdmin

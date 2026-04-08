@@ -12,9 +12,11 @@ import {
   QUOTE_STATUS_LABEL,
   QUOTE_REQUEST_STATUSES,
   createAdminQuoteRequestNote,
+  describeQuoteFollowUp,
   getAdminQuoteRequestById,
   getAdminQuoteRequestNotes,
   isNextQuoteStatusAllowed,
+  resolveQuoteFollowUpRules,
   updateAdminQuoteRequestNextAction,
   updateAdminQuoteRequestNote,
   updateAdminQuoteRequestStatus,
@@ -60,6 +62,52 @@ const formatDateTime = (value: string | null): string => {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+};
+
+const parseDateTimeInput = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+};
+
+const toDateTimeLocalInputValue = (value: string | null): string => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const getFollowUpBadgeClassName = (
+  followUpCategory: "a-traiter" | "en-attente" | "en-retard" | "none",
+): string => {
+  if (followUpCategory === "en-retard") {
+    return "bg-rose-100 text-rose-700";
+  }
+  if (followUpCategory === "a-traiter") {
+    return "bg-amber-100 text-amber-700";
+  }
+  if (followUpCategory === "en-attente") {
+    return "bg-slate-100 text-slate-700";
+  }
+  return "bg-slate-100 text-slate-600";
 };
 
 const formatSource = (value: string): string => {
@@ -158,16 +206,29 @@ const saveNextActionAction = async (formData: FormData) => {
 
   const quoteRequestIdRaw = formData.get("quoteRequestId");
   const nextActionRaw = formData.get("nextAction");
+  const nextActionDueAtRaw = formData.get("nextActionDueAt");
 
   const quoteRequestId =
     typeof quoteRequestIdRaw === "string" ? quoteRequestIdRaw.trim() : "";
   const nextAction = typeof nextActionRaw === "string" ? nextActionRaw : null;
+  const nextActionDueAtInput =
+    typeof nextActionDueAtRaw === "string" ? nextActionDueAtRaw.trim() : "";
+  const nextActionDueAt = parseDateTimeInput(nextActionDueAtInput || null);
 
   if (!quoteRequestId) {
     redirect("/admin/quotes?error=invalid-quote");
   }
 
-  const updated = await updateAdminQuoteRequestNextAction(quoteRequestId, nextAction);
+  if (nextActionDueAtInput && !nextActionDueAt) {
+    redirect(buildQuoteDetailHref(quoteRequestId, { error: "follow-up-invalid-date" }));
+  }
+
+  const updated = await updateAdminQuoteRequestNextAction(
+    quoteRequestId,
+    nextAction,
+    nextActionDueAt,
+  );
+  revalidatePath("/admin");
   revalidatePath("/admin/quotes");
   revalidatePath(`/admin/quotes/${quoteRequestId}`);
 
@@ -283,6 +344,10 @@ export default async function AdminQuoteDetailPage({
     notFound();
   }
 
+  const reminderRules = resolveQuoteFollowUpRules();
+  const followUpDescriptor = describeQuoteFollowUp(quoteRequest, {
+    rules: reminderRules,
+  });
   const nextStatuses = QUOTE_REQUEST_STATUSES.filter((status) =>
     isNextQuoteStatusAllowed(quoteRequest.status, status),
   );
@@ -341,7 +406,9 @@ export default async function AdminQuoteDetailPage({
         ) : null}
         {error ? (
           <p className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
-            Action impossible. Merci de verifier les informations envoyees.
+            {error === "follow-up-invalid-date"
+              ? "Date de relance invalide. Merci de verifier le format."
+              : "Action impossible. Merci de verifier les informations envoyees."}
           </p>
         ) : null}
 
@@ -465,6 +532,21 @@ export default async function AdminQuoteDetailPage({
 
           <aside className="rounded-2xl bg-white p-5 shadow-card">
             <h2 className="text-base font-bold text-brand-blue">Pilotage devis</h2>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Rappel
+              </p>
+              <span
+                className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getFollowUpBadgeClassName(followUpDescriptor.signal.category)}`}
+              >
+                {followUpDescriptor.label}
+              </span>
+              {quoteRequest.nextActionDueAt ? (
+                <p className="mt-2 text-xs text-slate-600">
+                  Echeance: {formatDateTime(quoteRequest.nextActionDueAt)}
+                </p>
+              ) : null}
+            </div>
 
             <div className="mt-3 border-t border-slate-200 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -512,6 +594,10 @@ export default async function AdminQuoteDetailPage({
                 <span className="font-semibold">Clos le:</span>{" "}
                 {formatDateTime(quoteRequest.closedAt)}
               </p>
+              <p className="mt-1 text-sm text-slate-700">
+                <span className="font-semibold">Prochaine relance:</span>{" "}
+                {formatDateTime(quoteRequest.nextActionDueAt)}
+              </p>
             </div>
 
             <form action={saveNextActionAction} className="mt-4 border-t border-slate-200 pt-3">
@@ -528,6 +614,21 @@ export default async function AdminQuoteDetailPage({
                   className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
                 />
               </label>
+              <label className="mt-3 block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Date de relance
+                </span>
+                <input
+                  type="datetime-local"
+                  name="nextActionDueAt"
+                  defaultValue={toDateTimeLocalInputValue(quoteRequest.nextActionDueAt)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                />
+              </label>
+              <p className="mt-2 text-xs text-slate-500">
+                Relance en retard apres {reminderRules.newQuoteOverdueHours}h (nouveau) et{" "}
+                {reminderRules.contactedQuoteOverdueHours}h (contacte).
+              </p>
               <FormSubmitButton
                 idleLabel="Enregistrer action"
                 pendingLabel="Enregistrement..."

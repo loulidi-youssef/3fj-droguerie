@@ -6,7 +6,12 @@ import {
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
 import { getAdminCustomers } from "@/lib/admin-customers";
-import { getAdminQuoteRequests } from "@/lib/admin-quotes";
+import {
+  getAdminQuoteRequests,
+  getOverdueQuotes,
+  getQuotesNeedingFollowUp,
+  getTodayFollowUps,
+} from "@/lib/admin-quotes";
 import { getAdminOrders, type OrderStatus } from "@/lib/admin-orders";
 import { getAdminProducts } from "@/lib/admin-products";
 
@@ -52,7 +57,12 @@ export default async function AdminIndexPage() {
     getAdminOrders(),
     getAdminCustomers(),
     getAdminProducts(),
-    getAdminQuoteRequests({ status: "new", limit: 300 }),
+    getAdminQuoteRequests({ status: "all", limit: 800 }),
+  ]);
+  const [quotesNeedingFollowUp, overdueQuotes, todayFollowUps] = await Promise.all([
+    getQuotesNeedingFollowUp({ quotes: quoteRequests }),
+    getOverdueQuotes({ quotes: quoteRequests }),
+    getTodayFollowUps({ quotes: quoteRequests }),
   ]);
 
   const pendingOrdersCount = orders.filter((order) => isPendingStatus(order.status)).length;
@@ -60,9 +70,18 @@ export default async function AdminIndexPage() {
     ["delivered", "collected"].includes(order.status),
   ).length;
   const lowStockProducts = products.filter((product) => product.is_active && product.stock <= 5);
-  const pendingQuoteRequestsCount = quoteRequests.length;
+  const pendingQuoteRequestsCount = quoteRequests.filter((quote) => quote.status === "new").length;
+  const quotesNeedingFollowUpCount = quotesNeedingFollowUp.length;
+  const overdueQuotesCount = overdueQuotes.length;
+  const todayFollowUpsCount = todayFollowUps.length;
   const recentOrders = orders.slice(0, 6);
   const recentCustomers = customers.slice(0, 6);
+
+  if (process.env.ADMIN_QUOTES_REMINDER_LOG === "1" && quotesNeedingFollowUpCount > 0) {
+    console.info(
+      `[admin][quotes] follow-up=${quotesNeedingFollowUpCount} overdue=${overdueQuotesCount} today=${todayFollowUpsCount}`,
+    );
+  }
 
   return (
     <section className="bg-brand-light py-12">
@@ -73,6 +92,31 @@ export default async function AdminIndexPage() {
             Vue rapide pour le pilotage quotidien des commandes, produits et clients.
           </p>
         </div>
+
+        {quotesNeedingFollowUpCount > 0 ? (
+          <article className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">
+              Vous avez {quotesNeedingFollowUpCount} devis a relancer.
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              {todayFollowUpsCount} a rappeler aujourd'hui, {overdueQuotesCount} en retard.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link
+                href="/admin/quotes?followUp=a-traiter"
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900"
+              >
+                Ouvrir a traiter
+              </Link>
+              <Link
+                href="/admin/quotes?followUp=en-retard"
+                className="rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700"
+              >
+                Ouvrir en retard
+              </Link>
+            </div>
+          </article>
+        ) : null}
 
         <div className="grid gap-3 md:grid-cols-5">
           <article className="rounded-2xl bg-white p-4 shadow-card">

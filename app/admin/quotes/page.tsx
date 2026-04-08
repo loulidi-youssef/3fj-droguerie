@@ -7,13 +7,19 @@ import {
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
 import {
+  QUOTE_FOLLOW_UP_FILTER_LABEL,
   QUOTE_REQUEST_STATUSES,
   QUOTE_STATUS_BADGE_CLASSNAME,
   QUOTE_STATUS_LABEL,
+  describeQuoteFollowUp,
   getAdminQuoteRequests,
+  isQuoteFollowUpFilter,
+  isQuoteInFollowUpFilter,
   getQuoteStatusCount,
   isNextQuoteStatusAllowed,
+  resolveQuoteFollowUpRules,
   updateAdminQuoteRequestStatus,
+  type QuoteFollowUpFilter,
 } from "@/lib/admin-quotes";
 import { isQuoteRequestStatus, type QuoteRequestStatus } from "@/lib/quote-requests";
 
@@ -21,6 +27,7 @@ type AdminQuotesPageProps = {
   searchParams: {
     q?: string | string[];
     status?: string | string[];
+    followUp?: string | string[];
     updated?: string | string[];
     error?: string | string[];
   };
@@ -48,9 +55,32 @@ const formatDateTime = (value: string): string => {
   }).format(date);
 };
 
+const formatNullableDateTime = (value: string | null): string => {
+  if (!value) {
+    return "-";
+  }
+  return formatDateTime(value);
+};
+
+const getFollowUpBadgeClassName = (
+  followUpCategory: "a-traiter" | "en-attente" | "en-retard" | "none",
+): string => {
+  if (followUpCategory === "en-retard") {
+    return "bg-rose-100 text-rose-700";
+  }
+  if (followUpCategory === "a-traiter") {
+    return "bg-amber-100 text-amber-700";
+  }
+  if (followUpCategory === "en-attente") {
+    return "bg-slate-100 text-slate-700";
+  }
+  return "bg-slate-100 text-slate-600";
+};
+
 const buildQuotesHref = (params: {
   q?: string;
   status?: string;
+  followUp?: string;
   updated?: string;
   error?: string;
 }): string => {
@@ -60,6 +90,9 @@ const buildQuotesHref = (params: {
   }
   if (params.status?.trim() && params.status !== "all") {
     searchParams.set("status", params.status.trim());
+  }
+  if (params.followUp?.trim() && params.followUp !== "all") {
+    searchParams.set("followUp", params.followUp.trim());
   }
   if (params.updated?.trim()) {
     searchParams.set("updated", params.updated.trim());
@@ -103,6 +136,7 @@ const updateQuoteStatusAction = async (formData: FormData) => {
   const nextStatusRaw = formData.get("nextStatus");
   const qRaw = formData.get("q");
   const statusFilterRaw = formData.get("statusFilter");
+  const followUpFilterRaw = formData.get("followUpFilter");
 
   const quoteRequestId =
     typeof quoteRequestIdRaw === "string" ? quoteRequestIdRaw.trim() : "";
@@ -111,6 +145,7 @@ const updateQuoteStatusAction = async (formData: FormData) => {
   const nextStatus = typeof nextStatusRaw === "string" ? nextStatusRaw.trim() : "";
   const q = typeof qRaw === "string" ? qRaw : "";
   const statusFilter = typeof statusFilterRaw === "string" ? statusFilterRaw : "";
+  const followUpFilter = typeof followUpFilterRaw === "string" ? followUpFilterRaw : "";
 
   if (
     !quoteRequestId ||
@@ -122,6 +157,7 @@ const updateQuoteStatusAction = async (formData: FormData) => {
       buildQuotesHref({
         q,
         status: statusFilter,
+        followUp: followUpFilter,
         error: "invalid-status",
       }),
     );
@@ -138,6 +174,7 @@ const updateQuoteStatusAction = async (formData: FormData) => {
       buildQuotesHref({
         q,
         status: statusFilter,
+        followUp: followUpFilter,
         error: "update-failed",
       }),
     );
@@ -147,6 +184,7 @@ const updateQuoteStatusAction = async (formData: FormData) => {
     buildQuotesHref({
       q,
       status: statusFilter,
+      followUp: followUpFilter,
       updated: "1",
     }),
   );
@@ -177,17 +215,33 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
   const query = toSingleValue(searchParams.q).trim();
   const normalizedQuery = query.toLowerCase();
   const statusFilterRaw = toSingleValue(searchParams.status).trim().toLowerCase();
+  const followUpFilterRaw = toSingleValue(searchParams.followUp).trim().toLowerCase();
   const selectedStatus: QuoteRequestStatus | "all" =
     statusFilterRaw && statusFilterRaw !== "all" && isQuoteRequestStatus(statusFilterRaw)
       ? statusFilterRaw
       : "all";
+  const selectedFollowUpFilter: QuoteFollowUpFilter = isQuoteFollowUpFilter(followUpFilterRaw)
+    ? followUpFilterRaw
+    : "all";
+  const reminderRules = resolveQuoteFollowUpRules();
 
   const quoteRequests = await getAdminQuoteRequests({
-    status: selectedStatus,
+    status: "all",
+    limit: 1000,
   });
 
+  const statusFilteredQuoteRequests =
+    selectedStatus === "all"
+      ? quoteRequests
+      : quoteRequests.filter((request) => request.status === selectedStatus);
+  const followUpFilteredQuoteRequests = statusFilteredQuoteRequests.filter((request) =>
+    isQuoteInFollowUpFilter(request, selectedFollowUpFilter, {
+      rules: reminderRules,
+    }),
+  );
+
   const filteredQuoteRequests = normalizedQuery
-    ? quoteRequests.filter((request) => {
+    ? followUpFilteredQuoteRequests.filter((request) => {
         const searchText = [
           request.id,
           request.anonymousId,
@@ -199,7 +253,31 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
 
         return searchText.includes(normalizedQuery);
       })
-    : quoteRequests;
+    : followUpFilteredQuoteRequests;
+
+  const followUpToProcessCount = statusFilteredQuoteRequests.filter((request) =>
+    isQuoteInFollowUpFilter(request, "a-traiter", {
+      rules: reminderRules,
+    }),
+  ).length;
+  const followUpWaitingCount = statusFilteredQuoteRequests.filter((request) =>
+    isQuoteInFollowUpFilter(request, "en-attente", {
+      rules: reminderRules,
+    }),
+  ).length;
+  const followUpOverdueCount = statusFilteredQuoteRequests.filter((request) =>
+    isQuoteInFollowUpFilter(request, "en-retard", {
+      rules: reminderRules,
+    }),
+  ).length;
+  const followUpDescriptorById = new Map(
+    filteredQuoteRequests.map((request) => [
+      request.id,
+      describeQuoteFollowUp(request, {
+        rules: reminderRules,
+      }),
+    ]),
+  );
 
   const updatedParam = toSingleValue(searchParams.updated);
   const errorParam = toSingleValue(searchParams.error);
@@ -233,6 +311,37 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
           </Link>
         </div>
 
+        {followUpToProcessCount > 0 || followUpOverdueCount > 0 ? (
+          <article className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">
+              Vous avez {followUpToProcessCount + followUpOverdueCount} devis a suivre
+              ({followUpOverdueCount} en retard).
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link
+                href={buildQuotesHref({
+                  q: query,
+                  status: selectedStatus,
+                  followUp: "a-traiter",
+                })}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900"
+              >
+                Voir a traiter
+              </Link>
+              <Link
+                href={buildQuotesHref({
+                  q: query,
+                  status: selectedStatus,
+                  followUp: "en-retard",
+                })}
+                className="rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700"
+              >
+                Voir en retard
+              </Link>
+            </div>
+          </article>
+        ) : null}
+
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <article className="rounded-2xl bg-white p-4 shadow-card">
             <p className="text-xs uppercase tracking-wide text-slate-500">Nouveaux</p>
@@ -252,7 +361,56 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
           </article>
         </div>
 
+        <article className="mb-4 rounded-2xl bg-white p-4 shadow-card">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Filtres relance
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link
+              href={buildQuotesHref({ q: query, status: selectedStatus, followUp: "a-traiter" })}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                selectedFollowUpFilter === "a-traiter"
+                  ? "bg-amber-100 text-amber-800"
+                  : "border border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {QUOTE_FOLLOW_UP_FILTER_LABEL["a-traiter"]} ({followUpToProcessCount})
+            </Link>
+            <Link
+              href={buildQuotesHref({ q: query, status: selectedStatus, followUp: "en-attente" })}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                selectedFollowUpFilter === "en-attente"
+                  ? "bg-slate-200 text-slate-800"
+                  : "border border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {QUOTE_FOLLOW_UP_FILTER_LABEL["en-attente"]} ({followUpWaitingCount})
+            </Link>
+            <Link
+              href={buildQuotesHref({ q: query, status: selectedStatus, followUp: "en-retard" })}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                selectedFollowUpFilter === "en-retard"
+                  ? "bg-rose-100 text-rose-700"
+                  : "border border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {QUOTE_FOLLOW_UP_FILTER_LABEL["en-retard"]} ({followUpOverdueCount})
+            </Link>
+            <Link
+              href={buildQuotesHref({ q: query, status: selectedStatus, followUp: "all" })}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                selectedFollowUpFilter === "all"
+                  ? "bg-brand-blue text-white"
+                  : "border border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {QUOTE_FOLLOW_UP_FILTER_LABEL.all}
+            </Link>
+          </div>
+        </article>
+
         <form method="get" action="/admin/quotes" className="mb-4 rounded-2xl bg-white p-4 shadow-card">
+          <input type="hidden" name="followUp" value={selectedFollowUpFilter} />
           <div className="grid gap-3 lg:grid-cols-3">
             <label className="block lg:col-span-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -298,6 +456,10 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
               Reinitialiser
             </Link>
           </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Regles relance: nouveau en retard apres {reminderRules.newQuoteOverdueHours}h,
+            contacte en retard apres {reminderRules.contactedQuoteOverdueHours}h.
+          </p>
         </form>
 
         {updatedParam === "1" ? (
@@ -331,6 +493,7 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
                     <th className="px-3 py-2">Quantite</th>
                     <th className="px-3 py-2">Source</th>
                     <th className="px-3 py-2">Statut</th>
+                    <th className="px-3 py-2">Relance</th>
                     <th className="px-3 py-2">Date</th>
                     <th className="px-3 py-2">Actions</th>
                   </tr>
@@ -340,6 +503,10 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
                     const nextStatuses = QUOTE_REQUEST_STATUSES.filter((status) =>
                       isNextQuoteStatusAllowed(request.status, status),
                     );
+                    const followUpDescriptor = followUpDescriptorById.get(request.id) ?? {
+                      signal: { category: "none", reason: "none", isOverdue: false, isDueToday: false },
+                      label: "Aucune relance",
+                    };
 
                     return (
                       <tr key={request.id} className="border-b border-slate-100 text-slate-700">
@@ -376,6 +543,16 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
                             {QUOTE_STATUS_LABEL[request.status]}
                           </span>
                         </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getFollowUpBadgeClassName(followUpDescriptor.signal.category)}`}
+                          >
+                            {followUpDescriptor.label}
+                          </span>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Echeance: {formatNullableDateTime(request.nextActionDueAt)}
+                          </p>
+                        </td>
                         <td className="px-3 py-2">{formatDateTime(request.createdAt)}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap gap-1">
@@ -395,6 +572,11 @@ export default async function AdminQuotesPage({ searchParams }: AdminQuotesPageP
                                   <input type="hidden" name="nextStatus" value={nextStatus} />
                                   <input type="hidden" name="q" value={query} />
                                   <input type="hidden" name="statusFilter" value={selectedStatus} />
+                                  <input
+                                    type="hidden"
+                                    name="followUpFilter"
+                                    value={selectedFollowUpFilter}
+                                  />
                                   <FormSubmitButton
                                     idleLabel={QUOTE_STATUS_LABEL[nextStatus]}
                                     pendingLabel="Maj..."
