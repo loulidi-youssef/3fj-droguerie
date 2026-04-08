@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
 import {
@@ -20,6 +20,7 @@ import {
   getStockStatusClassName,
   getStockStatusLabel,
 } from "@/lib/quantity";
+import { captureQuoteRequestAndRedirectToWhatsApp } from "@/lib/quote-request-client";
 import { useQuantityController } from "@/lib/use-quantity-controller";
 import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
 
@@ -300,6 +301,26 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       note: "Je souhaite un prix de gros.",
     },
   );
+  const handleDrawerGlobalQuoteRequestClick = async (
+    event: MouseEvent<HTMLAnchorElement>,
+  ) => {
+    event.preventDefault();
+
+    await captureQuoteRequestAndRedirectToWhatsApp({
+      whatsappUrl: globalBulkQuoteWhatsAppLink,
+      payload: {
+        source: "cart-drawer",
+        items: detailedItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          variantId: item.variantId,
+          selectedColor: item.selectedColor,
+          selectedSize: item.selectedSize,
+        })),
+      },
+      openInNewTab: true,
+    });
+  };
 
   const articleLabel = itemCount > 1 ? "articles" : "article";
 
@@ -475,6 +496,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               href={globalBulkQuoteWhatsAppLink}
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => {
+                void handleDrawerGlobalQuoteRequestClick(event);
+              }}
               className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 text-xs font-bold text-emerald-800 transition hover:bg-emerald-200 sm:h-11 sm:rounded-2xl sm:text-sm"
             >
               Demande globale de devis

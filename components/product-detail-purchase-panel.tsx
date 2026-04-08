@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { FavoriteButton } from "@/components/favorite-button";
@@ -21,6 +21,7 @@ import {
   getStockStatusClassName,
   getStockStatusLabel,
 } from "@/lib/quantity";
+import { captureQuoteRequestAndRedirectToWhatsApp } from "@/lib/quote-request-client";
 import { buildProductWhatsAppLink, buildProductWhatsAppQuoteLink } from "@/lib/whatsapp";
 import type { OfferDiscountType, Product, ProductVariant } from "@/types";
 
@@ -272,6 +273,28 @@ export const ProductDetailPurchasePanel = ({
     estimatedTotal: displayedLineTotal,
     note: "Je souhaite un prix de gros.",
   });
+  const handleProductQuoteRequestClick = async (
+    event: MouseEvent<HTMLAnchorElement>,
+  ) => {
+    event.preventDefault();
+
+    await captureQuoteRequestAndRedirectToWhatsApp({
+      whatsappUrl: productWhatsAppQuoteLink,
+      payload: {
+        source: "product-page",
+        items: [
+          {
+            productId: product.id,
+            quantity: normalizedPurchaseQuantity,
+            variantId: selectedVariant?.id,
+            selectedColor: normalizeVariantLabel(selectedVariant?.color) ?? undefined,
+            selectedSize: normalizeVariantLabel(selectedVariant?.size) ?? undefined,
+          },
+        ],
+      },
+      openInNewTab: true,
+    });
+  };
 
   const offerEndDate =
     offerPricing?.endAt && !Number.isNaN(new Date(offerPricing.endAt).getTime())
@@ -529,6 +552,9 @@ export const ProductDetailPurchasePanel = ({
               href={productWhatsAppQuoteLink}
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => {
+                void handleProductQuoteRequestClick(event);
+              }}
               className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 px-3 text-[10px] font-bold text-emerald-800 transition hover:bg-emerald-200 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
             >
               Demander prix de gros

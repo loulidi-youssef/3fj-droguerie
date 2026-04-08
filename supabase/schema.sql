@@ -143,6 +143,30 @@ add column if not exists selected_size text;
 create index if not exists idx_order_items_order_id on public.order_items(order_id);
 create index if not exists idx_order_items_product_id on public.order_items(product_id);
 
+create table if not exists public.quote_requests (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  user_id uuid null references auth.users(id) on delete set null,
+  anonymous_id text not null,
+  payload jsonb not null,
+  status text not null default 'new',
+  constraint quote_requests_status_check check (status in ('new', 'contacted', 'converted', 'closed')),
+  constraint quote_requests_payload_object_check check (jsonb_typeof(payload) = 'object'),
+  constraint quote_requests_anonymous_id_length_check check (char_length(btrim(anonymous_id)) >= 6)
+);
+
+drop trigger if exists trg_quote_requests_updated_at on public.quote_requests;
+create trigger trg_quote_requests_updated_at
+before update on public.quote_requests
+for each row
+execute function public.set_updated_at();
+
+create index if not exists idx_quote_requests_created_at on public.quote_requests(created_at desc);
+create index if not exists idx_quote_requests_status on public.quote_requests(status);
+create index if not exists idx_quote_requests_user_id on public.quote_requests(user_id);
+create index if not exists idx_quote_requests_anonymous_id on public.quote_requests(anonymous_id);
+
 create or replace function public.create_order_with_items_atomic(
   p_customer_name text,
   p_customer_phone text,
@@ -522,6 +546,7 @@ alter table public.ad_events enable row level security;
 alter table public.blog_posts enable row level security;
 alter table public.reviews enable row level security;
 alter table public.favorites enable row level security;
+alter table public.quote_requests enable row level security;
 
 drop policy if exists "Public can read active products" on public.products;
 create policy "Public can read active products"
@@ -597,6 +622,42 @@ with check (
   auth.uid() = user_id
   and status = 'cancelled'
 );
+
+drop policy if exists "Authenticated users can read own quote requests" on public.quote_requests;
+create policy "Authenticated users can read own quote requests"
+on public.quote_requests
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can create own quote requests" on public.quote_requests;
+create policy "Authenticated users can create own quote requests"
+on public.quote_requests
+for insert
+to authenticated
+with check (user_id is null or auth.uid() = user_id);
+
+drop policy if exists "Anonymous users can create quote requests" on public.quote_requests;
+create policy "Anonymous users can create quote requests"
+on public.quote_requests
+for insert
+to anon
+with check (user_id is null);
+
+drop policy if exists "Service role can read quote requests" on public.quote_requests;
+create policy "Service role can read quote requests"
+on public.quote_requests
+for select
+to service_role
+using (true);
+
+drop policy if exists "Service role can update quote requests" on public.quote_requests;
+create policy "Service role can update quote requests"
+on public.quote_requests
+for update
+to service_role
+using (true)
+with check (true);
 
 drop policy if exists "Authenticated users can read own favorites" on public.favorites;
 create policy "Authenticated users can read own favorites"

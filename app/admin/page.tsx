@@ -6,6 +6,7 @@ import {
   isAdminAuthConfigured,
 } from "@/lib/admin-auth";
 import { getAdminCustomers } from "@/lib/admin-customers";
+import { getAdminQuoteRequests } from "@/lib/admin-quotes";
 import { getAdminOrders, type OrderStatus } from "@/lib/admin-orders";
 import { getAdminProducts } from "@/lib/admin-products";
 
@@ -47,10 +48,11 @@ export default async function AdminIndexPage() {
     redirect("/admin/login");
   }
 
-  const [orders, customers, products] = await Promise.all([
+  const [orders, customers, products, quoteRequests] = await Promise.all([
     getAdminOrders(),
     getAdminCustomers(),
     getAdminProducts(),
+    getAdminQuoteRequests({ status: "new", limit: 300 }),
   ]);
 
   const pendingOrdersCount = orders.filter((order) => isPendingStatus(order.status)).length;
@@ -58,6 +60,7 @@ export default async function AdminIndexPage() {
     ["delivered", "collected"].includes(order.status),
   ).length;
   const lowStockProducts = products.filter((product) => product.is_active && product.stock <= 5);
+  const pendingQuoteRequestsCount = quoteRequests.length;
   const recentOrders = orders.slice(0, 6);
   const recentCustomers = customers.slice(0, 6);
 
@@ -71,7 +74,7 @@ export default async function AdminIndexPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
           <article className="rounded-2xl bg-white p-4 shadow-card">
             <p className="text-xs uppercase tracking-wide text-slate-500">Commandes en cours</p>
             <p className="mt-1 text-2xl font-extrabold text-brand-blue">{pendingOrdersCount}</p>
@@ -87,6 +90,10 @@ export default async function AdminIndexPage() {
           <article className="rounded-2xl bg-white p-4 shadow-card">
             <p className="text-xs uppercase tracking-wide text-slate-500">Clients actifs</p>
             <p className="mt-1 text-2xl font-extrabold text-brand-blue">{customers.length}</p>
+          </article>
+          <article className="rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Nouveaux devis</p>
+            <p className="mt-1 text-2xl font-extrabold text-sky-700">{pendingQuoteRequestsCount}</p>
           </article>
         </div>
 

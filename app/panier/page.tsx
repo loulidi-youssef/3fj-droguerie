@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
 import {
@@ -24,6 +24,7 @@ import {
   getStockStatusClassName,
   getStockStatusLabel,
 } from "@/lib/quantity";
+import { captureQuoteRequestAndRedirectToWhatsApp } from "@/lib/quote-request-client";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useQuantityController } from "@/lib/use-quantity-controller";
 import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
@@ -424,6 +425,28 @@ export default function PanierPage() {
           : `Je souhaite un prix de gros pour ces articles: ${bulkTriggeredItemNames.join(", ")}.`,
     },
   );
+  const handleGlobalQuoteRequestClick = async (
+    event: MouseEvent<HTMLAnchorElement>,
+  ) => {
+    event.preventDefault();
+
+    await captureQuoteRequestAndRedirectToWhatsApp({
+      whatsappUrl: globalBulkQuoteWhatsAppLink,
+      accessToken: customerAccessToken,
+      payload: {
+        source: "cart-page",
+        fulfillmentMethod,
+        items: detailedItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          variantId: item.variantId,
+          selectedColor: item.selectedColor,
+          selectedSize: item.selectedSize,
+        })),
+      },
+      openInNewTab: true,
+    });
+  };
 
   const validateAndSetErrors = (
     nextForm: CheckoutFormValues,
@@ -956,6 +979,9 @@ export default function PanierPage() {
                     href={globalBulkQuoteWhatsAppLink}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(event) => {
+                      void handleGlobalQuoteRequestClick(event);
+                    }}
                     className="mt-2 block rounded-xl border border-emerald-500 bg-emerald-100 px-4 py-3 text-center text-sm font-bold text-emerald-900 transition hover:bg-emerald-200"
                   >
                     Demande globale de devis
