@@ -1,4 +1,5 @@
 import { calculateEffectiveUnitPricing, type OfferUnitPricingRule } from "@/lib/offer-pricing";
+import { getUnitPriceForQuantity } from "@/lib/bulk-pricing";
 import { roundDhAmount } from "@/lib/currency";
 import { getMaxAllowedQuantity } from "@/lib/quantity";
 import type { CartItem, Product } from "@/types";
@@ -152,9 +153,15 @@ export const buildDetailedCartItems = (
           ? product.variants.find((variant) => variant.id === item.variantId)
           : undefined;
       const maxAvailableQuantity = getCartLineMaxAvailableQuantity(item, lookup);
-      const baseUnitPrice = selectedVariant?.price ?? product.price;
+      const quantityPricing = getUnitPriceForQuantity(product, item.quantity, {
+        baseUnitPrice: selectedVariant?.price ?? product.price,
+        tiers: selectedVariant?.bulkPriceTiers ?? product.bulkPriceTiers,
+      });
       const offerRule = lookup.activeOfferRulesByProductId[item.productId];
-      const effectivePricing = calculateEffectiveUnitPricing(baseUnitPrice, offerRule);
+      const effectivePricing = calculateEffectiveUnitPricing(
+        quantityPricing.unitPrice,
+        offerRule,
+      );
       const variantLabelParts = [
         item.selectedColor ? `Couleur: ${item.selectedColor}` : null,
         item.selectedSize ? `Taille: ${item.selectedSize}` : null,

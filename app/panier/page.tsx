@@ -10,6 +10,7 @@ import {
   fetchCartProductsLookup,
   type CartProductsLookup,
 } from "@/lib/cart-display";
+import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import {
   type CheckoutCustomerInput,
   type CheckoutField,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/quantity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useQuantityController } from "@/lib/use-quantity-controller";
-import { buildCartWhatsAppLink } from "@/lib/whatsapp";
+import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
 
 type CheckoutFormValues = CheckoutCustomerInput;
 
@@ -381,6 +382,46 @@ export default function PanierPage() {
       : undefined,
     {
       fulfillmentMethod,
+    },
+  );
+  const bulkEligibleItems = detailedItems.filter((item) => {
+    const selectedVariant = item.variantId
+      ? item.product.variants?.find((variant) => variant.id === item.variantId)
+      : undefined;
+    const threshold = resolveBulkQuoteThreshold(item.product, selectedVariant);
+    return isBulkQuoteQuantity(item.quantity, threshold);
+  });
+  const hasBulkEligibleItems = bulkEligibleItems.length > 0;
+  const bulkTriggeredItemNames = bulkEligibleItems.map((item) => item.product.name);
+  const globalBulkQuoteWhatsAppLink = buildCartWhatsAppQuoteLink(
+    detailedItems.map((item) => {
+      const selectedVariant = item.variantId
+        ? item.product.variants?.find((variant) => variant.id === item.variantId)
+        : undefined;
+
+      return {
+        name: item.product.name,
+        quantity: item.quantity,
+        variantLabel: item.variantLabel || undefined,
+        unitLabel: selectedVariant?.unitLabel ?? item.product.unitLabel,
+        unitPrice: item.unitPrice,
+        estimatedTotal: item.lineTotal,
+      };
+    }),
+    hasWhatsAppCustomerDetails
+      ? {
+          name: checkoutName || undefined,
+          phone: checkoutPhone || undefined,
+          address: checkoutAddress || undefined,
+          location: checkoutLocation || undefined,
+        }
+      : undefined,
+    {
+      fulfillmentMethod,
+      note:
+        bulkTriggeredItemNames.length === 1
+          ? `Je souhaite un prix de gros pour ${bulkTriggeredItemNames[0]}.`
+          : `Je souhaite un prix de gros pour ces articles: ${bulkTriggeredItemNames.join(", ")}.`,
     },
   );
 
@@ -905,6 +946,22 @@ export default function PanierPage() {
               <p className="mt-2 text-center text-[11px] text-slate-500">
                 Aucun paiement en ligne maintenant. Apres confirmation, vous serez redirige vers le suivi de commande.
               </p>
+
+              {hasBulkEligibleItems ? (
+                <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
+                  <p className="text-xs font-semibold text-emerald-800">
+                    Pour les grandes quantites, demandez un devis personnalise.
+                  </p>
+                  <a
+                    href={globalBulkQuoteWhatsAppLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 block rounded-xl border border-emerald-500 bg-emerald-100 px-4 py-3 text-center text-sm font-bold text-emerald-900 transition hover:bg-emerald-200"
+                  >
+                    Demande globale de devis
+                  </a>
+                </div>
+              ) : null}
 
               <a
                 href={directWhatsAppLink}

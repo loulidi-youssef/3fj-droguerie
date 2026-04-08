@@ -1,4 +1,5 @@
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
+import { AdminProductBulkPriceTiersInput } from "@/components/admin-product-bulk-price-tiers-input";
 import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
 import { FormSubmitButton } from "@/components/form-submit-button";
 
@@ -122,6 +123,7 @@ export const ProductCreateForm = ({ createProductAction }: ProductCreateFormProp
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
         </label>
+        <AdminProductBulkPriceTiersInput inputName="bulkPriceTiersJson" />
         <AdminProductImageUploadInput inputName="imageFiles" idPrefix="create-product" />
         <p className="-mt-1 text-xs text-slate-500 md:col-span-2">
           Les images telechargees sont optimisees automatiquement en WebP (thumb 300, medium

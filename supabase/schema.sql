@@ -19,6 +19,7 @@ create table if not exists public.products (
   name text not null,
   price integer not null check (price > 0),
   stock integer not null default 0 check (stock >= 0),
+  bulk_price_tiers jsonb not null default '[]'::jsonb,
   short_description text not null,
   description text not null,
   category_slug text not null,
@@ -31,6 +32,16 @@ create table if not exists public.products (
 
 alter table public.products
 add column if not exists stock integer not null default 0 check (stock >= 0);
+
+alter table public.products
+add column if not exists bulk_price_tiers jsonb not null default '[]'::jsonb;
+
+alter table public.products
+drop constraint if exists products_bulk_price_tiers_is_array_check;
+
+alter table public.products
+add constraint products_bulk_price_tiers_is_array_check
+check (jsonb_typeof(bulk_price_tiers) = 'array');
 
 drop trigger if exists trg_products_updated_at on public.products;
 create trigger trg_products_updated_at

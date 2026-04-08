@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-products";
 import { clearAdminSession } from "@/lib/admin-auth";
 import { parseDecimalInput, roundDhAmount } from "@/lib/currency";
+import type { BulkPriceTier } from "@/types";
 import {
   normalizeSlug,
   parseImages,
@@ -26,6 +27,7 @@ type ProductFormValue = {
   price: number;
   categorySlug: string;
   stock: number;
+  bulkPriceTiers: BulkPriceTier[];
   rating: number;
   images: string[];
   isActive: boolean;
@@ -46,6 +48,16 @@ type ParsedVariantsJson =
   | {
       ok: true;
       variants: UpsertAdminProductVariantInput[];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type ParsedBulkPriceTiersJson =
+  | {
+      ok: true;
+      tiers: BulkPriceTier[];
     }
   | {
       ok: false;
@@ -208,6 +220,76 @@ const parseProductVariantsJson = (
   return { ok: true, variants };
 };
 
+const parseBulkPriceTiersJson = (rawTiers: string): ParsedBulkPriceTiersJson => {
+  const trimmed = rawTiers.trim();
+  if (!trimmed) {
+    return { ok: true, tiers: [] };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return {
+      ok: false,
+      error: "Paliers de prix invalides: format incorrect.",
+    };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return {
+      ok: false,
+      error: "Paliers de prix invalides: format de liste attendu.",
+    };
+  }
+
+  const tiers: BulkPriceTier[] = [];
+  const minQtySeen = new Set<number>();
+
+  for (const [index, entry] of parsed.entries()) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return {
+        ok: false,
+        error: `Palier #${index + 1} invalide: objet attendu.`,
+      };
+    }
+
+    const record = entry as Record<string, unknown>;
+    const minQtyRaw = Number(record.minQty ?? record.min_qty);
+    if (!Number.isInteger(minQtyRaw) || minQtyRaw <= 0) {
+      return {
+        ok: false,
+        error: `Palier #${index + 1}: minQty doit etre un entier positif.`,
+      };
+    }
+
+    const minQty = Math.floor(minQtyRaw);
+    if (minQtySeen.has(minQty)) {
+      return {
+        ok: false,
+        error: `Palier #${index + 1}: minQty ${minQty} est duplique.`,
+      };
+    }
+
+    const price = parseDecimalInput(record.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      return {
+        ok: false,
+        error: `Palier #${index + 1}: prix invalide.`,
+      };
+    }
+
+    minQtySeen.add(minQty);
+    tiers.push({
+      minQty,
+      price: roundDhAmount(price),
+    });
+  }
+
+  const sortedTiers = [...tiers].sort((first, second) => first.minQty - second.minQty);
+  return { ok: true, tiers: sortedTiers };
+};
+
 const parseProductForm = (formData: FormData): ParsedProductForm => {
   const rawSlug = formData.get("slug");
   const rawName = formData.get("name");
@@ -216,6 +298,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const rawCategorySlug = formData.get("categorySlug");
   const rawExistingImages = formData.get("existingImages");
   const rawVariantsJson = formData.get("variantsJson");
+  const rawBulkPriceTiersJson = formData.get("bulkPriceTiersJson");
   const rawProductId = formData.get("productId");
 
   const slug = typeof rawSlug === "string" ? normalizeSlug(rawSlug) : "";
@@ -228,6 +311,8 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
     typeof rawCategorySlug === "string" ? rawCategorySlug.trim() : "";
   const images = typeof rawExistingImages === "string" ? parseImages(rawExistingImages) : [];
   const variantsJson = typeof rawVariantsJson === "string" ? rawVariantsJson : "";
+  const bulkPriceTiersJson =
+    typeof rawBulkPriceTiersJson === "string" ? rawBulkPriceTiersJson : "";
   const productIdForValidation =
     (typeof rawProductId === "string" ? rawProductId.trim() : "") || "__new__";
 
@@ -241,6 +326,14 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
     return {
       ok: false,
       error: parsedVariants.error,
+    };
+  }
+
+  const parsedBulkPriceTiers = parseBulkPriceTiersJson(bulkPriceTiersJson);
+  if (!parsedBulkPriceTiers.ok) {
+    return {
+      ok: false,
+      error: parsedBulkPriceTiers.error,
     };
   }
 
@@ -280,6 +373,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
       price: roundDhAmount(price),
       categorySlug,
       stock: Math.round(stock),
+      bulkPriceTiers: parsedBulkPriceTiers.tiers,
       rating,
       images,
       isActive,

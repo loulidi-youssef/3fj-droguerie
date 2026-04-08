@@ -6,15 +6,22 @@ import { AddToCartButton } from "@/components/add-to-cart-button";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { FavoriteButton } from "@/components/favorite-button";
 import { getCategoryNameBySlug } from "@/data/categories";
+import {
+  isBulkQuoteQuantity,
+  normalizeBulkQuoteUnitLabel,
+  resolveBulkQuoteThreshold,
+} from "@/lib/bulk-quote";
+import { getUnitPriceForQuantity } from "@/lib/bulk-pricing";
 import { formatDh } from "@/lib/currency";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import {
+  clampQuantityToStock,
   getMaxAllowedQuantity,
   getStockStatus,
   getStockStatusClassName,
   getStockStatusLabel,
 } from "@/lib/quantity";
-import { buildProductWhatsAppLink } from "@/lib/whatsapp";
+import { buildProductWhatsAppLink, buildProductWhatsAppQuoteLink } from "@/lib/whatsapp";
 import type { OfferDiscountType, Product, ProductVariant } from "@/types";
 
 type ProductDetailPurchasePanelProps = {
@@ -188,29 +195,53 @@ export const ProductDetailPurchasePanel = ({
     );
   };
 
-  const baseDisplayedPrice = selectedVariant?.price ?? product.price;
-  const effectiveOfferPricing = offerPricing
-    ? calculateEffectiveUnitPricing(baseDisplayedPrice, {
-        discountType: offerPricing.discountType,
-        discountValue: offerPricing.discountValue,
-      })
-    : null;
-  const displayedPrice = effectiveOfferPricing?.discountedPrice ?? baseDisplayedPrice;
-  const displayedPreviousPrice = effectiveOfferPricing
-    ? effectiveOfferPricing.originalPrice > effectiveOfferPricing.discountedPrice
-      ? effectiveOfferPricing.originalPrice
-      : null
-    : typeof selectedVariant?.previousPrice === "number" && selectedVariant.previousPrice > displayedPrice
-      ? selectedVariant.previousPrice
-      : typeof product.previousPrice === "number" && product.previousPrice > displayedPrice
-        ? product.previousPrice
-        : null;
-
   const selectedStock = selectedVariant?.stock ?? product.stock;
   const availabilityStatus = getStockStatus(selectedStock);
   const availabilityLabel = getStockStatusLabel(selectedStock);
   const availabilityClassName = getStockStatusClassName(selectedStock);
   const selectedMaxQuantity = getMaxAllowedQuantity(selectedStock);
+  const [selectedPurchaseQuantity, setSelectedPurchaseQuantity] = useState(1);
+  const normalizedPurchaseQuantity = clampQuantityToStock(
+    selectedPurchaseQuantity,
+    selectedMaxQuantity,
+    {
+      minQuantity: 1,
+      allowZeroWhenOutOfStock: false,
+    },
+  );
+  const quantityPricing = getUnitPriceForQuantity(product, normalizedPurchaseQuantity, {
+    baseUnitPrice: selectedVariant?.price ?? product.price,
+    tiers: selectedVariant?.bulkPriceTiers ?? product.bulkPriceTiers,
+  });
+  const effectiveOfferPricing = offerPricing
+    ? calculateEffectiveUnitPricing(quantityPricing.unitPrice, {
+        discountType: offerPricing.discountType,
+        discountValue: offerPricing.discountValue,
+      })
+    : null;
+  const displayedPrice = effectiveOfferPricing?.discountedPrice ?? quantityPricing.unitPrice;
+  const displayedPreviousPrice = effectiveOfferPricing
+    ? effectiveOfferPricing.originalPrice > effectiveOfferPricing.discountedPrice
+      ? effectiveOfferPricing.originalPrice
+      : null
+    : typeof selectedVariant?.previousPrice === "number" &&
+        selectedVariant.previousPrice > displayedPrice
+      ? selectedVariant.previousPrice
+      : typeof product.previousPrice === "number" && product.previousPrice > displayedPrice
+        ? product.previousPrice
+        : null;
+  const displayedLineTotal = displayedPrice * normalizedPurchaseQuantity;
+  const bulkPriceTiersForDisplay = quantityPricing.tiers.filter((tier) => tier.minQty > 1);
+
+  useEffect(() => {
+    setSelectedPurchaseQuantity((current) =>
+      clampQuantityToStock(current, selectedMaxQuantity, {
+        minQuantity: 1,
+        allowZeroWhenOutOfStock: false,
+      }),
+    );
+  }, [selectedMaxQuantity, selectedVariant?.id]);
+
   const lowStockCount =
     typeof selectedStock === "number" && selectedStock > 0 && selectedStock <= 5
       ? selectedStock
@@ -221,10 +252,25 @@ export const ProductDetailPurchasePanel = ({
   ].filter((value): value is string => Boolean(value));
   const selectedVariantLabel =
     selectedVariantLabelParts.length > 0 ? selectedVariantLabelParts.join(" / ") : undefined;
+  const selectedUnitLabel = selectedVariant?.unitLabel ?? product.unitLabel;
+  const bulkQuoteThreshold = resolveBulkQuoteThreshold(product, selectedVariant);
+  const isBulkQuoteQuantitySelected = isBulkQuoteQuantity(
+    normalizedPurchaseQuantity,
+    bulkQuoteThreshold,
+  );
+  const normalizedBulkUnitLabel = normalizeBulkQuoteUnitLabel(selectedUnitLabel);
   const productWhatsAppLink = buildProductWhatsAppLink(product.name, {
-    quantity: 1,
+    quantity: normalizedPurchaseQuantity,
     unitPrice: displayedPrice,
     variantLabel: selectedVariantLabel,
+  });
+  const productWhatsAppQuoteLink = buildProductWhatsAppQuoteLink(product.name, {
+    quantity: normalizedPurchaseQuantity,
+    unitPrice: displayedPrice,
+    variantLabel: selectedVariantLabel,
+    unitLabel: selectedUnitLabel,
+    estimatedTotal: displayedLineTotal,
+    note: "Je souhaite un prix de gros.",
   });
 
   const offerEndDate =
@@ -311,6 +357,24 @@ export const ProductDetailPurchasePanel = ({
             </span>
           ) : null}
         </div>
+        <p className="mt-1 text-[10px] font-semibold text-slate-600 sm:text-xs">
+          Total ({normalizedPurchaseQuantity}): {formatDh(displayedLineTotal)}
+        </p>
+
+        {bulkPriceTiersForDisplay.length > 0 ? (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
+            <p className="text-[9px] font-bold uppercase tracking-wide text-slate-700 sm:text-xs">
+              Prix de gros
+            </p>
+            <div className="mt-1 space-y-0.5 sm:mt-2">
+              {bulkPriceTiersForDisplay.map((tier) => (
+                <p key={tier.minQty} className="text-[10px] font-semibold text-slate-700 sm:text-sm">
+                  {tier.minQty}+ {"->"} {formatDh(tier.price)}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {offerPricing && effectiveOfferPricing ? (
           <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
@@ -432,12 +496,18 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
+            quantity={normalizedPurchaseQuantity}
             maxQuantity={selectedMaxQuantity ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
             showBulkButtons
             bulkStepOptions={[10, 50, 100]}
-            label="Commander maintenant"
-            className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
+            onQuantityPreviewChange={setSelectedPurchaseQuantity}
+            label={isBulkQuoteQuantitySelected ? "Ajouter au panier" : "Commander maintenant"}
+            className={
+              isBulkQuoteQuantitySelected
+                ? "inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base"
+                : "inline-flex h-9 items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
+            }
             controlsClassName="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-14 sm:rounded-xl"
           />
           <FavoriteButton
@@ -449,18 +519,47 @@ export const ProductDetailPurchasePanel = ({
         <p className="mt-0.5 text-[9px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
           Aucun paiement en ligne requis. Confirmation de commande rapide par telephone.
         </p>
-
-        <a
-          href={productWhatsAppLink}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
-        >
-          Commander via WhatsApp
-        </a>
         <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
-          Message pre-rempli avec le produit pour un traitement plus rapide.
+          Pour les grandes quantites ({bulkQuoteThreshold}+ {normalizedBulkUnitLabel}), demandez un devis personnalise.
         </p>
+
+        {isBulkQuoteQuantitySelected ? (
+          <>
+            <a
+              href={productWhatsAppQuoteLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 px-3 text-[10px] font-bold text-emerald-800 transition hover:bg-emerald-200 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+            >
+              Demander prix de gros
+            </a>
+            <a
+              href={productWhatsAppLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[10px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-sm"
+            >
+              Commander via WhatsApp
+            </a>
+            <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
+              Le devis en gros inclut la quantite, le prix estime et la variante choisie.
+            </p>
+          </>
+        ) : (
+          <>
+            <a
+              href={productWhatsAppLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+            >
+              Commander via WhatsApp
+            </a>
+            <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
+              Message pre-rempli avec le produit pour un traitement plus rapide.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="mt-3 hidden gap-1.5 sm:mt-4 sm:grid sm:gap-2 sm:grid-cols-3">
@@ -542,13 +641,18 @@ export const ProductDetailPurchasePanel = ({
             selectedPrice={displayedPrice}
             selectedPreviousPrice={displayedPreviousPrice ?? undefined}
             selectedImage={selectedVariant?.image ?? undefined}
+            quantity={normalizedPurchaseQuantity}
             maxQuantity={selectedMaxQuantity ?? undefined}
             disabled={availabilityStatus === "out-of-stock"}
             allowDirectInput={false}
             showBulkButtons={false}
             bulkStepOptions={[10, 50, 100]}
-            label="Commander"
-            className="inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg bg-brand-orange px-2.5 text-[10px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
+            label={isBulkQuoteQuantitySelected ? "Ajouter" : "Commander"}
+            className={
+              isBulkQuoteQuantitySelected
+                ? "inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 text-[10px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
+                : "inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg bg-brand-orange px-2.5 text-[10px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
+            }
             controlsClassName="inline-flex h-8 min-w-[7.6rem] items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"
           />
         </div>

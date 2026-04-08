@@ -1,5 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { normalizeBulkPriceTiers } from "@/lib/bulk-pricing";
 import { roundDhAmount } from "@/lib/currency";
+import type { BulkPriceTier } from "@/types";
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
 
@@ -27,6 +29,7 @@ export type AdminProduct = {
   price: number;
   category_slug: string;
   stock: number;
+  bulk_price_tiers: BulkPriceTier[];
   rating: number;
   images: string[];
   is_active: boolean;
@@ -56,6 +59,7 @@ export type UpsertAdminProductInput = {
   price: number;
   categorySlug: string;
   stock: number;
+  bulkPriceTiers: BulkPriceTier[];
   rating: number;
   images: string[];
   isActive: boolean;
@@ -65,6 +69,10 @@ export type UpsertAdminProductInput = {
 type AdminActionResult = {
   ok: boolean;
   error?: string;
+};
+
+type AdminProductRow = Omit<AdminProduct, "variants" | "bulk_price_tiers"> & {
+  bulk_price_tiers?: unknown;
 };
 
 export type AdminProductsQueryInput = {
@@ -110,6 +118,25 @@ const toNullableTrimmed = (value: string | null | undefined): string | null => {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const toDatabaseBulkPriceTiers = (tiers: BulkPriceTier[]): Array<{ minQty: number; price: number }> => {
+  return normalizeBulkPriceTiers(tiers).map((tier) => ({
+    minQty: tier.minQty,
+    price: roundDhAmount(tier.price),
+  }));
+};
+
+const toAdminProduct = (
+  row: AdminProductRow,
+  variants: AdminProductVariant[],
+): AdminProduct => {
+  return {
+    ...row,
+    stock: typeof row.stock === "number" ? row.stock : 0,
+    bulk_price_tiers: normalizeBulkPriceTiers(row.bulk_price_tiers),
+    variants,
+  };
 };
 
 const normalizeDatabaseError = (
@@ -205,7 +232,7 @@ const applyAdminProductsFilters = (
 
 const attachVariantsToAdminProducts = async (
   supabaseAdmin: SupabaseAdminClient,
-  products: AdminProduct[],
+  products: AdminProductRow[],
 ): Promise<AdminProduct[]> => {
   const productIds = products.map((product) => String(product.id));
   const variantsByProductId = new Map<string, AdminProductVariant[]>();
@@ -225,14 +252,9 @@ const attachVariantsToAdminProducts = async (
     }
   }
 
-  return products.map((product) => ({
-    ...product,
-    stock:
-      typeof (product as { stock?: unknown }).stock === "number"
-        ? ((product as { stock: number }).stock ?? 0)
-        : 0,
-    variants: variantsByProductId.get(product.id) ?? [],
-  }));
+  return products.map((product) =>
+    toAdminProduct(product, variantsByProductId.get(product.id) ?? []),
+  );
 };
 
 const replaceAdminProductVariants = async (
@@ -354,7 +376,7 @@ export const getAdminProducts = async (
     return [];
   }
 
-  return attachVariantsToAdminProducts(supabaseAdmin, data as AdminProduct[]);
+  return attachVariantsToAdminProducts(supabaseAdmin, data as AdminProductRow[]);
 };
 
 export const getAdminProductsPaginated = async (
@@ -403,7 +425,7 @@ export const getAdminProductsPaginated = async (
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(requestedPage, totalPages);
 
-  let pageRows = firstResult.data as AdminProduct[];
+  let pageRows = firstResult.data as AdminProductRow[];
   if (currentPage !== requestedPage) {
     const fallbackResult = await runPageQuery(currentPage);
     if (fallbackResult.error || !fallbackResult.data) {
@@ -415,7 +437,7 @@ export const getAdminProductsPaginated = async (
         pageSize,
       };
     }
-    pageRows = fallbackResult.data as AdminProduct[];
+    pageRows = fallbackResult.data as AdminProductRow[];
   }
 
   const products = await attachVariantsToAdminProducts(supabaseAdmin, pageRows);
@@ -633,6 +655,7 @@ export const createAdminProduct = async (
     price: roundDhAmount(input.price),
     category_slug: input.categorySlug.trim(),
     stock: input.stock,
+    bulk_price_tiers: toDatabaseBulkPriceTiers(input.bulkPriceTiers),
     rating: input.rating,
     images: input.images,
     is_active: input.isActive,
@@ -679,6 +702,7 @@ export const updateAdminProduct = async (
       price: roundDhAmount(input.price),
       category_slug: input.categorySlug.trim(),
       stock: input.stock,
+      bulk_price_tiers: toDatabaseBulkPriceTiers(input.bulkPriceTiers),
       rating: input.rating,
       images: input.images,
       is_active: input.isActive,

@@ -26,6 +26,7 @@ type AddToCartButtonProps = {
   allowDirectInput?: boolean;
   showBulkButtons?: boolean;
   bulkStepOptions?: number[];
+  onQuantityPreviewChange?: (quantity: number) => void;
 };
 
 export const AddToCartButton = ({
@@ -48,6 +49,7 @@ export const AddToCartButton = ({
   allowDirectInput = !compact,
   showBulkButtons = !compact,
   bulkStepOptions,
+  onQuantityPreviewChange,
 }: AddToCartButtonProps) => {
   const { items, addItem, updateQuantity } = useCart();
   const { showToast } = useToast();
@@ -130,6 +132,29 @@ export const AddToCartButton = ({
   useEffect(() => {
     setDraftQuantity(clampQuantityToStock(quantity, normalizedMaxQuantity, { minQuantity: 1 }));
   }, [quantity, normalizedMaxQuantity]);
+
+  useEffect(() => {
+    if (!onQuantityPreviewChange) {
+      return;
+    }
+
+    const quantityForPreview = currentQuantity > 0
+      ? clampQuantityToStock(currentQuantity, normalizedMaxQuantity, {
+          minQuantity: 1,
+          allowZeroWhenOutOfStock: false,
+        })
+      : clampQuantityToStock(draftQuantity, normalizedMaxQuantity, {
+          minQuantity: 1,
+          allowZeroWhenOutOfStock: false,
+        });
+
+    onQuantityPreviewChange(quantityForPreview);
+  }, [
+    currentQuantity,
+    draftQuantity,
+    normalizedMaxQuantity,
+    onQuantityPreviewChange,
+  ]);
 
   const handleAddToCart = () => {
     if (isDisabled) {

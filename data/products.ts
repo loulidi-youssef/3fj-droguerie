@@ -30,6 +30,10 @@ export const products: Product[] = [
     slug: "ciment-50kg",
     name: "Ciment 50kg",
     price: 80,
+    bulkPriceTiers: [
+      { minQty: 10, price: 76 },
+      { minQty: 50, price: 72 },
+    ],
     categorySlug: "materiaux-construction",
     shortDescription: "Ciment solide pour construction et travaux.",
     description:
@@ -80,6 +84,10 @@ export const products: Product[] = [
     slug: "cable-electrique",
     name: "Cable electrique",
     price: 100,
+    bulkPriceTiers: [
+      { minQty: 10, price: 94 },
+      { minQty: 50, price: 88 },
+    ],
     categorySlug: "electricite",
     shortDescription: "Cable electrique securise et fiable.",
     description:

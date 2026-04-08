@@ -57,6 +57,7 @@ export const ProductItem = ({
             <p className="text-xs text-slate-500">Slug: {product.category_slug}</p>
             <p className="text-xs text-slate-600">Note: {product.rating}</p>
             <p className="text-xs text-slate-600">Variantes: {product.variants.length}</p>
+            <p className="text-xs text-slate-600">Paliers gros: {product.bulk_price_tiers.length}</p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">

@@ -1,4 +1,5 @@
 import { AdminProductImageUploadInput } from "@/components/admin-product-image-upload-input";
+import { AdminProductBulkPriceTiersInput } from "@/components/admin-product-bulk-price-tiers-input";
 import { AdminProductVariantsInput } from "@/components/admin-product-variants-input";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import type { AdminProduct } from "@/lib/admin-products";
@@ -129,6 +130,13 @@ export const ProductEditForm = ({
           className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
+      <AdminProductBulkPriceTiersInput
+        inputName="bulkPriceTiersJson"
+        initialTiers={product.bulk_price_tiers.map((tier) => ({
+          minQty: tier.minQty,
+          price: tier.price,
+        }))}
+      />
       <AdminProductImageUploadInput
         inputName="imageFiles"
         idPrefix={`edit-product-${product.id}`}

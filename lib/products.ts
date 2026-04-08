@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { products as fallbackProducts } from "@/data/products";
+import { normalizeBulkPriceTiers } from "@/lib/bulk-pricing";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { TransactionDataUnavailableError } from "@/lib/transaction-data";
 import type { Product, ProductVariant } from "@/types";
@@ -11,6 +12,9 @@ type ProductRow = {
   price: number;
   previous_price?: number | null;
   stock?: number | null;
+  bulk_price_tiers?: unknown | null;
+  bulk_quote_threshold?: number | null;
+  unit_label?: string | null;
   short_description: string;
   description: string;
   category_slug: string;
@@ -27,11 +31,36 @@ type ProductVariantRow = {
   price: number;
   previous_price?: number | null;
   stock?: number | null;
+  bulk_price_tiers?: unknown | null;
+  bulk_quote_threshold?: number | null;
+  unit_label?: string | null;
   sku?: string | null;
   image?: string | null;
   is_active: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+const toPositiveInteger = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  const normalized = Math.floor(value);
+  if (!Number.isSafeInteger(normalized) || normalized < 1) {
+    return undefined;
+  }
+
+  return normalized;
+};
+
+const toNonEmptyString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 const PRODUCT_SELECT = "*";
@@ -74,6 +103,9 @@ const mapProductRow = (row: ProductRow): Product => ({
       ? row.previous_price
       : undefined,
   stock: typeof row.stock === "number" ? row.stock : undefined,
+  bulkPriceTiers: normalizeBulkPriceTiers(row.bulk_price_tiers),
+  bulkQuoteThreshold: toPositiveInteger(row.bulk_quote_threshold),
+  unitLabel: toNonEmptyString(row.unit_label),
   shortDescription: row.short_description,
   description: row.description,
   categorySlug: row.category_slug,
@@ -93,6 +125,9 @@ const mapProductVariantRow = (row: ProductVariantRow): ProductVariant => ({
       ? row.previous_price
       : undefined,
   stock: typeof row.stock === "number" ? row.stock : undefined,
+  bulkPriceTiers: normalizeBulkPriceTiers(row.bulk_price_tiers),
+  bulkQuoteThreshold: toPositiveInteger(row.bulk_quote_threshold),
+  unitLabel: toNonEmptyString(row.unit_label),
   sku: row.sku ?? null,
   image: row.image ?? null,
   isActive: row.is_active,

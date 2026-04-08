@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getUnitPriceForQuantity } from "@/lib/bulk-pricing";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getActiveOfferRulesByProductIdsStrict } from "@/lib/offers";
@@ -60,13 +61,82 @@ type ParseOrderItemsResult =
 type FulfillmentMethod = "delivery" | "pickup";
 
 const MAX_ORDER_REQUEST_BYTES = 20_000;
-const MAX_DISTINCT_ITEMS_PER_ORDER = 30;
-const MAX_QUANTITY_PER_PRODUCT = 20;
-const MAX_TOTAL_UNITS_PER_ORDER = 200;
+const DEFAULT_MAX_DISTINCT_ITEMS_PER_ORDER = 30;
+const DEFAULT_ANTI_ABUSE_MAX_TOTAL_UNITS_PER_ORDER = 5_000;
+const DEFAULT_ANTI_ABUSE_MAX_UNITS_PER_LINE = 10_000;
 const ORDER_RATE_LIMIT_WINDOW_MS = 60_000;
 const ORDER_RATE_LIMIT_MAX_REQUESTS = 10;
 const IDEMPOTENCY_DERIVED_WINDOW_MS = 10 * 60 * 1000;
 const MAX_IDEMPOTENCY_KEY_HEADER_LENGTH = 200;
+
+const toPositiveInteger = (value: string | undefined): number | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const parseProductMaxUnitsPerLineByProductId = (
+  rawValue: string | undefined,
+): Map<string, number> => {
+  if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
+    return new Map();
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return new Map();
+    }
+
+    const byProductId = new Map<string, number>();
+    for (const [rawProductId, rawLimit] of Object.entries(parsed)) {
+      const productId = rawProductId.trim();
+      const limit =
+        typeof rawLimit === "number" && Number.isInteger(rawLimit) && rawLimit > 0
+          ? rawLimit
+          : null;
+
+      if (!productId || limit === null) {
+        continue;
+      }
+
+      byProductId.set(productId, limit);
+    }
+
+    return byProductId;
+  } catch {
+    console.warn(
+      "[api/orders] ORDER_MAX_UNITS_PER_LINE_BY_PRODUCT ignored due to invalid JSON.",
+    );
+    return new Map();
+  }
+};
+
+const MAX_DISTINCT_ITEMS_PER_ORDER =
+  toPositiveInteger(process.env.ORDER_ANTI_ABUSE_MAX_DISTINCT_ITEMS_PER_ORDER) ??
+  DEFAULT_MAX_DISTINCT_ITEMS_PER_ORDER;
+const MAX_TOTAL_UNITS_PER_ORDER =
+  toPositiveInteger(process.env.ORDER_ANTI_ABUSE_MAX_TOTAL_UNITS_PER_ORDER) ??
+  DEFAULT_ANTI_ABUSE_MAX_TOTAL_UNITS_PER_ORDER;
+const MAX_UNITS_PER_LINE_ANTI_ABUSE =
+  toPositiveInteger(process.env.ORDER_ANTI_ABUSE_MAX_UNITS_PER_LINE) ??
+  DEFAULT_ANTI_ABUSE_MAX_UNITS_PER_LINE;
+const MAX_UNITS_PER_LINE_BUSINESS = toPositiveInteger(process.env.ORDER_MAX_UNITS_PER_LINE);
+const PRODUCT_MAX_UNITS_PER_LINE_BY_PRODUCT_ID = parseProductMaxUnitsPerLineByProductId(
+  process.env.ORDER_MAX_UNITS_PER_LINE_BY_PRODUCT,
+);
 
 const normalizeFulfillmentMethod = (value: unknown): FulfillmentMethod | null => {
   if (typeof value !== "string") {
@@ -111,10 +181,32 @@ const parseOrderItems = (items: IncomingOrderItem[]): ParseOrderItemsResult => {
     const existing = quantityByCompositeKey.get(compositeKey);
     const nextQuantity = (existing?.quantity ?? 0) + quantity;
 
-    if (nextQuantity > MAX_QUANTITY_PER_PRODUCT) {
+    if (nextQuantity > MAX_UNITS_PER_LINE_ANTI_ABUSE) {
       return {
         ok: false,
-        error: `La quantite maximale par produit est ${MAX_QUANTITY_PER_PRODUCT}.`,
+        error:
+          "Quantite demandee trop elevee pour une seule ligne de panier. Merci de fractionner la commande ou de contacter le support.",
+      };
+    }
+
+    if (
+      MAX_UNITS_PER_LINE_BUSINESS !== null &&
+      nextQuantity > MAX_UNITS_PER_LINE_BUSINESS
+    ) {
+      return {
+        ok: false,
+        error: `La quantite maximale autorisee par ligne est ${MAX_UNITS_PER_LINE_BUSINESS}.`,
+      };
+    }
+
+    const productSpecificLineLimit = PRODUCT_MAX_UNITS_PER_LINE_BY_PRODUCT_ID.get(productId);
+    if (
+      typeof productSpecificLineLimit === "number" &&
+      nextQuantity > productSpecificLineLimit
+    ) {
+      return {
+        ok: false,
+        error: `La quantite maximale autorisee pour ce produit est ${productSpecificLineLimit}.`,
       };
     }
 
@@ -369,10 +461,13 @@ export async function POST(request: NextRequest) {
 
     // Policy: product-level active offers apply to the selected unit base price,
     // including variant prices when a variant is chosen.
-    const baseUnitPrice = selectedVariant ? selectedVariant.price : product.price;
+    const quantityPricing = getUnitPriceForQuantity(product, item.quantity, {
+      baseUnitPrice: selectedVariant ? selectedVariant.price : product.price,
+      tiers: selectedVariant?.bulkPriceTiers ?? product.bulkPriceTiers,
+    });
     const offerRule = activeOfferRulesByProductId.get(product.id);
     const unitPrice = roundDhAmount(
-      calculateEffectiveUnitPricing(baseUnitPrice, offerRule).discountedPrice,
+      calculateEffectiveUnitPricing(quantityPricing.unitPrice, offerRule).discountedPrice,
     );
     const stock = selectedVariant?.stock ?? product.stock;
 

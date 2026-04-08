@@ -10,6 +10,7 @@ import {
   fetchCartProductsLookup,
   type CartProductsLookup,
 } from "@/lib/cart-display";
+import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
@@ -20,7 +21,7 @@ import {
   getStockStatusLabel,
 } from "@/lib/quantity";
 import { useQuantityController } from "@/lib/use-quantity-controller";
-import { buildCartWhatsAppLink } from "@/lib/whatsapp";
+import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
   isOpen: boolean;
@@ -271,6 +272,34 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     estimatedDeliveryCost,
     undefined,
   );
+  const bulkEligibleItems = detailedItems.filter((item) => {
+    const selectedVariant = item.variantId
+      ? item.product.variants?.find((variant) => variant.id === item.variantId)
+      : undefined;
+    const threshold = resolveBulkQuoteThreshold(item.product, selectedVariant);
+    return isBulkQuoteQuantity(item.quantity, threshold);
+  });
+  const hasBulkEligibleItems = bulkEligibleItems.length > 0;
+  const globalBulkQuoteWhatsAppLink = buildCartWhatsAppQuoteLink(
+    detailedItems.map((item) => {
+      const selectedVariant = item.variantId
+        ? item.product.variants?.find((variant) => variant.id === item.variantId)
+        : undefined;
+
+      return {
+        name: item.product.name,
+        quantity: item.quantity,
+        variantLabel: item.variantLabel || undefined,
+        unitLabel: selectedVariant?.unitLabel ?? item.product.unitLabel,
+        unitPrice: item.unitPrice,
+        estimatedTotal: item.lineTotal,
+      };
+    }),
+    undefined,
+    {
+      note: "Je souhaite un prix de gros.",
+    },
+  );
 
   const articleLabel = itemCount > 1 ? "articles" : "article";
 
@@ -441,6 +470,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           <p className="mt-2 text-center text-[11px] text-slate-500 sm:text-xs">
             Paiement a la livraison apres confirmation.
           </p>
+          {detailedItems.length > 0 && hasBulkEligibleItems ? (
+            <a
+              href={globalBulkQuoteWhatsAppLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 text-xs font-bold text-emerald-800 transition hover:bg-emerald-200 sm:h-11 sm:rounded-2xl sm:text-sm"
+            >
+              Demande globale de devis
+            </a>
+          ) : null}
           {detailedItems.length > 0 ? (
             <a
               href={directWhatsAppLink}

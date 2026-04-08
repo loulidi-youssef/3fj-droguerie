@@ -11,6 +11,9 @@ export type Product = {
   price: number;
   previousPrice?: number;
   stock?: number;
+  bulkPriceTiers?: BulkPriceTier[];
+  bulkQuoteThreshold?: number;
+  unitLabel?: string;
   shortDescription: string;
   description: string;
   categorySlug: string;
@@ -31,11 +34,19 @@ export type ProductVariant = {
   price: number;
   previousPrice?: number;
   stock?: number;
+  bulkPriceTiers?: BulkPriceTier[];
+  bulkQuoteThreshold?: number;
+  unitLabel?: string;
   sku?: string | null;
   image?: string | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type BulkPriceTier = {
+  minQty: number;
+  price: number;
 };
 
 export type BlogPost = {
