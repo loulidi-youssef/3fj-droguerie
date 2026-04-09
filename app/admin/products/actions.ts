@@ -460,7 +460,9 @@ const getValidatedProductInput = async (formData: FormData): Promise<ProductForm
   }
 
   const uploadedFiles = getUploadedImageFiles(formData);
-  const uploaded = await uploadAdminProductImages(parsed.value.slug, uploadedFiles);
+  const uploaded = await uploadAdminProductImages(parsed.value.slug, uploadedFiles, {
+    categorySlug: parsed.value.categorySlug,
+  });
   if (!uploaded.ok) {
     return redirectWithError(uploaded.error);
   }

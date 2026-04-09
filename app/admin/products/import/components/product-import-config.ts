@@ -117,8 +117,8 @@ export const columnHelpRows: Array<{
   {
     column: "image_url",
     description: "Chemin image ou URL",
-    format: "/images/... ou https://...",
-    example: "/images/products/perceuse-bosch.jpg",
+    format: "outillage/perceuse.jpg, https://... ou vide",
+    example: "outillage/perceuse-bosch-500w.jpg",
   },
   {
     column: "is_active",

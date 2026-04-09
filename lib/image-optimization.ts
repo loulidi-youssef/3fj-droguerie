@@ -2,6 +2,7 @@ import {
   PRODUCT_IMAGE_FALLBACK_SRC,
   PRODUCT_IMAGE_VARIANT_PATTERN,
   PRODUCT_IMAGE_VARIANT_SUFFIX,
+  resolveProductImageReference,
   type ProductImageVariant,
 } from "@/lib/product-image-variants";
 
@@ -139,7 +140,11 @@ export const getSafeNextImageProps = (
   options?: SafeNextImageOptions,
 ): SafeNextImageProps => {
   const fallbackSrc = toSafeFallbackSrc(options?.fallbackSrc);
-  const normalizedSrc = normalizeSameOriginAbsoluteSrc(rawSrc?.trim() ?? "");
+  const resolvedSrc = resolveProductImageReference(rawSrc, {
+    fallbackSrc: "",
+    useFallbackWhenInvalid: false,
+  });
+  const normalizedSrc = normalizeSameOriginAbsoluteSrc(resolvedSrc.trim());
   const withVariantSrc =
     options?.variant && normalizedSrc ? toVariantSrc(normalizedSrc, options.variant) : normalizedSrc;
   const src = withVariantSrc || fallbackSrc;

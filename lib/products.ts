@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { products as fallbackProducts } from "@/data/products";
 import { normalizeBulkPriceTiers } from "@/lib/bulk-pricing";
+import {
+  resolveOptionalProductImageReference,
+  resolveProductImageCollection,
+} from "@/lib/product-image-variants";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { TransactionDataUnavailableError } from "@/lib/transaction-data";
 import type { Product, ProductVariant } from "@/types";
@@ -19,7 +23,7 @@ type ProductRow = {
   description: string;
   category_slug: string;
   rating: number;
-  images: string[];
+  images: unknown;
   created_at?: string | null;
 };
 
@@ -110,7 +114,7 @@ const mapProductRow = (row: ProductRow): Product => ({
   description: row.description,
   categorySlug: row.category_slug,
   rating: row.rating,
-  images: row.images,
+  images: resolveProductImageCollection(row.images),
   createdAt: row.created_at ?? undefined,
 });
 
@@ -129,7 +133,7 @@ const mapProductVariantRow = (row: ProductVariantRow): ProductVariant => ({
   bulkQuoteThreshold: toPositiveInteger(row.bulk_quote_threshold),
   unitLabel: toNonEmptyString(row.unit_label),
   sku: row.sku ?? null,
-  image: row.image ?? null,
+  image: resolveOptionalProductImageReference(row.image),
   isActive: row.is_active,
   createdAt: row.created_at ?? undefined,
   updatedAt: row.updated_at ?? undefined,

@@ -1,5 +1,9 @@
 import { categories } from "@/data/categories";
 import { parseDecimalInput, roundDhAmount } from "@/lib/currency";
+import {
+  PRODUCT_IMAGE_FALLBACK_SRC,
+  normalizeProductImageReferenceForStorage,
+} from "@/lib/product-image-variants";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const PRODUCT_IMPORT_SUPPORTED_FORMATS = ["csv", "xlsx"] as const;
@@ -181,23 +185,31 @@ const parseBooleanCellValue = (rawValue: string): boolean | null => {
   return null;
 };
 
-const parseImageUrlsCell = (rawValue: string): string[] => {
-  return rawValue
+const parseImageReferencesCell = (
+  rawValue: string,
+): {
+  validReferences: string[];
+  invalidReferences: string[];
+} => {
+  const rawReferences = rawValue
     .split("|")
     .map((value) => value.trim())
     .filter(Boolean);
-};
 
-const isAcceptedImagePath = (value: string): boolean => {
-  if (!value) {
-    return false;
+  const validReferences: string[] = [];
+  const invalidReferences: string[] = [];
+
+  for (const rawReference of rawReferences) {
+    const normalizedReference = normalizeProductImageReferenceForStorage(rawReference);
+    if (!normalizedReference) {
+      invalidReferences.push(rawReference);
+      continue;
+    }
+
+    validReferences.push(normalizedReference);
   }
 
-  if (value.startsWith("/")) {
-    return true;
-  }
-
-  return /^https?:\/\//i.test(value);
+  return { validReferences, invalidReferences };
 };
 
 const shortenDescription = (description: string): string => {
@@ -484,17 +496,22 @@ const buildWorkingRow = (
     );
   }
 
-  const imageUrls = parseImageUrlsCell(raw.image_url);
+  const imageReferences = parseImageReferencesCell(raw.image_url);
+  let imageUrls = imageReferences.validReferences;
+
   if (imageUrls.length === 0) {
-    addRowError(row, "image_url manquant.", "image_url");
-  } else {
-    const hasInvalidImagePath = imageUrls.some((value) => !isAcceptedImagePath(value));
-    if (hasInvalidImagePath) {
-      addRowError(
-        row,
-        "image_url invalide (utilisez /images/... ou https://...).",
-        "image_url",
-      );
+    imageUrls = [PRODUCT_IMAGE_FALLBACK_SRC];
+    if (imageReferences.invalidReferences.length > 0) {
+      row.warnings.add("Reference image invalide, image par defaut utilisee.");
+    } else {
+      row.warnings.add("Aucune image fournie, image par defaut utilisee.");
+    }
+  }
+
+  if (imageReferences.invalidReferences.length > 0) {
+    row.warnings.add("Certaines references image sont invalides et ont ete ignorees.");
+    if (imageReferences.validReferences.length === 0) {
+      row.warnings.add(`Image par defaut utilisee: ${PRODUCT_IMAGE_FALLBACK_SRC}`);
     }
   }
 
@@ -1192,7 +1209,7 @@ export const getProductImportCsvTemplate = (): string => {
       old_price: "999.90",
       stock: "25",
       category: "outillage",
-      image_url: "/images/products/perceuse-bosch.jpg",
+      image_url: "outillage/perceuse-bosch-500w.jpg",
       is_active: "true",
     },
     {
@@ -1203,7 +1220,7 @@ export const getProductImportCsvTemplate = (): string => {
       old_price: "",
       stock: "60",
       category: "peinture",
-      image_url: "/images/products/peinture-atlas.jpg",
+      image_url: "peinture/peinture-atlas-20kg.jpg",
       is_active: "true",
     },
   ];
@@ -1232,7 +1249,7 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
       old_price: "999.90",
       stock: "25",
       category: "outillage",
-      image_url: "/images/products/perceuse-bosch.jpg",
+      image_url: "outillage/perceuse-bosch-500w.jpg",
       is_active: "true",
     },
     {
@@ -1243,7 +1260,7 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
       old_price: "",
       stock: "60",
       category: "peinture",
-      image_url: "/images/products/peinture-atlas.jpg",
+      image_url: "peinture/peinture-atlas-20kg.jpg",
       is_active: "true",
     },
   ];
@@ -1422,9 +1439,9 @@ export const getProductImportExcelTemplateBuffer = async (): Promise<Buffer> => 
     },
     {
       column: "image_url",
-      description: "Chemin image (/images/...) ou URL https://",
-      format: "Texte requis",
-      example: "/images/products/perceuse-bosch.jpg",
+      description: "Chemin Supabase Storage relatif, URL https:// ou vide",
+      format: "Ex: outillage/perceuse-bosch-500w.jpg",
+      example: "outillage/perceuse-bosch-500w.jpg",
     },
     {
       column: "is_active",

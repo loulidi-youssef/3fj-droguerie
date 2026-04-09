@@ -1,8 +1,11 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import sharp from "sharp";
-import { PRODUCT_IMAGE_VARIANT_SUFFIX } from "@/lib/product-image-variants";
+import {
+  PRODUCT_IMAGE_VARIANT_SUFFIX,
+  PRODUCT_IMAGES_DEFAULT_BUCKET,
+  buildProductStorageImagePath,
+} from "@/lib/product-image-variants";
 
-const DEFAULT_PRODUCT_IMAGES_BUCKET = "product-images";
 const MAX_UPLOAD_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const MIN_IMAGE_WIDTH = 800;
 const MIN_IMAGE_HEIGHT = 800;
@@ -51,15 +54,6 @@ const normalizeFileName = (fileName: string): string => {
     .replace(/[^a-z0-9._-]/g, "");
 
   return baseName || "image";
-};
-
-const toPublicUrl = (bucketName: string, objectPath: string): string => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  if (!supabaseUrl) {
-    return objectPath;
-  }
-
-  return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${objectPath}`;
 };
 
 const getErrorForInvalidImageType = (): string => {
@@ -124,10 +118,11 @@ type ProductImageUploadResult =
 export const uploadAdminProductImages = async (
   productSlug: string,
   files: File[],
+  options?: { categorySlug?: string },
 ): Promise<ProductImageUploadResult> => {
   const activeFiles = files.filter((file) => file.size > 0);
   if (activeFiles.length === 0) {
-    return { ok: true, paths: [], bucket: DEFAULT_PRODUCT_IMAGES_BUCKET };
+    return { ok: true, paths: [], bucket: PRODUCT_IMAGES_DEFAULT_BUCKET };
   }
 
   const supabaseAdmin = getSupabaseAdminClient();
@@ -139,7 +134,9 @@ export const uploadAdminProductImages = async (
   }
 
   const bucketName =
-    process.env.SUPABASE_PRODUCT_IMAGES_BUCKET?.trim() || DEFAULT_PRODUCT_IMAGES_BUCKET;
+    process.env.SUPABASE_PRODUCT_IMAGES_BUCKET?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PRODUCT_IMAGES_BUCKET?.trim() ||
+    PRODUCT_IMAGES_DEFAULT_BUCKET;
 
   const uploadedPaths: string[] = [];
 
@@ -227,7 +224,11 @@ export const uploadAdminProductImages = async (
     }
 
     const safeFileName = normalizeFileName(file.name);
-    const objectBasePath = `products/${productSlug}/${Date.now()}-${index}-${safeFileName}`;
+    const objectBasePath = buildProductStorageImagePath({
+      categorySlug: options?.categorySlug ?? "catalogue",
+      productSlug,
+      fileName: `${productSlug}-${Date.now()}-${index}-${safeFileName}`,
+    }).replace(/\.[a-z0-9]{2,6}$/i, "");
 
     const variantPaths: Record<UploadedProductImageVariant, string> = {
       thumbnail: `${objectBasePath}-${PRODUCT_IMAGE_VARIANT_SUFFIX.thumbnail}.webp`,
@@ -261,7 +262,7 @@ export const uploadAdminProductImages = async (
       }
     }
 
-    uploadedPaths.push(toPublicUrl(bucketName, variantPaths.large));
+    uploadedPaths.push(variantPaths.large);
   }
 
   return { ok: true, paths: uploadedPaths, bucket: bucketName };

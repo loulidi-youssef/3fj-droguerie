@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { resolveOptionalProductImageReference } from "@/lib/product-image-variants";
 
 type CustomerOrderRow = {
   id: string;
@@ -273,10 +274,11 @@ export const getAdminCustomerDetail = async (
           productName: productsValue?.name ?? "Produit",
           productSlug: productsValue?.slug ?? "",
           price: typeof productsValue?.price === "number" ? productsValue.price : null,
-          image:
+          image: resolveOptionalProductImageReference(
             Array.isArray(productsValue?.images) && productsValue.images.length > 0
               ? productsValue.images[0] ?? null
               : null,
+          ),
           createdAt: row.created_at,
         };
       })

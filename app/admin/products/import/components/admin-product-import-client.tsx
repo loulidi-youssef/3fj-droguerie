@@ -240,7 +240,7 @@ export const AdminProductImportClient = () => {
                 <td className="px-3 py-2">999.90</td>
                 <td className="px-3 py-2">25</td>
                 <td className="px-3 py-2">outillage</td>
-                <td className="px-3 py-2">/images/products/perceuse-bosch.jpg</td>
+                <td className="px-3 py-2">outillage/perceuse-bosch-500w.jpg</td>
                 <td className="px-3 py-2">true</td>
               </tr>
             </tbody>

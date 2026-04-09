@@ -106,11 +106,16 @@ export const buildProductJsonLd = ({
   currency = "MAD",
   priceValidUntil = null,
 }: BuildProductJsonLdInput) => {
+  const normalizedImages =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images.map((image) => toAbsoluteUrl(image))
+      : [toAbsoluteUrl(siteImages.hero)];
+
   return {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
-    image: product.images,
+    image: normalizedImages,
     description: product.shortDescription || product.description,
     sku: product.id,
     category: product.categorySlug,
