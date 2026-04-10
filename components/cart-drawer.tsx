@@ -87,28 +87,28 @@ const CartDrawerQuantityControls = ({
         </button>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {BULK_STEPS.map((step) => (
           <button
             key={step}
             type="button"
             onClick={() => quantityController.incrementBy(step)}
             disabled={!quantityController.canIncrement}
-            className="inline-flex h-6 items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-[10px] font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             +{step}
           </button>
         ))}
       </div>
 
-      <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stockClassName}`}>
+      <p className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stockClassName}`}>
         {stockLabel}
       </p>
 
       {quantityController.hasReachedMax &&
       maxAvailableQuantity !== null &&
       maxAvailableQuantity > 0 ? (
-        <p className="mt-1 text-[10px] font-medium text-amber-700">
+        <p className="mt-1.5 text-sm font-medium text-amber-700">
           Quantite maximale disponible atteinte.
         </p>
       ) : null}
@@ -264,8 +264,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               <circle cx="17" cy="19" r="1.5" />
             </svg>
             <div className="flex items-baseline gap-2">
-              <h2 className="text-[1.05rem] font-extrabold leading-none text-slate-900 sm:text-[2rem]">Mon Panier</h2>
-              <span className="text-xs text-slate-500 sm:text-lg">
+              <h2 className="text-lg font-extrabold leading-none text-slate-900 sm:text-[2rem]">Mon Panier</h2>
+              <span className="text-sm text-slate-500 sm:text-lg">
                 ({itemCount} {articleLabel})
               </span>
             </div>
@@ -291,10 +291,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 <circle cx="17" cy="19" r="1.5" />
               </svg>
               <p className="mt-3 text-xl font-bold text-slate-600 sm:mt-5 sm:text-[2.05rem]">Votre panier est vide</p>
-              <p className="mt-1 text-sm text-slate-500 sm:text-[1.5rem]">Ajoutez des produits pour commencer</p>
+              <p className="mt-1.5 text-sm md:text-base text-slate-500 sm:text-[1.5rem]">Ajoutez des produits pour commencer</p>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3.5">
               {isLoadingProducts && detailedItems.length === 0 ? (
                 <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
                   Chargement du panier...
@@ -319,7 +319,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 return (
                 <article
                   key={item.lineKey}
-                  className="rounded-xl border border-slate-300/80 bg-[#f8f8f8] p-2 shadow-[0_3px_10px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:p-3"
+                  className="rounded-xl border border-slate-300/80 bg-[#f8f8f8] p-2.5 shadow-[0_3px_10px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:p-3"
                 >
                   <div className="flex items-start gap-2 sm:gap-3">
                     <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white sm:h-20 sm:w-20 sm:rounded-xl">
@@ -334,17 +334,17 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-[13px] font-semibold leading-snug text-slate-800 sm:text-[1.55rem]">
+                      <h3 className="truncate text-sm font-semibold leading-snug text-slate-800 sm:text-[1.55rem]">
                         {item.product.name}
                       </h3>
                       {item.variantLabel ? (
-                        <p className="mt-0.5 text-xs font-medium text-slate-500">{item.variantLabel}</p>
+                        <p className="mt-0.5 text-sm font-medium text-slate-500">{item.variantLabel}</p>
                       ) : null}
                       <p className="mt-0.5 text-base font-extrabold leading-none text-[#ef4444] sm:text-[1.7rem]">
                         {formatDh(item.unitPrice)}
                       </p>
                       {item.originalUnitPrice ? (
-                        <p className="mt-0.5 text-xs font-semibold text-slate-400 line-through">
+                        <p className="mt-0.5 text-sm font-semibold text-slate-400 line-through">
                           {formatDh(item.originalUnitPrice)}
                         </p>
                       ) : null}
@@ -390,11 +390,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
           <Link
             href="/panier"
             onClick={onClose}
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#f43b2f] to-[#ff7a00] text-sm font-bold text-white shadow-[0_10px_18px_rgba(249,115,22,0.26)] transition hover:brightness-95 sm:h-14 sm:rounded-2xl sm:text-[1.6rem]"
+            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#f43b2f] to-[#ff7a00] px-4 py-3 text-base font-bold text-white shadow-[0_10px_18px_rgba(249,115,22,0.26)] transition hover:brightness-95 sm:h-14 sm:rounded-2xl sm:text-[1.6rem]"
           >
             Commander maintenant
           </Link>
-          <p className="mt-2 text-center text-[11px] text-slate-500 sm:text-xs">
+          <p className="mt-2 text-center text-sm text-slate-500 sm:text-xs">
             Paiement a la livraison apres confirmation.
           </p>
           {detailedItems.length > 0 && hasBulkEligibleItems ? (
@@ -405,7 +405,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               onClick={(event) => {
                 void handleDrawerGlobalQuoteRequestClick(event);
               }}
-              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 text-xs font-bold text-emerald-800 transition hover:bg-emerald-200 sm:h-11 sm:rounded-2xl sm:text-sm"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 px-4 py-3 text-base font-bold text-emerald-800 transition hover:bg-emerald-200 sm:h-11 sm:rounded-2xl sm:text-sm"
             >
               Demande globale de devis
             </a>
@@ -415,7 +415,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               href={directWhatsAppLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:h-11 sm:rounded-2xl sm:text-sm"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-base font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:h-11 sm:rounded-2xl sm:text-sm"
             >
               Finaliser sur WhatsApp
             </a>

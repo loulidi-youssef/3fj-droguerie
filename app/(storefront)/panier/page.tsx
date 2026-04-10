@@ -205,28 +205,28 @@ const CartPageQuantityControls = ({
         </button>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {BULK_STEPS.map((step) => (
           <button
             key={step}
             type="button"
             onClick={() => quantityController.incrementBy(step)}
             disabled={!quantityController.canIncrement}
-            className="inline-flex h-6 items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-[10px] font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             +{step}
           </button>
         ))}
       </div>
 
-      <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stockClassName}`}>
+      <p className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stockClassName}`}>
         {stockLabel}
       </p>
 
       {quantityController.hasReachedMax &&
       maxAvailableQuantity !== null &&
       maxAvailableQuantity > 0 ? (
-        <p className="mt-2 text-xs font-medium text-amber-700">
+        <p className="mt-2 text-sm font-medium text-amber-700">
           Quantite maximale disponible atteinte.
         </p>
       ) : null}
@@ -655,23 +655,23 @@ export default function PanierPage() {
             </Link>
           </div>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div className="mt-6 grid gap-7 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
               {detailedItems.length > 0 ? (
                 detailedItems.map((item) => {
                   return (
                     <article key={item.lineKey} className="rounded-2xl bg-white p-4 shadow-card">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h2 className="text-lg font-bold text-brand-blue">{item.product.name}</h2>
                           {item.variantLabel ? (
-                            <p className="text-xs font-medium text-slate-500">{item.variantLabel}</p>
+                            <p className="text-sm font-medium text-slate-500">{item.variantLabel}</p>
                           ) : null}
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm md:text-base text-slate-600">
                             {item.originalUnitPrice ? (
-                              <span className="mr-2 line-through">{formatDh(item.originalUnitPrice)}</span>
+                              <span className="mr-2 text-sm line-through">{formatDh(item.originalUnitPrice)}</span>
                             ) : null}
-                            <span>{formatDh(item.unitPrice)} / unite</span>
+                            <span className="text-base font-semibold">{formatDh(item.unitPrice)} / unite</span>
                           </p>
                         </div>
 
@@ -693,11 +693,11 @@ export default function PanierPage() {
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-brand-blue">Total ligne: {formatDh(item.lineTotal)}</p>
+                        <p className="text-base font-semibold text-brand-blue">Total ligne: {formatDh(item.lineTotal)}</p>
                         <button
                           type="button"
                           onClick={() => removeItem(item.productId, item.variantId)}
-                          className="text-xs font-semibold text-rose-600 hover:underline"
+                          className="text-sm font-semibold text-rose-600 hover:underline"
                         >
                           Supprimer
                         </button>
@@ -720,10 +720,10 @@ export default function PanierPage() {
 
               <div className="mt-5 space-y-4">
                 <section>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                     Choisissez votre mode de livraison
                   </p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {deliveryOptions.map((option, index) => {
                       const isSelected = option.id === selectedDeliveryOption;
                       const priceLabel = option.price === 0 ? "Gratuit" : formatDh(option.price);
@@ -753,16 +753,16 @@ export default function PanierPage() {
                                 <DeliveryModeIcon icon={option.icon} className="h-4 w-4" />
                               </span>
                               <div>
-                                <span className="block text-sm font-bold text-brand-blue">
+                                <span className="block text-base font-bold text-brand-blue">
                                   {option.title}
                                 </span>
-                                <span className="mt-0.5 block text-[11px] text-slate-600">
+                                <span className="mt-1 block text-sm text-slate-600">
                                   {option.description}
                                 </span>
                               </div>
                             </div>
                             <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                              className={`inline-flex rounded-full px-2.5 py-1 text-sm font-bold ${
                                 isSelected
                                   ? "bg-brand-orange text-white"
                                   : "bg-slate-100 text-slate-700"
@@ -772,7 +772,7 @@ export default function PanierPage() {
                             </span>
                           </div>
                           {option.condition ? (
-                            <p className="mt-2 text-[11px] font-medium text-slate-500">
+                            <p className="mt-2 text-sm font-medium text-slate-500">
                               {option.condition}
                             </p>
                           ) : null}
@@ -784,7 +784,7 @@ export default function PanierPage() {
 
                 <section className="space-y-3">
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                       Telephone *
                     </span>
                     <input
@@ -798,12 +798,12 @@ export default function PanierPage() {
                       aria-invalid={touchedFields.phone && Boolean(fieldErrors.phone)}
                     />
                     {touchedFields.phone && fieldErrors.phone ? (
-                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.phone}</p>
+                      <p className="mt-1 text-sm font-medium text-rose-700">{fieldErrors.phone}</p>
                     ) : null}
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                       {isNameRequired ? "Nom complet *" : "Nom complet (optionnel)"}
                     </span>
                     <input
@@ -817,12 +817,12 @@ export default function PanierPage() {
                       aria-invalid={touchedFields.name && Boolean(fieldErrors.name)}
                     />
                     {touchedFields.name && fieldErrors.name ? (
-                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.name}</p>
+                      <p className="mt-1 text-sm font-medium text-rose-700">{fieldErrors.name}</p>
                     ) : null}
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                       Ville *
                     </span>
                     <input
@@ -836,13 +836,13 @@ export default function PanierPage() {
                       aria-invalid={touchedFields.location && Boolean(fieldErrors.location)}
                     />
                     {touchedFields.location && fieldErrors.location ? (
-                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.location}</p>
+                      <p className="mt-1 text-sm font-medium text-rose-700">{fieldErrors.location}</p>
                     ) : null}
                   </label>
 
                   {requiresAddress ? (
                     <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                         Adresse *
                       </span>
                       <input
@@ -856,17 +856,17 @@ export default function PanierPage() {
                         aria-invalid={touchedFields.address && Boolean(fieldErrors.address)}
                       />
                       {touchedFields.address && fieldErrors.address ? (
-                        <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.address}</p>
+                        <p className="mt-1 text-sm font-medium text-rose-700">{fieldErrors.address}</p>
                       ) : null}
                     </label>
                   ) : (
-                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                    <p className="rounded-xl bg-emerald-50 px-3 py-3 text-sm font-medium text-emerald-700">
                       Retrait en magasin selectionne. Aucune adresse n'est requise.
                     </p>
                   )}
 
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                       Note de commande (optionnel)
                     </span>
                     <textarea
@@ -878,15 +878,15 @@ export default function PanierPage() {
                       aria-invalid={touchedFields.note && Boolean(fieldErrors.note)}
                     />
                     {touchedFields.note && fieldErrors.note ? (
-                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.note}</p>
+                      <p className="mt-1 text-sm font-medium text-rose-700">{fieldErrors.note}</p>
                     ) : null}
                   </label>
                 </section>
               </div>
 
               <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-brand-blue">Recapitulatif final</p>
-                <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+                <p className="text-base font-semibold text-brand-blue">Recapitulatif final</p>
+                <ul className="mt-3 space-y-2 text-sm md:text-base text-slate-700">
                   {detailedItems.map((item) => (
                     <li key={`summary-${item.lineKey}`} className="flex justify-between gap-2">
                       <span className="truncate">
@@ -896,7 +896,7 @@ export default function PanierPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-sm text-slate-700">
+                <div className="mt-3 space-y-2.5 border-t border-slate-200 pt-3 text-sm md:text-base text-slate-700">
                   <div className="flex items-center justify-between">
                     <span>Total produits</span>
                     <span className="font-semibold">{formatDh(subtotal)}</span>
@@ -907,43 +907,43 @@ export default function PanierPage() {
                       {deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}
                     </span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between rounded-xl bg-brand-blue px-3 py-2.5 text-base font-extrabold text-white">
+                  <div className="mt-2 flex items-center justify-between rounded-xl bg-brand-blue px-3 py-3 text-base font-extrabold text-white">
                     <span>Total a payer</span>
                     <span className="text-lg">{formatDh(total)}</span>
                   </div>
-                  <p className="text-[11px] font-medium text-slate-500">
+                  <p className="text-sm font-medium text-slate-500">
                     Paiement a la livraison apres confirmation.
                   </p>
                 </div>
               </section>
 
               {missingProductsMessage ? (
-                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-700">
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-700">
                   {missingProductsMessage}
                 </p>
               ) : null}
 
               {submitInfo ? (
-                <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
+                <p className="mt-3 rounded-xl bg-sky-50 p-3 text-sm font-medium text-sky-700">
                   {submitInfo}
                 </p>
               ) : null}
 
               {submitError ? (
-                <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700">
+                <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-700">
                   {submitError}
                 </p>
               ) : null}
 
-              <div className="mt-4 hidden gap-2 md:grid">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-brand-blue/80">
+              <div className="mt-5 hidden gap-3 md:grid">
+                <p className="text-sm font-bold uppercase tracking-wide text-brand-blue/80">
                   Action recommandee
                 </p>
                 <button
                   type="button"
                   onClick={handleConfirmOrder}
                   disabled={isCheckoutActionDisabled}
-                  className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-base font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {primaryCheckoutCtaLabel}
                 </button>
@@ -952,22 +952,22 @@ export default function PanierPage() {
                   type="button"
                   onClick={handleConfirmWhatsApp}
                   disabled={isWhatsAppActionDisabled}
-                  className="block w-full rounded-xl border border-emerald-400 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="block w-full rounded-xl border border-emerald-400 bg-emerald-50 px-4 py-3 text-center text-base font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Confirmer sur WhatsApp
                 </button>
 
-                <div className="mt-1 grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
-                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                <div className="mt-2 grid grid-cols-2 gap-2.5 text-sm font-semibold text-slate-600">
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2.5 text-center">
                     Paiement a la livraison
                   </p>
-                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2.5 text-center">
                     Confirmation rapide
                   </p>
-                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2.5 text-center">
                     Support WhatsApp
                   </p>
-                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2.5 text-center">
                     Retrait en magasin
                   </p>
                 </div>
@@ -981,7 +981,7 @@ export default function PanierPage() {
                   onClick={(event) => {
                     void handleGlobalQuoteRequestClick(event);
                   }}
-                  className="mt-3 hidden rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 md:block"
+                  className="mt-4 hidden rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-base font-semibold text-emerald-700 md:block"
                 >
                   Demande globale de devis
                 </a>
@@ -990,7 +990,7 @@ export default function PanierPage() {
               <button
                 type="button"
                 onClick={clearCart}
-                className="mt-3 hidden w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 md:block"
+                className="mt-4 hidden w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-700 md:block"
               >
                 Vider le panier
               </button>
@@ -1001,8 +1001,8 @@ export default function PanierPage() {
 
       {items.length > 0 ? (
         <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 pb-[env(safe-area-inset-bottom)] md:hidden">
-          <div className="rounded-2xl border border-emerald-300 bg-white p-2 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
-            <div className="mb-2 space-y-1.5 rounded-xl bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
+          <div className="rounded-2xl border border-emerald-300 bg-white p-2.5 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
+            <div className="mb-2.5 space-y-2 rounded-xl bg-slate-50 px-2.5 py-2 text-sm font-semibold text-slate-600">
               <div className="flex items-center justify-between">
                 <span>Total produits</span>
                 <span>{formatDh(subtotal)}</span>
@@ -1011,17 +1011,17 @@ export default function PanierPage() {
                 <span>Livraison</span>
                 <span>{deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-brand-blue px-2.5 py-1.5 text-sm font-extrabold text-white">
+              <div className="flex items-center justify-between rounded-lg bg-brand-blue px-2.5 py-2 text-base font-extrabold text-white">
                 <span>Total a payer</span>
                 <span>{formatDh(total)}</span>
               </div>
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2.5">
               <button
                 type="button"
                 onClick={handleConfirmOrder}
                 disabled={isCheckoutActionDisabled}
-                className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+                className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-base font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {primaryCheckoutCtaLabel}
               </button>
@@ -1029,22 +1029,22 @@ export default function PanierPage() {
                 type="button"
                 onClick={handleConfirmWhatsApp}
                 disabled={isWhatsAppActionDisabled}
-                className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Confirmer sur WhatsApp
-                </button>
+                className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-base font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Confirmer sur WhatsApp
+              </button>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-semibold text-slate-600">
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+            <div className="mt-2.5 grid grid-cols-2 gap-2 text-sm font-semibold text-slate-600">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-center">
                 Paiement livraison
               </p>
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-center">
                 Confirmation rapide
               </p>
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-center">
                 Support WhatsApp
               </p>
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-center">
                 Retrait magasin
               </p>
             </div>

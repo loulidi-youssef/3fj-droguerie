@@ -214,7 +214,7 @@ export const AddToCartButton = ({
             onClick={() => cartQuantityController.decrementBy(1)}
             disabled={!cartQuantityController.canDecrement}
             className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
-              compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
+              compact ? "h-8 w-8 text-base sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
             }`}
             aria-label="Diminuer la quantite"
           >
@@ -234,14 +234,14 @@ export const AddToCartButton = ({
                 }
               }}
               className={`w-12 bg-transparent text-center font-semibold text-slate-800 outline-none ${
-                compact ? "text-xs sm:text-sm" : "text-base"
+                compact ? "text-sm sm:text-base" : "text-base"
               }`}
               aria-label="Saisir la quantite"
               disabled={isDisabled}
             />
           ) : (
             <span
-              className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-xs sm:text-sm" : "text-base"}`}
+              className={`min-w-[3.25rem] text-center font-semibold text-slate-800 ${compact ? "text-sm sm:text-base" : "text-base"}`}
             >
               {currentQuantity}
             </span>
@@ -251,7 +251,7 @@ export const AddToCartButton = ({
             onClick={() => cartQuantityController.incrementBy(1)}
             disabled={!cartQuantityController.canIncrement}
             className={`inline-flex items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60 ${
-              compact ? "h-7 w-7 text-sm sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
+              compact ? "h-8 w-8 text-base sm:h-8 sm:w-8 sm:text-base" : "h-9 w-9 text-lg"
             }`}
             aria-label="Augmenter la quantite"
           >
@@ -267,7 +267,7 @@ export const AddToCartButton = ({
                 type="button"
                 onClick={() => cartQuantityController.incrementBy(step)}
                 disabled={!cartQuantityController.canIncrement}
-                className="inline-flex h-7 items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60"
               >
                 +{step}
               </button>
@@ -278,7 +278,7 @@ export const AddToCartButton = ({
         {cartQuantityController.hasReachedMax &&
         normalizedMaxQuantity !== null &&
         normalizedMaxQuantity > 0 ? (
-          <p className="text-[10px] font-medium text-amber-700">{maxReachedLabel}</p>
+          <p className="text-sm font-medium text-amber-700">{maxReachedLabel}</p>
         ) : null}
       </div>
     );
@@ -332,7 +332,7 @@ export const AddToCartButton = ({
                 type="button"
                 onClick={() => draftQuantityController.incrementBy(step)}
                 disabled={!draftQuantityController.canIncrement}
-                className="inline-flex h-7 items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-60"
               >
                 +{step}
               </button>
@@ -343,14 +343,14 @@ export const AddToCartButton = ({
         {draftQuantityController.hasReachedMax &&
         normalizedMaxQuantity !== null &&
         normalizedMaxQuantity > 0 ? (
-          <p className="text-[10px] font-medium text-amber-700">{maxReachedLabel}</p>
+          <p className="text-sm font-medium text-amber-700">{maxReachedLabel}</p>
         ) : null}
 
         <button
           type="button"
           onClick={handleAddToCart}
           disabled={isDisabled}
-          className={`${className ?? "btn-primary"} ${
+          className={`${className ?? "btn-primary px-4 py-3 text-base"} ${
             isActive ? "scale-[0.98]" : ""
           } ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
         >
@@ -365,7 +365,7 @@ export const AddToCartButton = ({
       type="button"
       onClick={handleAddToCart}
       disabled={isDisabled}
-      className={`${className ?? "btn-primary"} ${
+      className={`${className ?? "btn-primary px-4 py-3 text-base"} ${
         isActive ? "scale-[0.98]" : ""
       } ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
     >

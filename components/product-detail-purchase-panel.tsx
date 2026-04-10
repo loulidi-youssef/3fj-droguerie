@@ -336,27 +336,27 @@ export const ProductDetailPurchasePanel = ({
     <div>
       <Link
         href={`/produits?categorie=${encodeURIComponent(product.categorySlug)}`}
-        className="text-[9px] font-semibold uppercase tracking-[0.08em] text-brand-orange hover:underline sm:text-sm"
+        className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-orange hover:underline sm:text-sm"
       >
         {getCategoryNameBySlug(product.categorySlug)}
       </Link>
-      <h1 className="mt-1 text-[1.1rem] font-extrabold leading-tight tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
+      <h1 className="mt-1.5 text-lg font-extrabold leading-tight tracking-tight text-brand-blue sm:mt-2 sm:text-[2.15rem]">
         {product.name}
       </h1>
 
-      <div className="mt-1 flex flex-wrap items-center gap-1 sm:mt-3 sm:gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:mt-3 sm:gap-2">
         {effectiveOfferPricing ? (
-          <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-700 sm:px-3 sm:py-1 sm:text-xs">
+          <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-700 sm:px-3 sm:py-1 sm:text-sm">
             -{effectiveOfferPricing.savingsPercent}% remise
           </span>
         ) : null}
         {availabilityStatus === "limited" ? (
-          <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-700 sm:px-3 sm:py-1 sm:text-xs">
+          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 sm:px-3 sm:py-1 sm:text-sm">
             Stock faible
           </span>
         ) : null}
         {offerEndsSoon ? (
-          <span className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-[9px] font-bold text-brand-orange sm:px-3 sm:py-1 sm:text-xs">
+          <span className="inline-flex rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-brand-orange sm:px-3 sm:py-1 sm:text-sm">
             Offre limitee
           </span>
         ) : null}
@@ -369,29 +369,29 @@ export const ProductDetailPurchasePanel = ({
               {formatDh(displayedPrice)}
             </p>
             {displayedPreviousPrice !== null ? (
-              <p className="pb-0.5 text-[10px] font-semibold text-slate-400 line-through sm:pb-1 sm:text-base">
+              <p className="pb-0.5 text-sm font-semibold text-slate-400 line-through sm:pb-1 sm:text-base">
                 {formatDh(displayedPreviousPrice)}
               </p>
             ) : null}
           </div>
           {offerPricing && effectiveOfferPricing ? (
-            <span className="inline-flex shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 sm:hidden">
+            <span className="inline-flex shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700 sm:hidden">
               -{effectiveOfferPricing.savingsPercent}%
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-[10px] font-semibold text-slate-600 sm:text-xs">
+        <p className="mt-1.5 text-sm font-semibold text-slate-600 sm:text-sm">
           Total ({normalizedPurchaseQuantity}): {formatDh(displayedLineTotal)}
         </p>
 
         {bulkPriceTiersForDisplay.length > 0 ? (
-          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-slate-700 sm:text-xs">
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/80 p-2 sm:mt-3 sm:rounded-xl sm:p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-700 sm:text-xs">
               Prix de gros
             </p>
-            <div className="mt-1 space-y-0.5 sm:mt-2">
+            <div className="mt-1.5 space-y-1 sm:mt-2">
               {bulkPriceTiersForDisplay.map((tier) => (
-                <p key={tier.minQty} className="text-[10px] font-semibold text-slate-700 sm:text-sm">
+                <p key={tier.minQty} className="text-sm font-semibold text-slate-700 sm:text-sm">
                   {tier.minQty}+ {"->"} {formatDh(tier.price)}
                 </p>
               ))}
@@ -400,64 +400,64 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
 
         {offerPricing && effectiveOfferPricing ? (
-          <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-700 sm:text-xs">
+          <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 sm:mt-3 sm:rounded-xl sm:p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 sm:text-xs">
               Offre active {offerPricing.discountLabel}
             </p>
-            <p className="mt-0.5 text-[9px] font-semibold text-slate-700 sm:mt-1 sm:text-sm">
+            <p className="mt-1 text-sm font-semibold text-slate-700 sm:mt-1 sm:text-sm">
               Vous economisez {formatDh(effectiveOfferPricing.savingsAmount)} ({effectiveOfferPricing.savingsPercent}%)
             </p>
             {offerEndLabel ? (
-              <p className="mt-0.5 text-[9px] text-slate-600 sm:mt-1 sm:text-xs">Valable jusqu'au {offerEndLabel}</p>
+              <p className="mt-1 text-sm text-slate-600 sm:mt-1 sm:text-sm">Valable jusqu'au {offerEndLabel}</p>
             ) : null}
           </div>
         ) : null}
 
         <p
-          className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-xs ${availabilityClassName}`}
+          className={`mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold sm:mt-3 sm:px-3 sm:py-1 sm:text-sm ${availabilityClassName}`}
         >
           {availabilityLabel}
         </p>
 
         {lowStockCount !== null ? (
-          <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 sm:mt-3 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs">
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-sm font-semibold text-amber-700 sm:mt-3 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm">
             Plus que {lowStockCount} en stock pour cette option.
           </p>
         ) : null}
 
         {offerPricing && hasOfferCountdown && offerCountdownTarget ? (
-          <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50/80 p-1.5 sm:mt-3 sm:rounded-xl sm:p-3">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-brand-orange sm:text-xs">
+          <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/80 p-2 sm:mt-3 sm:rounded-xl sm:p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-brand-orange sm:text-xs">
               {offerEndsSoon ? "Offre bientot terminee" : "Temps restant sur cette offre"}
             </p>
             <CountdownTimer expiresAt={offerCountdownTarget} compact />
           </div>
         ) : null}
 
-        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5 sm:hidden">
-          <div className="grid grid-cols-3 gap-1">
-            <p className="rounded-md bg-white px-1.5 py-1 text-center text-[9px] font-semibold text-brand-blue">
+        <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 sm:hidden">
+          <div className="grid grid-cols-2 gap-1.5">
+            <p className="rounded-md bg-white px-2 py-1.5 text-center text-sm font-semibold text-brand-blue">
               Paiement livraison
             </p>
-            <p className="rounded-md bg-white px-1.5 py-1 text-center text-[9px] font-semibold text-brand-blue">
+            <p className="rounded-md bg-white px-2 py-1.5 text-center text-sm font-semibold text-brand-blue">
               Produit garanti
             </p>
-            <p className="rounded-md bg-white px-1.5 py-1 text-center text-[9px] font-semibold text-brand-blue">
+            <p className="rounded-md bg-white px-2 py-1.5 text-center text-sm font-semibold text-brand-blue">
               Livraison rapide
             </p>
           </div>
-          <p className="mt-1.5 text-[9px] text-slate-700">
+          <p className="mt-2 text-sm text-slate-700">
             Domicile: <span className="font-semibold">{deliveryEstimate}</span>
           </p>
-          <p className="mt-0.5 text-[9px] text-slate-700">
+          <p className="mt-1 text-sm text-slate-700">
             Retrait: <span className="font-semibold">{pickupEstimate}</span>
           </p>
         </div>
 
         {hasVariants && hasColorOptions ? (
-          <div className="mt-2.5 sm:mt-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">Couleur</p>
-            <div className="mt-1.5 flex flex-wrap gap-1 sm:mt-2 sm:gap-2">
+          <div className="mt-3 sm:mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">Couleur</p>
+            <div className="mt-2 flex flex-wrap gap-1.5 sm:mt-2 sm:gap-2">
               {colorOptions.map((color) => {
                 const targetVariant = pickVariantForColor(color.key);
                 const isSelected = normalizeColorKey(selectedVariant?.color) === color.key;
@@ -468,7 +468,7 @@ export const ProductDetailPurchasePanel = ({
                     key={color.key}
                     type="button"
                     onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none transition sm:px-3 sm:py-1.5 sm:text-sm ${
+                    className={`rounded-full border px-2.5 py-1 text-sm font-semibold leading-none transition sm:px-3 sm:py-1.5 sm:text-sm ${
                       isSelected
                         ? "border-brand-blue bg-brand-blue text-white"
                         : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -483,9 +483,9 @@ export const ProductDetailPurchasePanel = ({
         ) : null}
 
         {hasVariants && hasSizeOptions ? (
-          <div className="mt-2 sm:mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">Taille</p>
-            <div className="mt-1.5 flex flex-wrap gap-1 sm:mt-2 sm:gap-2">
+          <div className="mt-3 sm:mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">Taille</p>
+            <div className="mt-2 flex flex-wrap gap-1.5 sm:mt-2 sm:gap-2">
               {sizeOptions.map((size) => {
                 const targetVariant = pickVariantForSize(size.key);
                 const isSelected = normalizeSizeKey(selectedVariant?.size) === size.key;
@@ -496,7 +496,7 @@ export const ProductDetailPurchasePanel = ({
                     key={size.key}
                     type="button"
                     onClick={() => setSelectedVariantId(targetVariant?.id ?? null)}
-                    className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold leading-none transition sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-sm ${
+                    className={`rounded-md border px-2.5 py-1 text-sm font-semibold leading-none transition sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-sm ${
                       isSelected
                         ? "border-brand-blue bg-brand-blue text-white"
                         : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
@@ -510,7 +510,7 @@ export const ProductDetailPurchasePanel = ({
           </div>
         ) : null}
 
-        <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2 sm:mt-6 sm:gap-3 sm:border-0 sm:pt-0">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 sm:mt-6 sm:gap-3 sm:border-0 sm:pt-0">
           <AddToCartButton
             productId={product.id}
             variantId={selectedVariant?.id}
@@ -528,21 +528,21 @@ export const ProductDetailPurchasePanel = ({
             label={isBulkQuoteQuantitySelected ? "Ajouter au panier" : "Commander maintenant"}
             className={
               isBulkQuoteQuantitySelected
-                ? "inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base"
-                : "inline-flex h-9 items-center justify-center rounded-lg bg-brand-orange px-3 text-[11px] font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
+                ? "inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base"
+                : "inline-flex h-12 items-center justify-center rounded-lg bg-brand-orange px-4 py-3 text-base font-extrabold text-white shadow-[0_8px_16px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-14 sm:rounded-xl sm:px-8 sm:text-base sm:shadow-[0_10px_20px_rgba(245,122,17,0.35)]"
             }
-            controlsClassName="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-14 sm:rounded-xl"
+            controlsClassName="inline-flex h-12 items-center rounded-lg border border-slate-300 bg-white px-3 sm:h-14 sm:rounded-xl"
           />
           <FavoriteButton
             productId={product.id}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70 sm:h-14 sm:w-14 sm:rounded-xl"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70 sm:h-14 sm:w-14 sm:rounded-xl"
           />
         </div>
 
-        <p className="mt-0.5 text-[9px] font-medium text-slate-600 sm:mt-2 sm:text-xs">
+        <p className="mt-1 text-sm font-medium text-slate-600 sm:mt-2 sm:text-sm">
           Aucun paiement en ligne requis. Confirmation de commande rapide par telephone.
         </p>
-        <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
+        <p className="mt-1 text-sm text-slate-500 sm:text-sm">
           Pour les grandes quantites ({bulkQuoteThreshold}+ {normalizedBulkUnitLabel}), demandez un devis personnalise.
         </p>
 
@@ -555,7 +555,7 @@ export const ProductDetailPurchasePanel = ({
               onClick={(event) => {
                 void handleProductQuoteRequestClick(event);
               }}
-              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 px-3 text-[10px] font-bold text-emerald-800 transition hover:bg-emerald-200 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-lg border border-emerald-500 bg-emerald-100 px-4 py-3 text-base font-bold text-emerald-800 transition hover:bg-emerald-200 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-base"
             >
               Demander prix de gros
             </a>
@@ -563,11 +563,11 @@ export const ProductDetailPurchasePanel = ({
               href={productWhatsAppLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-[10px] font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-sm"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-base"
             >
               Commander via WhatsApp
             </a>
-            <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
+            <p className="mt-1 text-sm text-slate-500 sm:text-sm">
               Le devis en gros inclut la quantite, le prix estime et la variante choisie.
             </p>
           </>
@@ -577,35 +577,35 @@ export const ProductDetailPurchasePanel = ({
               href={productWhatsAppLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-flex h-[2.125rem] w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-sm"
+              className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-base font-bold text-emerald-700 transition hover:bg-emerald-100 sm:mt-3 sm:h-11 sm:rounded-xl sm:text-base"
             >
               Commander via WhatsApp
             </a>
-            <p className="mt-0.5 text-[9px] text-slate-500 sm:text-xs">
+            <p className="mt-1 text-sm text-slate-500 sm:text-sm">
               Message pre-rempli avec le produit pour un traitement plus rapide.
             </p>
           </>
         )}
       </div>
 
-      <div className="mt-3 hidden gap-1.5 sm:mt-4 sm:grid sm:gap-2 sm:grid-cols-3">
+      <div className="mt-3 hidden gap-2 sm:mt-4 sm:grid sm:gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-blue">
             Paiement a la livraison
           </p>
-          <p className="mt-1 text-[11px] text-slate-600 sm:text-xs">Payez en toute serenite a la reception.</p>
+          <p className="mt-1 text-sm text-slate-600 sm:text-sm">Payez en toute serenite a la reception.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-blue">
             Produit garanti
           </p>
-          <p className="mt-1 text-[11px] text-slate-600 sm:text-xs">Controle qualite avant expedition.</p>
+          <p className="mt-1 text-sm text-slate-600 sm:text-sm">Controle qualite avant expedition.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-blue">
             Livraison rapide
           </p>
-          <p className="mt-1 text-[11px] text-slate-600 sm:text-xs">Traitement prioritaire des commandes locales.</p>
+          <p className="mt-1 text-sm text-slate-600 sm:text-sm">Traitement prioritaire des commandes locales.</p>
         </div>
       </div>
 
@@ -621,11 +621,11 @@ export const ProductDetailPurchasePanel = ({
         </p>
       </div>
 
-      <p className="mt-2 text-[11px] leading-5 text-slate-700 line-clamp-5 sm:mt-4 sm:text-[0.95rem] sm:leading-7 sm:line-clamp-none">{product.description}</p>
+      <p className="mt-2.5 text-sm leading-6 text-slate-700 line-clamp-5 sm:mt-4 sm:text-[0.95rem] sm:leading-7 sm:line-clamp-none">{product.description}</p>
 
       <Link
         href="/panier"
-        className="mt-2.5 inline-flex text-xs font-semibold text-brand-orange hover:underline sm:mt-4 sm:text-sm"
+        className="mt-3 inline-flex text-sm font-semibold text-brand-orange hover:underline sm:mt-4 sm:text-sm"
       >
         Aller au panier
       </Link>
@@ -636,23 +636,23 @@ export const ProductDetailPurchasePanel = ({
         className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 shadow-[0_-8px_20px_rgba(15,42,77,0.08)] backdrop-blur md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="mx-auto flex max-w-7xl items-center gap-2 px-2.5 py-1.5 sm:gap-3 sm:px-5 sm:py-3">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-2.5 py-2 sm:gap-3 sm:px-5 sm:py-3">
           <div className="min-w-0 flex-1">
             {offerPricing && effectiveOfferPricing ? (
-              <p className="truncate text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+              <p className="truncate text-sm font-bold uppercase tracking-wide text-emerald-700">
                 {offerPricing.discountLabel} - Economie {formatDh(effectiveOfferPricing.savingsAmount)}
               </p>
             ) : (
-              <p className={`text-[10px] font-bold uppercase tracking-wide ${availabilityTextClass}`}>
+              <p className={`text-sm font-bold uppercase tracking-wide ${availabilityTextClass}`}>
                 {availabilityLabel}
               </p>
             )}
             <div className="flex items-end gap-1">
-              <p className="text-[0.98rem] font-extrabold leading-tight text-brand-blue sm:text-xl">
+              <p className="text-lg font-extrabold leading-tight text-brand-blue sm:text-xl">
                 {formatDh(displayedPrice)}
               </p>
               {displayedPreviousPrice !== null ? (
-                <p className="pb-0.5 text-[9px] font-semibold text-slate-400 line-through">
+                <p className="pb-0.5 text-xs font-semibold text-slate-400 line-through">
                   {formatDh(displayedPreviousPrice)}
                 </p>
               ) : null}
@@ -676,13 +676,13 @@ export const ProductDetailPurchasePanel = ({
             label={isBulkQuoteQuantitySelected ? "Ajouter" : "Commander"}
             className={
               isBulkQuoteQuantitySelected
-                ? "inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 text-[10px] font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
-                : "inline-flex h-8 min-w-[7.6rem] items-center justify-center rounded-lg bg-brand-orange px-2.5 text-[10px] font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-sm"
+                ? "inline-flex h-10 min-w-[8.5rem] items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-3 text-base font-bold text-brand-blue transition hover:border-brand-orange hover:text-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-base"
+                : "inline-flex h-10 min-w-[8.5rem] items-center justify-center rounded-lg bg-brand-orange px-3 py-3 text-base font-extrabold text-white shadow-[0_7px_14px_rgba(245,122,17,0.28)] transition hover:bg-brand-orangeDark disabled:hover:bg-brand-orange sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl sm:px-5 sm:text-base"
             }
-            controlsClassName="inline-flex h-8 min-w-[7.6rem] items-center rounded-lg border border-slate-300 bg-white px-2 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"
+            controlsClassName="inline-flex h-10 min-w-[8.5rem] items-center rounded-lg border border-slate-300 bg-white px-3 sm:h-12 sm:min-w-[11.25rem] sm:rounded-xl"
           />
         </div>
-        <p className="px-2.5 pb-1.5 text-[9px] text-slate-500 sm:px-5 sm:pb-3 sm:text-xs">
+        <p className="px-2.5 pb-2 text-sm text-slate-500 sm:px-5 sm:pb-3 sm:text-sm">
           Paiement a la livraison et confirmation avant expedition.
         </p>
       </div>

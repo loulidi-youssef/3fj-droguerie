@@ -243,6 +243,7 @@ export const Header = () => {
   const isCategoriesTabActive = pathname === "/produits" || pathname.startsWith("/produits/");
   const isAccountTabActive =
     pathname.startsWith("/compte") || pathname === "/login" || pathname === "/register";
+  const isPanierActive = pathname === "/panier";
 
   useEffect(() => {
     document.body.dataset.mobileBottomNav = shouldShowMobileBottomNav ? "true" : "false";
@@ -525,6 +526,27 @@ export const Header = () => {
             }`}
           >
             <CustomerAuthNav iconOnly />
+
+            <Link
+              href="/panier"
+              className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white transition sm:h-10 sm:w-10 ${
+                isPanierActive
+                  ? "border-brand-orange text-brand-orange"
+                  : "border-slate-300 text-slate-700 hover:border-brand-orange hover:text-brand-orange"
+              }`}
+              aria-label="Voir le panier"
+            >
+              <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 sm:h-5 sm:w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M2 3h3l2.5 11h10L20 6H6" />
+                <circle cx="10" cy="19" r="1.5" />
+                <circle cx="17" cy="19" r="1.5" />
+              </svg>
+              {itemCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex min-w-[1.05rem] items-center justify-center rounded-full bg-brand-orange px-1 text-[9px] font-bold leading-none text-white">
+                  {itemCount > 99 ? "99+" : itemCount}
+                </span>
+              ) : null}
+            </Link>
 
             <a
               href={`https://wa.me/${businessInfo.whatsappPhone}`}
