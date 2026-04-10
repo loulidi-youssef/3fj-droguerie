@@ -11,6 +11,7 @@ import {
   getAdminProductsPageData,
   type AdminProductsSearchParams,
 } from "@/app/admin/products/lib/page-data";
+import { categories } from "@/data/categories";
 import {
   isAdminProductsConfigured,
   requireAdminProductsSession,
@@ -42,7 +43,31 @@ export default async function AdminProductsPage({
 
   await requireAdminProductsSession();
 
-  const pageData = await getAdminProductsPageData(searchParams);
+  let pageData: Awaited<ReturnType<typeof getAdminProductsPageData>>;
+  try {
+    pageData = await getAdminProductsPageData(searchParams);
+  } catch (error) {
+    console.error("[admin-products/page] Unhandled admin products page load failure.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    pageData = {
+      productsCount: 0,
+      filteredProductsCount: 0,
+      currentPageProductsCount: 0,
+      filteredProducts: [],
+      groupedProducts: [],
+      categoryOptions: [...new Set(categories.map((category) => category.slug))],
+      sortedCategoryEntries: [],
+      selectedCategory: "",
+      searchQuery: "",
+      currentPage: 1,
+      totalPages: 1,
+      pageSize: 30,
+      successMessage: "",
+      errorMessage:
+        "Impossible de charger la page produits admin pour le moment. Merci de reessayer.",
+    };
+  }
 
   return (
     <AdminProductsPageView

@@ -1,7 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeBulkPriceTiers } from "@/lib/bulk-pricing";
 import { roundDhAmount } from "@/lib/currency";
-import { devWarn } from "@/lib/dev-log";
+import { devError, devWarn } from "@/lib/dev-log";
 import type { BulkPriceTier } from "@/types";
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
@@ -189,6 +189,28 @@ const normalizeImages = (value: unknown): string[] => {
     .filter(Boolean);
 };
 
+const toNormalizedCategorySlug = (
+  value: unknown,
+  options?: { fallback?: string; context?: "products-row" | "category-counts" },
+): string => {
+  const fallback = options?.fallback ?? "non-classe";
+
+  if (typeof value === "string") {
+    const trimmed = value.trim().toLowerCase();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  devWarn("[admin-products] Non-string category slug normalized to fallback.", {
+    context: options?.context ?? "products-row",
+    rawType: typeof value,
+  });
+  return fallback;
+};
+
 const logNormalizationIssue = (
   scope: "product" | "variant",
   id: string,
@@ -248,7 +270,9 @@ const toAdminProduct = (
 ): AdminProduct => {
   const productId = toTrimmedString(row.id, toTrimmedString(row.slug, "unknown-product"));
   const slug = toTrimmedString(row.slug, productId);
-  const categorySlug = toTrimmedString(row.category_slug, "non-classe").toLowerCase();
+  const categorySlug = toNormalizedCategorySlug(row.category_slug, {
+    context: "products-row",
+  });
   const images = normalizeImages(row.images);
   const stock = Math.max(0, Math.round(toFiniteNumber(row.stock, 0)));
   const price = roundDhAmount(Math.max(0, toFiniteNumber(row.price, 0)));
@@ -613,12 +637,18 @@ export const getAdminProductsCategoryCounts = async (): Promise<Map<string, numb
   }
 
   const counts = new Map<string, number>();
-  for (const row of data as Array<{ category_slug: string }>) {
-    const slug = row.category_slug?.trim().toLowerCase();
-    if (!slug) {
-      continue;
+  try {
+    for (const row of data as Array<{ category_slug?: unknown }>) {
+      const slug = toNormalizedCategorySlug(row.category_slug, {
+        context: "category-counts",
+      });
+      counts.set(slug, (counts.get(slug) ?? 0) + 1);
     }
-    counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  } catch (error) {
+    devError("[admin-products] Failed while building category counts.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return new Map();
   }
 
   return counts;

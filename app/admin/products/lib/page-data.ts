@@ -9,6 +9,7 @@ import {
   parseFlashMessage,
   parseSelectedCategory,
 } from "@/app/admin/products/lib/formatters";
+import { devError } from "@/lib/dev-log";
 
 export type AdminProductsSearchParams = {
   success?: string | string[];
@@ -40,6 +41,30 @@ export type AdminProductsPageData = {
   errorMessage: string;
 };
 
+const createFallbackPageData = (input: {
+  selectedCategory: string;
+  searchQuery: string;
+  successMessage: string;
+  errorMessage: string;
+}): AdminProductsPageData => {
+  return {
+    productsCount: 0,
+    filteredProductsCount: 0,
+    currentPageProductsCount: 0,
+    filteredProducts: [],
+    groupedProducts: [],
+    categoryOptions: [...new Set(categories.map((category) => category.slug))],
+    sortedCategoryEntries: [],
+    selectedCategory: input.selectedCategory,
+    searchQuery: input.searchQuery,
+    currentPage: 1,
+    totalPages: 1,
+    pageSize: 30,
+    successMessage: input.successMessage,
+    errorMessage: input.errorMessage,
+  };
+};
+
 const parsePage = (value: string | string[] | undefined): number => {
   const rawValue =
     typeof value === "string" ? value : Array.isArray(value) ? value[0] ?? "" : "";
@@ -61,14 +86,50 @@ export const getAdminProductsPageData = async (
   const searchQueryRaw = parseFlashMessage(searchParams.q).trim();
   const requestedPage = parsePage(searchParams.page);
 
-  const [paginatedResult, categoryCountMap] = await Promise.all([
-    getAdminProductsPaginated({
-      categorySlug: selectedCategory || null,
-      searchQuery: searchQueryRaw || null,
-      page: requestedPage,
-    }),
-    getAdminProductsCategoryCounts(),
-  ]);
+  const fallbackBase = {
+    selectedCategory,
+    searchQuery: searchQueryRaw,
+    successMessage,
+    errorMessage,
+  };
+
+  let paginatedResult: Awaited<ReturnType<typeof getAdminProductsPaginated>>;
+  let categoryCountMap: Awaited<ReturnType<typeof getAdminProductsCategoryCounts>>;
+  try {
+    [paginatedResult, categoryCountMap] = await Promise.all([
+      getAdminProductsPaginated({
+        categorySlug: selectedCategory || null,
+        searchQuery: searchQueryRaw || null,
+        page: requestedPage,
+      }),
+      getAdminProductsCategoryCounts(),
+    ]);
+  } catch (error) {
+    console.error("[admin-products/page-data] Failed to load admin products page data.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return createFallbackPageData({
+      ...fallbackBase,
+      errorMessage:
+        errorMessage ||
+        "Impossible de charger les produits pour le moment. Merci de reessayer.",
+    });
+  }
+
+  if (!paginatedResult || !Array.isArray(paginatedResult.products)) {
+    devError("[admin-products/page-data] Unexpected paginated payload shape.", {
+      hasPaginatedResult: Boolean(paginatedResult),
+      productsType: paginatedResult
+        ? typeof (paginatedResult as { products?: unknown }).products
+        : "undefined",
+    });
+    return createFallbackPageData({
+      ...fallbackBase,
+      errorMessage:
+        errorMessage ||
+        "Les donnees produits sont invalides. Merci de reessayer apres rafraichissement.",
+    });
+  }
 
   const productsCount = [...categoryCountMap.values()].reduce(
     (sum, value) => sum + value,
@@ -98,14 +159,27 @@ export const getAdminProductsPageData = async (
     groupedProductsMap.set(categorySlug, [...existing, product]);
   }
 
-  const groupedProducts = [...groupedProductsMap.entries()]
-    .sort((first, second) =>
-      formatCategoryLabel(first[0]).localeCompare(formatCategoryLabel(second[0]), "fr"),
-    )
-    .map(([categorySlug, groupProducts]) => ({
-      categorySlug,
-      products: groupProducts,
-    }));
+  let groupedProducts: ProductsGroup[] = [];
+  try {
+    groupedProducts = [...groupedProductsMap.entries()]
+      .sort((first, second) =>
+        formatCategoryLabel(first[0]).localeCompare(formatCategoryLabel(second[0]), "fr"),
+      )
+      .map(([categorySlug, groupProducts]) => ({
+        categorySlug,
+        products: groupProducts,
+      }));
+  } catch (error) {
+    console.error("[admin-products/page-data] Failed to group products by category.", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return createFallbackPageData({
+      ...fallbackBase,
+      errorMessage:
+        errorMessage ||
+        "Impossible d'organiser les produits par categorie. Merci de reessayer.",
+    });
+  }
 
   return {
     productsCount,
