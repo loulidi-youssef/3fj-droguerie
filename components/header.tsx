@@ -526,24 +526,6 @@ export const Header = () => {
           >
             <CustomerAuthNav iconOnly />
 
-            <button
-              type="button"
-              onClick={() => setIsCartDrawerOpen(true)}
-              className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-brand-orange hover:text-brand-orange sm:h-10 sm:w-10 ${itemCount > 0 ? "ring-2 ring-orange-100" : ""}`}
-              aria-label={homepageContent.header.cartAriaLabel}
-            >
-              <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 sm:h-5 sm:w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M2 3h3l2.5 11h10L20 6H6" />
-                <circle cx="10" cy="19" r="1.5" />
-                <circle cx="17" cy="19" r="1.5" />
-              </svg>
-              {itemCount > 0 ? (
-                <span className="absolute -right-1 -top-1 rounded-full bg-brand-orange px-1.5 py-0.5 text-[10px] font-bold text-white animate-[pulse_1.8s_ease-in-out_infinite]">
-                  {itemCount}
-                </span>
-              ) : null}
-            </button>
-
             <a
               href={`https://wa.me/${businessInfo.whatsappPhone}`}
               target="_blank"
