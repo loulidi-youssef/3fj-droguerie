@@ -212,6 +212,20 @@ const toPositiveInteger = (value: unknown): number | null => {
   return normalized;
 };
 
+const toPositiveIntegerFlexible = (value: unknown): number | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return toPositiveInteger(parsed);
+  }
+
+  return toPositiveInteger(value);
+};
+
 const toNonNegativeAmount = (value: unknown): number | null => {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return null;
@@ -219,6 +233,20 @@ const toNonNegativeAmount = (value: unknown): number | null => {
 
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
   return Object.is(rounded, -0) ? 0 : rounded;
+};
+
+const toNonNegativeAmountFlexible = (value: unknown): number | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return toNonNegativeAmount(parsed);
+  }
+
+  return toNonNegativeAmount(value);
 };
 
 const toIsoDateTimeOrNull = (value: unknown): string | null => {
@@ -628,11 +656,22 @@ const normalizePayload = (value: unknown): QuoteRequestPayload | null => {
         return null;
       }
 
-      const productId = toNonEmptyString(item.productId);
-      const productName = toNonEmptyString(item.productName);
-      const quantity = toPositiveInteger(item.quantity);
-      const estimatedUnitPrice = toNonNegativeAmount(item.estimatedUnitPrice);
-      const estimatedTotal = toNonNegativeAmount(item.estimatedTotal);
+      const productId = toNonEmptyString(item.productId ?? item.product_id);
+      const productName = toNonEmptyString(
+        item.productName ?? item.product_name ?? item.name,
+      );
+      const quantity = toPositiveIntegerFlexible(item.quantity);
+      const estimatedUnitPrice = toNonNegativeAmountFlexible(
+        item.estimatedUnitPrice ?? item.unitPrice ?? item.unit_price,
+      );
+      const estimatedTotalFromPayload = toNonNegativeAmountFlexible(
+        item.estimatedTotal ?? item.lineTotal ?? item.line_total,
+      );
+      const estimatedTotal =
+        estimatedTotalFromPayload ??
+        (quantity !== null && estimatedUnitPrice !== null
+          ? toNonNegativeAmount(quantity * estimatedUnitPrice)
+          : null);
 
       if (
         !productId ||
@@ -647,10 +686,10 @@ const normalizePayload = (value: unknown): QuoteRequestPayload | null => {
       return {
         productId,
         productName,
-        variantId: toNonEmptyString(item.variantId),
-        variantLabel: toNonEmptyString(item.variantLabel),
+        variantId: toNonEmptyString(item.variantId ?? item.variant_id),
+        variantLabel: toNonEmptyString(item.variantLabel ?? item.variant_label),
         quantity,
-        unitLabel: toNonEmptyString(item.unitLabel),
+        unitLabel: toNonEmptyString(item.unitLabel ?? item.unit_label),
         estimatedUnitPrice,
         estimatedTotal,
       };
