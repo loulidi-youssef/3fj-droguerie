@@ -17,6 +17,7 @@ type QuoteTrendPoint = {
 
 type QuoteTrendChartProps = {
   data: QuoteTrendPoint[];
+  valueLabel?: string;
 };
 
 const formatShortDate = (value: string): string => {
@@ -27,7 +28,10 @@ const formatShortDate = (value: string): string => {
   return new Intl.DateTimeFormat("fr-MA", { day: "2-digit", month: "2-digit" }).format(date);
 };
 
-export function QuoteTrendChart({ data }: QuoteTrendChartProps) {
+export function QuoteTrendChart({
+  data,
+  valueLabel = "commandes",
+}: QuoteTrendChartProps) {
   const safeData = Array.isArray(data) ? data : [];
 
   if (safeData.length === 0) {
@@ -53,7 +57,7 @@ export function QuoteTrendChart({ data }: QuoteTrendChartProps) {
           <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#475569" }} />
           <Tooltip
             labelFormatter={(label) => formatShortDate(String(label))}
-            formatter={(value) => [`${Number(value ?? 0)} devis`, "Volume"]}
+            formatter={(value) => [`${Number(value ?? 0)} ${valueLabel}`, "Volume"]}
           />
           <Area
             type="monotone"
