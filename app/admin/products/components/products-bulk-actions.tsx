@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import { MetricChip } from "@/app/admin/components/metric-chip";
 import {
   AdminIconBulk,
   AdminIconInfo,
@@ -147,7 +148,7 @@ export const ProductsBulkActions = ({
   }
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,42,77,0.07)] sm:p-6">
+    <section className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/60 p-5 shadow-md sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -158,9 +159,10 @@ export const ProductsBulkActions = ({
             Appliquez une action unique a plusieurs produits selectionnes.
           </p>
         </div>
-        <p className="rounded-full border border-brand-blue/20 bg-brand-blue/5 px-3 py-1 text-xs font-semibold text-brand-blue">
-          Selection: {selectedCount} / {currentPageProductsCount}
-        </p>
+        <MetricChip
+          tone="blue"
+          label={`Selection: ${selectedCount} / ${currentPageProductsCount}`}
+        />
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
@@ -191,7 +193,7 @@ export const ProductsBulkActions = ({
         id="admin-products-bulk-form"
         action={bulkUpdateProductsAction}
         onSubmit={handleSubmit}
-        className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3.5"
+        className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3.5"
       >
         <input type="hidden" name="returnCategory" value={selectedCategory} />
         <input type="hidden" name="returnSearchQuery" value={searchQuery} />
@@ -250,4 +252,3 @@ export const ProductsBulkActions = ({
     </section>
   );
 };
-

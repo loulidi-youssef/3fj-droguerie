@@ -1,5 +1,6 @@
 import { formatDh } from "@/lib/currency";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import { MetricChip } from "@/app/admin/components/metric-chip";
 import type { AdminProduct } from "@/lib/admin-products";
 import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 import { ProductEditForm } from "@/app/admin/products/components/product-edit-form";
@@ -25,16 +26,16 @@ type ProductItemProps = {
   deleteProductAction: FormAction;
 };
 
-const getStockBadgeClassName = (stock: number): string => {
+const getStockBadgeClassName = (stock: number): "red" | "orange" | "green" => {
   if (stock <= 0) {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "red";
   }
 
   if (stock <= 5) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "orange";
   }
 
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "green";
 };
 
 const getStockLabel = (stock: number): string => {
@@ -83,7 +84,7 @@ export const ProductItem = ({
 
   return (
     <ProductDetailsShell
-      className="group rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
+      className="group rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/70 shadow-md"
       productSnapshot={{
         id: product.id,
         slug: safeSlug,
@@ -123,24 +124,8 @@ export const ProductItem = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                product.is_active
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-300 bg-slate-100 text-slate-700"
-              }`}
-            >
-              <AdminIconStatus className="mr-1 h-3.5 w-3.5" />
-              {product.is_active ? "Actif" : "Inactif"}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getStockBadgeClassName(
-                safeStock,
-              )}`}
-            >
-              <AdminIconStock className="mr-1 h-3.5 w-3.5" />
-              {getStockLabel(safeStock)}
-            </span>
+            <MetricChip tone={product.is_active ? "green" : "slate"} label={product.is_active ? "Actif" : "Inactif"} />
+            <MetricChip tone={getStockBadgeClassName(safeStock)} label={getStockLabel(safeStock)} />
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition group-hover:border-brand-blue group-hover:text-brand-blue">
               <AdminIconChevronDown className="h-4 w-4 transition group-open:rotate-180" />
             </span>
@@ -148,23 +133,23 @@ export const ProductItem = ({
         </div>
 
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
             <AdminIconPrice className="h-4 w-4 text-brand-blue" />
             {formatDh(safePrice)}
           </p>
-          <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
             <AdminIconStock className="h-4 w-4 text-slate-500" />
             Stock: <span className="font-semibold">{safeStock}</span>
           </p>
-          <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-800">
             <AdminIconCategory className="h-4 w-4 text-slate-500" />
             {formatCategoryLabel(safeCategorySlug)}
           </p>
-          <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-800">
             <AdminIconVariants className="h-4 w-4 text-slate-500" />
             {safeVariants.length} variante(s)
           </p>
-          <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
             <AdminIconBulk className="h-4 w-4 text-slate-500" />
             {safeBulkPriceTiers.length} palier(s) gros
           </p>
@@ -174,7 +159,7 @@ export const ProductItem = ({
         </div>
       </summary>
 
-      <div className="border-t border-slate-200 bg-slate-50/45 px-4 pb-4 pt-4 sm:px-5">
+      <div className="border-t border-slate-200 bg-slate-50/60 px-4 pb-4 pt-4 sm:px-5">
         <ProductEditPanelBoundary productId={product.id} productSlug={safeSlug}>
           <ProductEditForm
             product={product}

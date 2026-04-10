@@ -97,7 +97,7 @@ export const AdminProductsPageView = ({
   ).length;
 
   return (
-    <section className="bg-brand-light py-12">
+    <section className="min-h-screen bg-gradient-to-b from-brand-light via-slate-50 to-sky-50/60 py-12">
       <div className="mx-auto max-w-7xl space-y-5 px-4 sm:px-5 lg:px-6">
         <AdminProductActionNotifications
           successMessage={successMessage}
@@ -110,7 +110,7 @@ export const AdminProductsPageView = ({
           <div
             role="status"
             aria-live="polite"
-            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800"
+            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800 shadow-sm"
           >
             <p className="text-xs font-bold uppercase tracking-wide">Succes</p>
             <p className="mt-1 text-sm font-medium">{successMessage}</p>
@@ -118,7 +118,7 @@ export const AdminProductsPageView = ({
         ) : null}
 
         {errorMessage ? (
-          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-sm">
             {errorMessage}
           </p>
         ) : null}
@@ -163,7 +163,7 @@ export const AdminProductsPageView = ({
 
         {totalPages > 1 ? (
           <nav
-            className="flex flex-wrap items-center justify-center gap-2"
+            className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm"
             aria-label="Pagination produits admin"
           >
             <Link

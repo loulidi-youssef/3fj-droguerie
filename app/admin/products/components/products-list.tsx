@@ -1,4 +1,5 @@
 import { ProductItem } from "@/app/admin/products/components/product-item";
+import { MetricChip } from "@/app/admin/components/metric-chip";
 import {
   AdminIconCategory,
   AdminIconProducts,
@@ -33,7 +34,7 @@ export const ProductsList = ({
 }: ProductsListProps) => {
   if (productsCount === 0) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_12px_28px_rgba(15,42,77,0.06)]">
+      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-md">
         <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
           <AdminIconProducts className="h-4 w-4 text-slate-500" />
           Aucun produit dans Supabase.
@@ -45,7 +46,7 @@ export const ProductsList = ({
   return (
     <div className="space-y-5">
       {filteredProductsCount === 0 || currentPageProductsCount === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_12px_28px_rgba(15,42,77,0.06)]">
+        <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-md">
           <p className="text-sm text-slate-600">
             {selectedCategory
               ? `Aucun produit dans la categorie ${formatCategoryLabel(selectedCategory)}.`
@@ -58,16 +59,14 @@ export const ProductsList = ({
       {groupedProducts.map((group) => (
         <section
           key={group.categorySlug}
-          className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,42,77,0.07)] sm:p-5"
+          className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/70 p-4 shadow-md sm:p-5"
         >
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
             <h2 className="inline-flex items-center gap-2 text-base font-bold text-brand-blue">
               <AdminIconCategory className="h-4 w-4" />
               {formatCategoryLabel(group.categorySlug)}
             </h2>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
-              {group.products.length} produit(s)
-            </span>
+            <MetricChip tone="slate" label={`${group.products.length} produit(s)`} />
           </div>
 
           <div className="space-y-4">
@@ -86,4 +85,3 @@ export const ProductsList = ({
     </div>
   );
 };
-

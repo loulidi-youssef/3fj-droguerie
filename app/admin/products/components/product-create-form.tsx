@@ -29,10 +29,10 @@ type SectionProps = {
 
 const SectionCard = ({ title, icon, description, children }: SectionProps) => {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+    <section className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/70 p-4 shadow-sm">
       <div className="mb-3">
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
             {icon}
           </span>
           {title}
@@ -48,7 +48,7 @@ const SectionCard = ({ title, icon, description, children }: SectionProps) => {
 
 export const ProductCreateForm = ({ createProductAction }: ProductCreateFormProps) => {
   return (
-    <details id="admin-products-create" className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_32px_rgba(15,42,77,0.07)]" open>
+    <details id="admin-products-create" className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/60 p-5 shadow-md" open>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
         <div>
           <p className="inline-flex items-center gap-2 rounded-full border border-brand-blue/20 bg-brand-blue/5 px-3 py-1 text-xs font-semibold text-brand-blue">

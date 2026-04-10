@@ -1,5 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  Boxes,
+  ChartColumn,
+  CircleAlert,
+  FileText,
+  PackageSearch,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
+import { ActionCard } from "@/app/admin/components/action-card";
+import { AdminSectionCard } from "@/app/admin/components/admin-section-card";
+import { MetricChip } from "@/app/admin/components/metric-chip";
+import { PremiumStatCard } from "@/app/admin/components/premium-stat-card";
+import { SectionHeader } from "@/app/admin/components/section-header";
 import { formatDh } from "@/lib/currency";
 import {
   hasValidAdminSession,
@@ -77,26 +91,36 @@ export default async function AdminIndexPage() {
   const recentOrders = orders.slice(0, 6);
   const recentCustomers = customers.slice(0, 6);
 
-  if (process.env.ADMIN_QUOTES_REMINDER_LOG === "1" && quotesNeedingFollowUpCount > 0) {
-    console.info(
-      `[admin][quotes] follow-up=${quotesNeedingFollowUpCount} overdue=${overdueQuotesCount} today=${todayFollowUpsCount}`,
-    );
-  }
-
   return (
-    <section className="bg-brand-light py-12">
+    <section className="min-h-screen bg-gradient-to-b from-brand-light via-slate-50 to-sky-50/60 py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-5">
-          <h1 className="text-3xl font-extrabold text-brand-blue">Dashboard admin</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Vue rapide pour le pilotage quotidien des commandes, produits et clients.
-          </p>
-        </div>
+        <SectionHeader
+          badge="Admin SaaS"
+          title="Dashboard admin"
+          description="Vue globale commandes, produits, clients et suivi commercial."
+          actions={
+            <>
+              <Link
+                href="/admin/quotes/analytics"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+              >
+                Analytics
+              </Link>
+              <Link
+                href="/admin/products"
+                className="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-blue/90"
+              >
+                Gerer produits
+              </Link>
+            </>
+          }
+        />
 
         {quotesNeedingFollowUpCount > 0 ? (
-          <article className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">
-              Vous avez {quotesNeedingFollowUpCount} devis a relancer.
+          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <CircleAlert className="h-4 w-4" />
+              {quotesNeedingFollowUpCount} devis a relancer
             </p>
             <p className="mt-1 text-xs text-amber-800">
               {todayFollowUpsCount} a rappeler aujourd'hui, {overdueQuotesCount} en retard.
@@ -115,43 +139,99 @@ export default async function AdminIndexPage() {
                 Ouvrir en retard
               </Link>
             </div>
-          </article>
+          </div>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-5">
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Commandes en cours</p>
-            <p className="mt-1 text-2xl font-extrabold text-brand-blue">{pendingOrdersCount}</p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Commandes terminees</p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-700">{deliveredOrdersCount}</p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Produits stock bas</p>
-            <p className="mt-1 text-2xl font-extrabold text-amber-700">{lowStockProducts.length}</p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Clients actifs</p>
-            <p className="mt-1 text-2xl font-extrabold text-brand-blue">{customers.length}</p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Nouveaux devis</p>
-            <p className="mt-1 text-2xl font-extrabold text-sky-700">{pendingQuoteRequestsCount}</p>
-          </article>
+        <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <PremiumStatCard
+            title="Commandes en cours"
+            value={pendingOrdersCount}
+            subtitle="Pipeline de livraison"
+            tone="blue"
+            icon={<ShoppingCart className="h-5 w-5" />}
+          />
+          <PremiumStatCard
+            title="Commandes terminees"
+            value={deliveredOrdersCount}
+            subtitle="Livrees ou recuperees"
+            tone="green"
+            icon={<PackageSearch className="h-5 w-5" />}
+          />
+          <PremiumStatCard
+            title="Stock faible"
+            value={lowStockProducts.length}
+            subtitle="Produits a reapprovisionner"
+            tone="orange"
+            icon={<Boxes className="h-5 w-5" />}
+          />
+          <PremiumStatCard
+            title="Clients actifs"
+            value={customers.length}
+            subtitle="Clients avec historique"
+            tone="indigo"
+            icon={<Users className="h-5 w-5" />}
+          />
+          <PremiumStatCard
+            title="Nouveaux devis"
+            value={pendingQuoteRequestsCount}
+            subtitle="A traiter rapidement"
+            tone="blue"
+            icon={<FileText className="h-5 w-5" />}
+          />
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold text-brand-blue">Commandes recentes</h2>
+        <AdminSectionCard
+          title="Actions rapides"
+          subtitle="Acces direct aux operations quotidiennes"
+          icon={<ChartColumn className="h-4 w-4" />}
+          className="mb-5"
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ActionCard
+              href="/admin/orders"
+              title="Commandes"
+              description="Suivi des statuts, details et actions."
+              icon={<ShoppingCart className="h-4 w-4" />}
+              tone="blue"
+            />
+            <ActionCard
+              href="/admin/products"
+              title="Produits"
+              description="Catalogue, stock, variantes et prix."
+              icon={<Boxes className="h-4 w-4" />}
+              tone="green"
+            />
+            <ActionCard
+              href="/admin/customers"
+              title="Clients"
+              description="Profils clients et historique d'achats."
+              icon={<Users className="h-4 w-4" />}
+              tone="indigo"
+            />
+            <ActionCard
+              href="/admin/quotes"
+              title="Devis"
+              description="Relances et suivi commercial."
+              icon={<FileText className="h-4 w-4" />}
+              tone="orange"
+            />
+          </div>
+        </AdminSectionCard>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <AdminSectionCard
+            title="Commandes recentes"
+            subtitle="Dernieres operations du flux commandes"
+            icon={<ShoppingCart className="h-4 w-4" />}
+            actions={
               <Link
                 href="/admin/orders"
-                className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
               >
                 Voir toutes
               </Link>
-            </div>
+            }
+          >
             {recentOrders.length === 0 ? (
               <p className="text-sm text-slate-600">Aucune commande pour le moment.</p>
             ) : (
@@ -159,7 +239,7 @@ export default async function AdminIndexPage() {
                 {recentOrders.map((order) => (
                   <li
                     key={order.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
                   >
                     <div>
                       <p className="text-sm font-semibold text-brand-blue">{order.customer_name}</p>
@@ -178,18 +258,21 @@ export default async function AdminIndexPage() {
                 ))}
               </ul>
             )}
-          </article>
+          </AdminSectionCard>
 
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold text-brand-blue">Clients recents</h2>
+          <AdminSectionCard
+            title="Clients recents"
+            subtitle="Nouveaux profils et activite client"
+            icon={<Users className="h-4 w-4" />}
+            actions={
               <Link
                 href="/admin/customers"
-                className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
               >
                 Voir tous
               </Link>
-            </div>
+            }
+          >
             {recentCustomers.length === 0 ? (
               <p className="text-sm text-slate-600">Aucun client disponible.</p>
             ) : (
@@ -197,7 +280,7 @@ export default async function AdminIndexPage() {
                 {recentCustomers.map((customer) => (
                   <li
                     key={customer.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
                   >
                     <div>
                       <p className="text-sm font-semibold text-brand-blue">{customer.displayName}</p>
@@ -205,24 +288,28 @@ export default async function AdminIndexPage() {
                         {customer.email ?? customer.phone ?? "Sans contact"}
                       </p>
                     </div>
-                    <p className="text-xs text-slate-600">{customer.orderCount} commande(s)</p>
+                    <MetricChip tone="slate" label={`${customer.orderCount} commande(s)`} />
                   </li>
                 ))}
               </ul>
             )}
-          </article>
+          </AdminSectionCard>
         </div>
 
-        <article className="mt-4 rounded-2xl bg-white p-4 shadow-card">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-brand-blue">Produits stock bas</h2>
+        <AdminSectionCard
+          title="Produits stock bas"
+          subtitle="Surveillance proactive des references critiques"
+          icon={<Boxes className="h-4 w-4" />}
+          className="mt-5"
+          actions={
             <Link
               href="/admin/products"
-              className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+              className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
             >
               Gerer produits
             </Link>
-          </div>
+          }
+        >
           {lowStockProducts.length === 0 ? (
             <p className="text-sm text-slate-600">Aucun produit critique en stock actuellement.</p>
           ) : (
@@ -239,7 +326,12 @@ export default async function AdminIndexPage() {
                   {lowStockProducts.map((product) => (
                     <tr key={product.id} className="border-b border-slate-100 text-slate-700">
                       <td className="px-3 py-2 font-semibold">{product.name}</td>
-                      <td className="px-3 py-2">{product.stock}</td>
+                      <td className="px-3 py-2">
+                        <MetricChip
+                          tone={product.stock <= 0 ? "red" : "orange"}
+                          label={`${product.stock}`}
+                        />
+                      </td>
                       <td className="px-3 py-2">{formatDh(product.price)}</td>
                     </tr>
                   ))}
@@ -247,7 +339,7 @@ export default async function AdminIndexPage() {
               </table>
             </div>
           )}
-        </article>
+        </AdminSectionCard>
       </div>
     </section>
   );

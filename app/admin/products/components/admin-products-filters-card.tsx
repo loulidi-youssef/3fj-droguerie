@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MetricChip } from "@/app/admin/components/metric-chip";
+import { AdminSectionCard } from "@/app/admin/components/admin-section-card";
 import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 import {
   AdminIconCategory,
@@ -31,20 +33,13 @@ export const AdminProductsFiltersCard = ({
   const hasSearch = searchQuery.trim().length > 0;
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,42,77,0.07)] sm:p-6">
+    <AdminSectionCard
+      title="Recherche et filtres"
+      subtitle="Filtrez rapidement le catalogue avant edition ou operations en lot."
+      icon={<AdminIconFilter className="h-4 w-4" />}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <AdminIconFilter className="h-4 w-4" />
-            Recherche et filtres
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            Filtrez rapidement le catalogue avant edition ou operations en lot.
-          </p>
-        </div>
-        <p className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-          {filteredProductsCount} resultat(s)
-        </p>
+        <MetricChip tone="blue" label={`${filteredProductsCount} resultat(s)`} />
       </div>
 
       <form method="get" action="/admin/products" className="mt-4">
@@ -83,7 +78,7 @@ export const AdminProductsFiltersCard = ({
         </label>
       </form>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3.5">
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <AdminIconCategory className="h-4 w-4" />
           Filtre categorie
@@ -141,7 +136,6 @@ export const AdminProductsFiltersCard = ({
           </p>
         </div>
       </div>
-    </section>
+    </AdminSectionCard>
   );
 };
-
