@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AnalyticsGrid } from "./components/analytics-grid";
+import { ChartCard } from "./components/chart-card";
+import { StatCard } from "./components/stat-card";
+import { StatusBadge, type DashboardStatus } from "./components/status-badge";
 import {
-  QUOTE_STATUS_BADGE_CLASSNAME,
-  QUOTE_STATUS_LABEL,
   getAdminQuoteAnalytics,
   resolveQuoteAnalyticsRange,
   type QuoteAnalyticsRangeKey,
-  type QuoteStatusBreakdown,
 } from "@/lib/admin-quotes";
 import { hasValidAdminSession, isAdminAuthConfigured } from "@/lib/admin-auth";
 import { formatDh } from "@/lib/currency";
@@ -20,13 +21,10 @@ type AdminQuoteAnalyticsPageProps = {
   };
 };
 
-const STATUS_ORDER: QuoteRequestStatus[] = ["new", "contacted", "converted", "closed"];
-
-const STATUS_CHART_COLORS: Record<QuoteRequestStatus, string> = {
-  new: "#0284c7",
-  contacted: "#d97706",
-  converted: "#16a34a",
-  closed: "#64748b",
+type DonutSegment = {
+  label: string;
+  value: number;
+  color: string;
 };
 
 const toSingleValue = (value: string | string[] | undefined): string => {
@@ -37,6 +35,21 @@ const toSingleValue = (value: string | string[] | undefined): string => {
     return value[0] ?? "";
   }
   return "";
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+};
+
+const toStringOrDefault = (value: unknown, fallback = ""): string => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 };
 
 const formatDateTime = (value: string): string => {
@@ -51,78 +64,106 @@ const formatDateTime = (value: string): string => {
   }).format(date);
 };
 
-const formatDay = (value: string): string => {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
-    return value;
+const mapStatus = (status: QuoteRequestStatus): DashboardStatus => {
+  if (status === "converted") {
+    return "confirmed";
   }
-
-  return new Intl.DateTimeFormat("fr-MA", {
-    day: "2-digit",
-    month: "2-digit",
-  }).format(date);
+  if (status === "closed") {
+    return "cancelled";
+  }
+  if (status === "contacted") {
+    return "processing";
+  }
+  return "pending";
 };
 
-const getItemsSummaryLabel = (
-  items: Array<{
-    productName: string;
-    quantity: number;
-  }>,
-): string => {
-  if (items.length === 0) {
-    return "Aucun article";
+const getStatusLabel = (status: DashboardStatus): string => {
+  if (status === "confirmed") {
+    return "Confirmed";
   }
-
-  if (items.length === 1) {
-    const item = items[0];
-    return `${item.productName} x${item.quantity}`;
+  if (status === "cancelled") {
+    return "Cancelled";
   }
-
-  const first = items[0];
-  return `${first.productName} +${items.length - 1} autre(s)`;
+  if (status === "processing") {
+    return "Processing";
+  }
+  return "Pending";
 };
 
-const buildStatusPieBackground = (statusBreakdown: QuoteStatusBreakdown): string => {
-  const total = STATUS_ORDER.reduce((sum, status) => sum + statusBreakdown[status], 0);
+const buildDonutBackground = (segments: DonutSegment[]): string => {
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
   if (total <= 0) {
-    return "conic-gradient(#cbd5e1 0deg 360deg)";
+    return "conic-gradient(#e2e8f0 0deg 360deg)";
   }
 
   let cursor = 0;
-  const segments: string[] = [];
-  for (const status of STATUS_ORDER) {
-    const count = statusBreakdown[status];
-    if (count <= 0) {
+  const slices: string[] = [];
+  for (const segment of segments) {
+    if (segment.value <= 0) {
       continue;
     }
 
-    const sweep = (count / total) * 360;
+    const sweep = (segment.value / total) * 360;
     const nextCursor = cursor + sweep;
-    segments.push(`${STATUS_CHART_COLORS[status]} ${cursor}deg ${nextCursor}deg`);
+    slices.push(`${segment.color} ${cursor}deg ${nextCursor}deg`);
     cursor = nextCursor;
   }
 
-  return `conic-gradient(${segments.join(", ")})`;
+  return `conic-gradient(${slices.join(", ")})`;
 };
 
-const getStatusPercent = (
-  status: QuoteRequestStatus,
-  statusBreakdown: QuoteStatusBreakdown,
-): number => {
-  const total = STATUS_ORDER.reduce((sum, key) => sum + statusBreakdown[key], 0);
-  if (total <= 0) {
-    return 0;
+const buildLinePath = (
+  points: Array<{ date: string; count: number }>,
+  width: number,
+  height: number,
+): string => {
+  if (points.length === 0) {
+    return "";
   }
 
-  return Math.round((statusBreakdown[status] / total) * 1000) / 10;
+  const maxCount = Math.max(1, ...points.map((point) => point.count));
+  const stepX = points.length > 1 ? width / (points.length - 1) : 0;
+
+  return points
+    .map((point, index) => {
+      const x = stepX * index;
+      const y = height - (point.count / maxCount) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 };
 
 const rangeOptions: Array<{ value: QuoteAnalyticsRangeKey; label: string }> = [
-  { value: "today", label: "Aujourd'hui" },
-  { value: "7d", label: "7 derniers jours" },
-  { value: "30d", label: "30 derniers jours" },
-  { value: "custom", label: "Personnalise" },
+  { value: "today", label: "Today" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
 ];
+
+const TotalIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5 text-sky-700" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M4 5h16v14H4z" />
+    <path d="M8 9h8M8 13h5" />
+  </svg>
+);
+
+const ConfirmedIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M20 6L9 17l-5-5" />
+  </svg>
+);
+
+const PendingIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5 text-amber-700" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+
+const RejectedIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5 text-rose-700" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
 
 export default async function AdminQuoteAnalyticsPage({
   searchParams,
@@ -131,7 +172,7 @@ export default async function AdminQuoteAnalyticsPage({
     return (
       <section className="bg-brand-light py-12">
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-card">
-          <h1 className="text-2xl font-extrabold text-brand-blue">Analytics devis</h1>
+          <h1 className="text-2xl font-extrabold text-brand-blue">Quote Analytics</h1>
           <p className="mt-3 text-sm text-slate-700">
             Configurez
             <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
@@ -151,6 +192,7 @@ export default async function AdminQuoteAnalyticsPage({
   const selectedRange = toSingleValue(searchParams.range).trim().toLowerCase();
   const fromInput = toSingleValue(searchParams.from).trim();
   const toInput = toSingleValue(searchParams.to).trim();
+
   const range = resolveQuoteAnalyticsRange({
     range: selectedRange,
     from: fromInput,
@@ -158,44 +200,57 @@ export default async function AdminQuoteAnalyticsPage({
   });
 
   const analytics = await getAdminQuoteAnalytics(range);
-  const maxDailyCount = Math.max(1, ...analytics.dailyActivity.map((point) => point.count));
-  const pieBackground = buildStatusPieBackground(analytics.filteredStatusBreakdown);
+
+  const pendingCount = analytics.filteredStatusBreakdown.new;
+  const processingCount = analytics.filteredStatusBreakdown.contacted;
+  const confirmedCount = analytics.filteredStatusBreakdown.converted;
+  const cancelledCount = analytics.filteredStatusBreakdown.closed;
+
+  const donutSegments: DonutSegment[] = [
+    { label: "Pending", value: pendingCount, color: "#f59e0b" },
+    { label: "Processing", value: processingCount, color: "#0ea5e9" },
+    { label: "Confirmed", value: confirmedCount, color: "#10b981" },
+    { label: "Cancelled", value: cancelledCount, color: "#ef4444" },
+  ];
+
+  const totalForDonut = donutSegments.reduce((sum, segment) => sum + segment.value, 0);
+  const donutBackground = buildDonutBackground(donutSegments);
+
+  const chartWidth = 920;
+  const chartHeight = 220;
+  const linePath = buildLinePath(analytics.dailyActivity, chartWidth, chartHeight);
 
   return (
     <section className="bg-brand-light py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-extrabold text-brand-blue">Analytics devis</h1>
+            <h1 className="text-3xl font-extrabold text-brand-blue">Quote Analytics</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Suivi des volumes, conversions et tendances produits pour les demandes de devis.
+              Dashboard CRM moderne pour suivre les demandes de devis et leur evolution.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/admin/quotes"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
             >
               Liste devis
             </Link>
             <Link
               href="/admin"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
             >
               Dashboard
             </Link>
           </div>
         </div>
 
-        <form
-          method="get"
-          action="/admin/quotes/analytics"
-          className="mb-4 rounded-2xl bg-white p-4 shadow-card"
-        >
-          <div className="grid gap-3 lg:grid-cols-4">
+        <form method="get" action="/admin/quotes/analytics" className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-4">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Periode
+                Time range
               </span>
               <select
                 name="range"
@@ -210,9 +265,7 @@ export default async function AdminQuoteAnalyticsPage({
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Du
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">From</span>
               <input
                 type="date"
                 name="from"
@@ -221,9 +274,7 @@ export default async function AdminQuoteAnalyticsPage({
               />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Au
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">To</span>
               <input
                 type="date"
                 name="to"
@@ -231,230 +282,202 @@ export default async function AdminQuoteAnalyticsPage({
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
               />
             </label>
-            <div className="flex items-end gap-2">
+            <div className="flex items-end">
               <button
                 type="submit"
-                className="w-full rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white"
+                className="w-full rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95"
               >
-                Appliquer
+                Apply filters
               </button>
             </div>
           </div>
         </form>
 
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Total devis</p>
-            <p className="mt-1 text-2xl font-extrabold text-brand-blue">
-              {analytics.metrics.totalQuotesAllTime}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Aujourd'hui</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {analytics.metrics.quotesToday}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Cette semaine</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {analytics.metrics.quotesThisWeek}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Ce mois</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">
-              {analytics.metrics.quotesThisMonth}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Conversion globale</p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-700">
-              {analytics.metrics.conversionRateAllTime}%
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-xs uppercase tracking-wide text-slate-500">
-              Conversion ({analytics.range.label})
-            </p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-700">
-              {analytics.filteredConversionRate}%
-            </p>
-          </article>
+        <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Total Devis"
+            value={analytics.filteredTotalQuotes}
+            subtitle="Total des demandes"
+            tone="blue"
+            icon={<TotalIcon />}
+          />
+          <StatCard
+            title="Confirmed Devis"
+            value={confirmedCount}
+            subtitle="Status: confirmed"
+            tone="green"
+            icon={<ConfirmedIcon />}
+          />
+          <StatCard
+            title="Pending Devis"
+            value={pendingCount}
+            subtitle="Status: pending"
+            tone="orange"
+            icon={<PendingIcon />}
+          />
+          <StatCard
+            title="Rejected / Cancelled"
+            value={cancelledCount}
+            subtitle="Status: rejected / cancelled"
+            tone="red"
+            icon={<RejectedIcon />}
+          />
         </div>
 
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          {STATUS_ORDER.map((status) => (
-            <article key={status} className="rounded-2xl bg-white p-4 shadow-card">
-              <p className="text-xs uppercase tracking-wide text-slate-500">
-                {QUOTE_STATUS_LABEL[status]}
-              </p>
-              <p className="mt-1 text-2xl font-extrabold text-slate-900">
-                {analytics.metrics.statusBreakdownAllTime[status]}
-              </p>
-            </article>
-          ))}
-        </div>
+        <AnalyticsGrid>
+          <div className="xl:col-span-1">
+            <ChartCard
+              title="Status Distribution"
+              subtitle="Pending, processing, confirmed, cancelled"
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="relative h-40 w-40 shrink-0 rounded-full"
+                  style={{ background: donutBackground }}
+                  aria-label="Quote status donut chart"
+                >
+                  <div className="absolute inset-[22%] rounded-full bg-white" />
+                </div>
+                <div className="space-y-2 text-sm">
+                  {donutSegments.map((segment) => {
+                    const percent = totalForDonut > 0 ? Math.round((segment.value / totalForDonut) * 1000) / 10 : 0;
+                    return (
+                      <div key={segment.label} className="flex items-center gap-2">
+                        <span
+                          className="inline-block h-3 w-3 rounded-full"
+                          style={{ backgroundColor: segment.color }}
+                        />
+                        <span className="font-medium text-slate-700">{segment.label}</span>
+                        <span className="text-slate-500">
+                          {segment.value} ({percent}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </ChartCard>
+          </div>
 
-        {analytics.isRangeDatasetTruncated ? (
-          <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-700">
-            La periode contient un volume tres important. Les graphiques et top produits sont
-            bases sur un echantillon recent (max 5000 demandes), mais les compteurs globaux restent exacts.
-          </p>
-        ) : null}
-
-        <div className="mb-4 grid gap-4 xl:grid-cols-3">
-          <article className="rounded-2xl bg-white p-4 shadow-card xl:col-span-2">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-brand-blue">Devis par jour ({analytics.range.label})</h2>
-              <p className="text-xs text-slate-500">{analytics.filteredTotalQuotes} devis</p>
-            </div>
-            <div className="overflow-x-auto">
-              <div className="flex min-w-[680px] items-end gap-2 rounded-xl bg-slate-50 p-3">
-                {analytics.dailyActivity.map((point) => {
-                  const barHeight = Math.max(
-                    6,
-                    Math.round((point.count / maxDailyCount) * 140),
-                  );
-
-                  return (
-                    <div key={point.date} className="flex w-6 flex-col items-center gap-1">
-                      <div
-                        title={`${point.date}: ${point.count}`}
-                        className="w-full rounded-t bg-brand-blue/80"
-                        style={{ height: `${barHeight}px` }}
+          <div className="xl:col-span-2">
+            <ChartCard
+              title="Devis over time"
+              subtitle={`Quotes per day (${analytics.range.label})`}
+              actions={
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                  {analytics.dailyActivity.length} days
+                </span>
+              }
+            >
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight + 40}`}
+                  className="h-[280px] w-full"
+                  role="img"
+                  aria-label="Quote activity line chart"
+                >
+                  <defs>
+                    <linearGradient id="quoteLineFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#2563eb" stopOpacity="0.02" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="#cbd5e1" strokeWidth="1.5" />
+                  {linePath ? (
+                    <>
+                      <path
+                        d={`${linePath} L ${chartWidth},${chartHeight} L 0,${chartHeight} Z`}
+                        fill="url(#quoteLineFill)"
                       />
-                      <p className="text-[10px] text-slate-500">{formatDay(point.date)}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </article>
+                      <path d={linePath} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
+                    </>
+                  ) : null}
+                  {analytics.dailyActivity.map((point, index) => {
+                    if (index % Math.max(1, Math.floor(analytics.dailyActivity.length / 8)) !== 0) {
+                      return null;
+                    }
 
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <h2 className="text-lg font-bold text-brand-blue">
-              Repartition statuts ({analytics.range.label})
-            </h2>
-            <div className="mt-3 flex items-center gap-4">
-              <div
-                className="relative h-28 w-28 shrink-0 rounded-full"
-                style={{ background: pieBackground }}
-                aria-label="Graphique statuts devis"
-              >
-                <div className="absolute inset-[18%] rounded-full bg-white" />
+                    const x =
+                      analytics.dailyActivity.length > 1
+                        ? (chartWidth / (analytics.dailyActivity.length - 1)) * index
+                        : chartWidth / 2;
+                    return (
+                      <text key={point.date} x={x} y={chartHeight + 18} textAnchor="middle" className="fill-slate-500 text-[11px]">
+                        {point.date.slice(5)}
+                      </text>
+                    );
+                  })}
+                </svg>
               </div>
-              <div className="space-y-2 text-sm">
-                {STATUS_ORDER.map((status) => (
-                  <div key={status} className="flex items-center gap-2">
-                    <span
-                      className="inline-block h-3 w-3 rounded-full"
-                      style={{ backgroundColor: STATUS_CHART_COLORS[status] }}
-                    />
-                    <span className="font-medium text-slate-700">{QUOTE_STATUS_LABEL[status]}</span>
-                    <span className="text-slate-500">
-                      {analytics.filteredStatusBreakdown[status]} ({getStatusPercent(status, analytics.filteredStatusBreakdown)}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </article>
-        </div>
+            </ChartCard>
+          </div>
+        </AnalyticsGrid>
 
-        <div className="mb-4 grid gap-4 xl:grid-cols-2">
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <h2 className="text-lg font-bold text-brand-blue">Top produits demandes</h2>
-            {analytics.topProducts.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">
-                Aucun produit demande sur cette periode.
+        <div className="mt-5">
+          <ChartCard
+            title="Quote Requests Summary"
+            subtitle="Dernieres demandes avec statut et montant estime"
+          >
+            {analytics.recentQuoteRequests.length === 0 ? (
+              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                Aucune demande sur cette periode.
               </p>
             ) : (
-              <div className="mt-3 overflow-x-auto">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
-                  <thead>
+                  <thead className="bg-slate-50">
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-2 py-2">Produit</th>
-                      <th className="px-2 py-2">Nb devis</th>
-                      <th className="px-2 py-2">Quantite</th>
+                      <th className="px-3 py-2">Nom client</th>
+                      <th className="px-3 py-2">Telephone</th>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Statut</th>
+                      <th className="px-3 py-2">Montant estime</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics.topProducts.map((product) => (
-                      <tr key={`${product.productId}::${product.productName}`} className="border-b border-slate-100 text-slate-700">
-                        <td className="px-2 py-2 font-medium">{product.productName}</td>
-                        <td className="px-2 py-2">{product.quoteRequestCount}</td>
-                        <td className="px-2 py-2">{product.totalRequestedQuantity}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </article>
+                    {analytics.recentQuoteRequests.map((request) => {
+                      const payloadRecord = asRecord(request.payload);
+                      const customerRecord = asRecord(payloadRecord?.customer);
 
-          <article className="rounded-2xl bg-white p-4 shadow-card">
-            <h2 className="text-lg font-bold text-brand-blue">
-              Activite recente ({analytics.range.label})
-            </h2>
-            {analytics.recentQuoteRequests.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">Aucune demande recente sur cette periode.</p>
-            ) : (
-              <div className="mt-3 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-2 py-2">Date</th>
-                      <th className="px-2 py-2">Produits</th>
-                      <th className="px-2 py-2">Quantite</th>
-                      <th className="px-2 py-2">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analytics.recentQuoteRequests.map((request) => (
-                      <tr key={request.id} className="border-b border-slate-100 text-slate-700">
-                        <td className="px-2 py-2">{formatDateTime(request.createdAt)}</td>
-                        <td className="px-2 py-2">
-                          {getItemsSummaryLabel(
-                            request.payload.items.map((item) => ({
-                              productName: item.productName,
-                              quantity: item.quantity,
-                            })),
-                          )}
-                        </td>
-                        <td className="px-2 py-2 font-semibold">
-                          {request.payload.summary.totalQuantity}
-                        </td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${QUOTE_STATUS_BADGE_CLASSNAME[request.status]}`}
-                          >
-                            {QUOTE_STATUS_LABEL[request.status]}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                      const customerName =
+                        toStringOrDefault(customerRecord?.name) ||
+                        toStringOrDefault(payloadRecord?.customerName) ||
+                        toStringOrDefault(payloadRecord?.customer_name) ||
+                        "Client anonyme";
+                      const customerPhone =
+                        toStringOrDefault(customerRecord?.phone) ||
+                        toStringOrDefault(payloadRecord?.customerPhone) ||
+                        toStringOrDefault(payloadRecord?.customer_phone) ||
+                        "-";
+
+                      const dashboardStatus = mapStatus(request.status);
+
+                      return (
+                        <tr
+                          key={request.id}
+                          className="border-b border-slate-100 text-slate-700 transition hover:bg-slate-50/80"
+                        >
+                          <td className="px-3 py-3 font-medium">{customerName}</td>
+                          <td className="px-3 py-3">{customerPhone}</td>
+                          <td className="px-3 py-3">{formatDateTime(request.createdAt)}</td>
+                          <td className="px-3 py-3">
+                            <StatusBadge
+                              status={dashboardStatus}
+                              label={getStatusLabel(dashboardStatus)}
+                            />
+                          </td>
+                          <td className="px-3 py-3 font-semibold text-slate-900">
+                            {formatDh(request.payload.summary.estimatedSubtotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
-          </article>
+          </ChartCard>
         </div>
-
-        <article className="rounded-2xl bg-white p-4 shadow-card">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-brand-blue">Valeur estimee ({analytics.range.label})</h2>
-          <p className="mt-2 text-xl font-extrabold text-slate-900">
-            {formatDh(
-              analytics.recentQuoteRequests.reduce(
-                (sum, request) => sum + request.payload.summary.estimatedSubtotal,
-                0,
-              ),
-            )}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Somme des montants estimes des demandes recentes affichees dans le tableau.
-          </p>
-        </article>
       </div>
     </section>
   );
