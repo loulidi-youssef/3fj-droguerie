@@ -1,22 +1,20 @@
-import { type QuoteRequestStatus } from "@/lib/quote-requests";
+export type AnalyticsOrderStatus = "pending" | "confirmed" | "cancelled";
 
 type StatusBadgeProps = {
-  status: QuoteRequestStatus;
+  status: AnalyticsOrderStatus;
   label?: string;
 };
 
-const BADGE_CLASSNAME: Record<QuoteRequestStatus, string> = {
-  new: "bg-amber-100 text-amber-700 border-amber-200",
-  contacted: "bg-sky-100 text-sky-700 border-sky-200",
-  converted: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  closed: "bg-rose-100 text-rose-700 border-rose-200",
+const BADGE_CLASSNAME: Record<AnalyticsOrderStatus, string> = {
+  pending: "bg-amber-100 text-amber-700 border-amber-200",
+  confirmed: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  cancelled: "bg-rose-100 text-rose-700 border-rose-200",
 };
 
-const STATUS_LABEL: Record<QuoteRequestStatus, string> = {
-  new: "Nouveau",
-  contacted: "Contacte",
-  converted: "Converti",
-  closed: "Cloture",
+const STATUS_LABEL: Record<AnalyticsOrderStatus, string> = {
+  pending: "En attente",
+  confirmed: "Confirmee",
+  cancelled: "Annulee",
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {

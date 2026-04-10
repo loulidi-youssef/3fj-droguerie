@@ -10,15 +10,18 @@ import {
   StatusDistributionChart,
   type StatusDistributionDatum,
 } from "./components/status-distribution-chart";
-import { StatusBadge } from "./components/status-badge";
+import { StatusBadge, type AnalyticsOrderStatus } from "./components/status-badge";
 import {
-  getAdminQuoteAnalytics,
+  getAdminOrders,
+  type AdminOrder,
+  type OrderStatus,
+} from "@/lib/admin-orders";
+import { hasValidAdminSession, isAdminAuthConfigured } from "@/lib/admin-auth";
+import { formatDh } from "@/lib/currency";
+import {
   resolveQuoteAnalyticsRange,
   type QuoteAnalyticsRangeKey,
 } from "@/lib/admin-quotes";
-import { hasValidAdminSession, isAdminAuthConfigured } from "@/lib/admin-auth";
-import { formatDh } from "@/lib/currency";
-import { type QuoteRequestStatus } from "@/lib/quote-requests";
 
 type AdminQuoteAnalyticsPageProps = {
   searchParams?: {
@@ -28,32 +31,25 @@ type AdminQuoteAnalyticsPageProps = {
   };
 };
 
+type StatusBreakdown = Record<AnalyticsOrderStatus, number>;
+type DailyPoint = { date: string; count: number };
+
 const RANGE_OPTIONS: Array<{ value: QuoteAnalyticsRangeKey; label: string }> = [
   { value: "today", label: "Aujourd'hui" },
   { value: "7d", label: "7 jours" },
   { value: "30d", label: "30 jours" },
 ];
 
-const STATUS_COLOR: Record<QuoteRequestStatus, string> = {
-  new: "#f59e0b",
-  contacted: "#2563eb",
-  converted: "#10b981",
-  closed: "#ef4444",
+const STATUS_COLOR: Record<AnalyticsOrderStatus, string> = {
+  pending: "#f59e0b",
+  confirmed: "#10b981",
+  cancelled: "#ef4444",
 };
 
-const STATUS_LABEL: Record<QuoteRequestStatus, string> = {
-  new: "Nouveau",
-  contacted: "Contacte",
-  converted: "Converti",
-  closed: "Cloture",
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  cart: "Panier",
-  product: "Produit",
-  checkout: "Checkout",
-  quote: "Devis",
-  unknown: "Inconnu",
+const STATUS_LABEL: Record<AnalyticsOrderStatus, string> = {
+  pending: "En attente",
+  confirmed: "Confirmee",
+  cancelled: "Annulee",
 };
 
 const toSingleValue = (value: string | string[] | undefined): string => {
@@ -66,17 +62,108 @@ const toSingleValue = (value: string | string[] | undefined): string => {
   return "";
 };
 
-const toStringOrDefault = (value: unknown, fallback = ""): string => {
-  if (typeof value !== "string") {
-    return fallback;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : fallback;
+const toIsoDateInput = (value: Date): string => {
+  return value.toISOString().slice(0, 10);
 };
 
-const toSourceLabel = (source: unknown): string => {
-  const normalized = toStringOrDefault(source, "unknown").toLowerCase();
-  return SOURCE_LABEL[normalized] ?? normalized;
+const addUtcDays = (value: Date, days: number): Date => {
+  const next = new Date(value);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+};
+
+const toUtcStartOfDay = (value: Date): Date => {
+  return new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+  );
+};
+
+const normalizeOrderStatus = (value: OrderStatus | string | null | undefined): AnalyticsOrderStatus => {
+  const normalized = (value ?? "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalized === "cancelled" || normalized === "canceled" || normalized === "annulee" || normalized === "annule") {
+    return "cancelled";
+  }
+
+  if (
+    normalized === "confirmed" ||
+    normalized === "delivered" ||
+    normalized === "livree" ||
+    normalized === "livre" ||
+    normalized === "collected"
+  ) {
+    return "confirmed";
+  }
+
+  return "pending";
+};
+
+const createEmptyBreakdown = (): StatusBreakdown => ({
+  pending: 0,
+  confirmed: 0,
+  cancelled: 0,
+});
+
+const getStatusBreakdown = (orders: AdminOrder[]): StatusBreakdown => {
+  const breakdown = createEmptyBreakdown();
+  for (const order of orders) {
+    breakdown[normalizeOrderStatus(order.status)] += 1;
+  }
+  return breakdown;
+};
+
+const getDateKey = (value: string): string | null => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString().slice(0, 10);
+};
+
+const isWithinInclusiveDateRange = (
+  createdAt: string,
+  fromDateInput: string,
+  toDateInput: string,
+): boolean => {
+  const dateKey = getDateKey(createdAt);
+  if (!dateKey) {
+    return false;
+  }
+  return dateKey >= fromDateInput && dateKey <= toDateInput;
+};
+
+const getDailyActivity = (orders: AdminOrder[], fromDateInput: string, toDateInput: string): DailyPoint[] => {
+  const counts = new Map<string, number>();
+  for (const order of orders) {
+    const key = getDateKey(order.created_at);
+    if (!key || key < fromDateInput || key > toDateInput) {
+      continue;
+    }
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const start = new Date(`${fromDateInput}T00:00:00.000Z`);
+  const end = new Date(`${toDateInput}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return [];
+  }
+
+  const points: DailyPoint[] = [];
+  let cursor = new Date(start);
+  while (cursor <= end) {
+    const key = toIsoDateInput(cursor);
+    points.push({
+      date: key,
+      count: counts.get(key) ?? 0,
+    });
+    cursor = addUtcDays(cursor, 1);
+  }
+  return points;
 };
 
 const formatDateTime = (value: string): string => {
@@ -163,56 +250,60 @@ export default async function AdminQuoteAnalyticsPage({
     to: toInput,
   });
 
-  const analytics = await getAdminQuoteAnalytics(range);
+  const allOrders = await getAdminOrders({ status: "all" });
+  const filteredOrders = allOrders.filter((order) =>
+    isWithinInclusiveDateRange(order.created_at, range.fromDateInput, range.toDateInput),
+  );
 
-  const totalQuotes = analytics.filteredTotalQuotes;
-  const confirmedCount = analytics.filteredStatusBreakdown.converted;
-  const pendingCount =
-    analytics.filteredStatusBreakdown.new + analytics.filteredStatusBreakdown.contacted;
-  const closedCount = analytics.filteredStatusBreakdown.closed;
-  const conversionRate = analytics.filteredConversionRate;
-  const trendShare = totalQuotes > 0 ? Math.round((totalQuotes / Math.max(1, analytics.metrics.totalQuotesAllTime)) * 100) : 0;
+  const now = new Date();
+  const todayStart = toUtcStartOfDay(now);
+  const todayInput = toIsoDateInput(todayStart);
+  const weekFromInput = toIsoDateInput(addUtcDays(todayStart, -6));
+  const monthFromInput = toIsoDateInput(addUtcDays(todayStart, -29));
+
+  const ordersThisWeek = allOrders.filter((order) =>
+    isWithinInclusiveDateRange(order.created_at, weekFromInput, todayInput),
+  ).length;
+  const ordersThisMonth = allOrders.filter((order) =>
+    isWithinInclusiveDateRange(order.created_at, monthFromInput, todayInput),
+  ).length;
+
+  const filteredBreakdown = getStatusBreakdown(filteredOrders);
+  const totalOrders = filteredOrders.length;
+  const confirmedOrders = filteredBreakdown.confirmed;
+  const pendingOrders = filteredBreakdown.pending;
+  const cancelledOrders = filteredBreakdown.cancelled;
+  const conversionRate = totalOrders > 0 ? Math.round((confirmedOrders / totalOrders) * 1000) / 10 : 0;
+  const trendShare = totalOrders > 0 ? Math.round((totalOrders / Math.max(1, allOrders.length)) * 100) : 0;
 
   const statusData: StatusDistributionDatum[] = [
-    {
-      key: "new",
-      label: STATUS_LABEL.new,
-      value: analytics.filteredStatusBreakdown.new,
-      color: STATUS_COLOR.new,
-    },
-    {
-      key: "contacted",
-      label: STATUS_LABEL.contacted,
-      value: analytics.filteredStatusBreakdown.contacted,
-      color: STATUS_COLOR.contacted,
-    },
-    {
-      key: "converted",
-      label: STATUS_LABEL.converted,
-      value: analytics.filteredStatusBreakdown.converted,
-      color: STATUS_COLOR.converted,
-    },
-    {
-      key: "closed",
-      label: STATUS_LABEL.closed,
-      value: analytics.filteredStatusBreakdown.closed,
-      color: STATUS_COLOR.closed,
-    },
+    { key: "pending", label: STATUS_LABEL.pending, value: pendingOrders, color: STATUS_COLOR.pending },
+    { key: "confirmed", label: STATUS_LABEL.confirmed, value: confirmedOrders, color: STATUS_COLOR.confirmed },
+    { key: "cancelled", label: STATUS_LABEL.cancelled, value: cancelledOrders, color: STATUS_COLOR.cancelled },
   ];
+
+  const dailyActivity = getDailyActivity(allOrders, range.fromDateInput, range.toDateInput);
+  const recentOrders = [...filteredOrders]
+    .sort((a, b) => {
+      const first = new Date(a.created_at).getTime();
+      const second = new Date(b.created_at).getTime();
+      return second - first;
+    })
+    .slice(0, 30);
 
   return (
     <section className="min-h-screen bg-gradient-to-b from-brand-light via-sky-50/40 to-brand-light py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <AnalyticsSectionHeader
           title="Devis / Quote Analytics"
-          description="Vue CRM moderne pour suivre les demandes, la conversion et les tendances commerciales."
+          description="Dashboard analytics base sur les commandes reelles (orders)."
           actions={
             <>
               <Link
-                href="/admin/quotes"
+                href="/admin/orders"
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
               >
-                Liste des devis
+                Liste des commandes
               </Link>
               <Link
                 href="/admin"
@@ -278,49 +369,43 @@ export default async function AdminQuoteAnalyticsPage({
 
         <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Total Devis"
-            value={totalQuotes}
-            subtitle="Total des demandes"
+            title="Total Commandes"
+            value={totalOrders}
+            subtitle="Total sur la periode"
             note={getTrendNote(trendShare)}
             tone="blue"
             icon={<TotalIcon />}
           />
           <StatCard
-            title="Devis Confirmes"
-            value={confirmedCount}
-            subtitle="Opportunites validees"
-            note={`${conversionRate}% de conversion`}
+            title="Commandes Confirmees"
+            value={confirmedOrders}
+            subtitle="Confirmees / livrees"
+            note={`${conversionRate}% du total`}
             tone="green"
             icon={<ConfirmedIcon />}
           />
           <StatCard
-            title="Devis En attente"
-            value={pendingCount}
-            subtitle="A traiter"
-            note={`${analytics.filteredStatusBreakdown.new} nouveaux + ${analytics.filteredStatusBreakdown.contacted} contactes`}
+            title="Commandes En attente"
+            value={pendingOrders}
+            subtitle="Nouvelles / en cours"
+            note="A traiter"
             tone="orange"
             icon={<PendingIcon />}
           />
           <StatCard
-            title="Devis Clotures"
-            value={closedCount}
-            subtitle="Non retenus"
-            note="Annules / fermes"
+            title="Commandes Annulees"
+            value={cancelledOrders}
+            subtitle="Annulees"
+            note="Statut final negatif"
             tone="red"
             icon={<ClosedIcon />}
           />
         </div>
 
-        {analytics.isRangeDatasetTruncated ? (
-          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Le volume de la periode est eleve. Les graphiques utilisent un echantillon limite pour rester rapides.
-          </div>
-        ) : null}
-
-        {totalQuotes === 0 ? (
+        {totalOrders === 0 ? (
           <EmptyAnalyticsState
-            title="Aucune demande de devis sur cette periode"
-            description="Essayez une autre plage de dates ou revenez plus tard. Les cartes et graphiques se rempliront automatiquement des que des demandes arrivent."
+            title="Aucune commande sur cette periode"
+            description="Essayez une autre plage de dates. Les KPI et graphiques se mettront a jour automatiquement."
           />
         ) : (
           <>
@@ -328,30 +413,30 @@ export default async function AdminQuoteAnalyticsPage({
               <ChartCard
                 className="xl:col-span-2"
                 title="Repartition des statuts"
-                subtitle="Nouveau, Contacte, Converti, Cloture"
+                subtitle="Pending / Confirmed / Cancelled"
               >
                 <StatusDistributionChart data={statusData} />
               </ChartCard>
 
               <ChartCard
                 className="xl:col-span-3"
-                title="Evolution des devis"
-                subtitle={`Activite journaliere (${analytics.range.label})`}
+                title="Evolution des commandes"
+                subtitle={`Activite journaliere (${range.label})`}
                 actions={
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                    {analytics.dailyActivity.length} jours
+                    {dailyActivity.length} jours
                   </span>
                 }
               >
-                <QuoteTrendChart data={analytics.dailyActivity} />
+                <QuoteTrendChart data={dailyActivity} />
               </ChartCard>
             </AnalyticsGrid>
 
             <div className="grid gap-5 xl:grid-cols-5">
               <ChartCard
                 className="xl:col-span-4"
-                title="Devis recents"
-                subtitle="Suivi client, statut et estimation"
+                title="Commandes recentes"
+                subtitle="Donnees reelles depuis la table orders"
               >
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="min-w-full text-left text-sm">
@@ -361,32 +446,29 @@ export default async function AdminQuoteAnalyticsPage({
                         <th className="px-3 py-2">Telephone</th>
                         <th className="px-3 py-2">Date</th>
                         <th className="px-3 py-2">Statut</th>
-                        <th className="px-3 py-2">Montant estime</th>
-                        <th className="px-3 py-2">Source</th>
+                        <th className="px-3 py-2">Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.recentQuoteRequests.map((request) => {
-                        const customerName = "Client anonyme";
-                        const customerPhone = "-";
-                        const estimatedSubtotal = request.payload.summary.estimatedSubtotal ?? 0;
-                        const sourceLabel = toSourceLabel(request.payload.source);
+                      {recentOrders.map((order) => {
+                        const customerName = (order.customer_name ?? "").trim() || "Client anonyme";
+                        const customerPhone = (order.customer_phone ?? "").trim() || "-";
+                        const normalizedStatus = normalizeOrderStatus(order.status);
 
                         return (
                           <tr
-                            key={request.id}
+                            key={order.id}
                             className="border-b border-slate-100 text-slate-700 transition hover:bg-sky-50/40"
                           >
                             <td className="px-3 py-3 font-medium">{customerName}</td>
                             <td className="px-3 py-3">{customerPhone}</td>
-                            <td className="px-3 py-3">{formatDateTime(request.createdAt)}</td>
+                            <td className="px-3 py-3">{formatDateTime(order.created_at)}</td>
                             <td className="px-3 py-3">
-                              <StatusBadge status={request.status} />
+                              <StatusBadge status={normalizedStatus} />
                             </td>
                             <td className="px-3 py-3 font-semibold text-slate-900">
-                              {formatDh(estimatedSubtotal)}
+                              {formatDh(order.total)}
                             </td>
-                            <td className="px-3 py-3 text-slate-600">{sourceLabel}</td>
                           </tr>
                         );
                       })}
@@ -398,31 +480,20 @@ export default async function AdminQuoteAnalyticsPage({
               <ChartCard
                 className="xl:col-span-1"
                 title="Insights rapides"
-                subtitle="Synthese operationnelle"
+                subtitle="Synthese commandes"
               >
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-sky-100 bg-sky-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-sky-700">Taux conversion</p>
-                    <p className="mt-1 text-2xl font-extrabold text-sky-900">{conversionRate}%</p>
+                    <p className="text-xs uppercase tracking-wide text-sky-700">Total historique</p>
+                    <p className="mt-1 text-2xl font-extrabold text-sky-900">{allOrders.length}</p>
                   </div>
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-emerald-700">Semaine</p>
-                    <p className="mt-1 text-2xl font-extrabold text-emerald-900">{analytics.metrics.quotesThisWeek}</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">7 derniers jours</p>
+                    <p className="mt-1 text-2xl font-extrabold text-emerald-900">{ordersThisWeek}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-600">Top produits demandes</p>
-                    {analytics.topProducts.length === 0 ? (
-                      <p className="mt-2 text-xs text-slate-500">Aucun produit dominant.</p>
-                    ) : (
-                      <ul className="mt-2 space-y-1.5">
-                        {analytics.topProducts.slice(0, 3).map((item) => (
-                          <li key={`${item.productId}-${item.productName}`} className="text-xs text-slate-700">
-                            <span className="font-semibold">{item.productName}</span>
-                            <span className="text-slate-500"> ({item.quoteRequestCount} devis)</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <p className="text-xs uppercase tracking-wide text-slate-600">30 derniers jours</p>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900">{ordersThisMonth}</p>
                   </div>
                 </div>
               </ChartCard>
