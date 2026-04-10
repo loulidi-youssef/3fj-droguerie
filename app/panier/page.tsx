@@ -55,6 +55,7 @@ const initialCheckoutForm: CheckoutFormValues = {
   phone: "",
   address: "",
   location: "",
+  note: "",
 };
 
 const initialTouchedFields: Record<CheckoutField, boolean> = {
@@ -62,9 +63,10 @@ const initialTouchedFields: Record<CheckoutField, boolean> = {
   phone: false,
   address: false,
   location: false,
+  note: false,
 };
 
-const baseRequiredFields: CheckoutField[] = ["phone"];
+const baseRequiredFields: CheckoutField[] = ["name", "phone", "location"];
 const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
 const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 const BULK_STEPS = [10, 50, 100];
@@ -272,6 +274,7 @@ export default function PanierPage() {
           typeof parsedDraft.location === "string"
             ? parsedDraft.location
             : current.location,
+        note: typeof parsedDraft.note === "string" ? parsedDraft.note : current.note,
       }));
     } catch {
       window.localStorage.removeItem(CHECKOUT_DRAFT_STORAGE_KEY);
@@ -445,8 +448,9 @@ export default function PanierPage() {
   const checkoutPhone = checkoutForm.phone.trim();
   const checkoutAddress = checkoutForm.address.trim();
   const checkoutLocation = checkoutForm.location.trim();
+  const checkoutNote = checkoutForm.note.trim();
   const hasWhatsAppCustomerDetails = Boolean(
-    checkoutName || checkoutPhone || checkoutAddress || checkoutLocation,
+    checkoutName || checkoutPhone || checkoutAddress || checkoutLocation || checkoutNote,
   );
 
   const directWhatsAppLink = buildCartWhatsAppLink(
@@ -463,6 +467,7 @@ export default function PanierPage() {
           phone: checkoutPhone || undefined,
           address: checkoutAddress || undefined,
           location: checkoutLocation || undefined,
+          note: checkoutNote || undefined,
         }
       : undefined,
     {
@@ -500,6 +505,7 @@ export default function PanierPage() {
           phone: checkoutPhone || undefined,
           address: checkoutAddress || undefined,
           location: checkoutLocation || undefined,
+          note: checkoutNote || undefined,
         }
       : undefined,
     {
@@ -540,6 +546,8 @@ export default function PanierPage() {
   ) => {
     const validation = validateCheckoutCustomer(nextForm, {
       requireAddress: requiresAddressForDeliveryOption(deliveryOption),
+      requireName: true,
+      requireLocation: true,
     });
     setFieldErrors(validation.errors);
     return validation;
@@ -596,6 +604,7 @@ export default function PanierPage() {
       phone: current.phone || Boolean(errors.phone),
       address: current.address || Boolean(errors.address),
       location: current.location || Boolean(errors.location),
+      note: current.note || Boolean(errors.note),
     }));
   };
 
@@ -641,6 +650,7 @@ export default function PanierPage() {
         validation.errors.phone ||
         validation.errors.address ||
         validation.errors.location ||
+        validation.errors.note ||
         "Merci de corriger le formulaire avant de continuer.";
 
       setSubmitError(firstError);
@@ -697,7 +707,7 @@ export default function PanierPage() {
       setAuthRequiredPrompt(false);
       showToast("Commande enregistree avec succes.");
       setSubmitInfo(`Commande enregistree (ref: ${payload.orderId}). Redirection...`);
-      router.push(`/compte/commandes/${encodeURIComponent(payload.orderId)}?success=1`);
+      router.push(`/commande/succes?orderId=${encodeURIComponent(payload.orderId)}`);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Une erreur est survenue.";
@@ -726,9 +736,11 @@ export default function PanierPage() {
     if (!validation.isValid) {
       markTouchedFromFieldErrors(validation.errors);
       const firstError =
-        validation.errors.phone ||
-        validation.errors.address ||
         validation.errors.name ||
+        validation.errors.phone ||
+        validation.errors.location ||
+        validation.errors.address ||
+        validation.errors.note ||
         "Merci de verifier vos informations.";
       setSubmitError(firstError);
       return;
@@ -810,7 +822,7 @@ export default function PanierPage() {
             <aside className="rounded-2xl bg-white p-4 shadow-card md:p-5">
               <h2 className="text-xl font-extrabold text-brand-blue">Confirmation rapide</h2>
               <p className="mt-1 text-sm text-slate-600">
-                1) Renseignez votre telephone 2) Choisissez la livraison 3) Confirmez sur WhatsApp.
+                1) Completez vos coordonnees 2) Choisissez la livraison 3) Confirmez votre commande.
               </p>
 
               <div className="mt-5 space-y-4">
@@ -899,7 +911,7 @@ export default function PanierPage() {
 
                   <label className="block">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Nom (optionnel)
+                      Nom complet *
                     </span>
                     <input
                       type="text"
@@ -907,12 +919,31 @@ export default function PanierPage() {
                       onChange={(event) => handleCheckoutFieldChange("name", event.target.value)}
                       onBlur={() => handleFieldBlur("name")}
                       className={getInputClassName("name")}
-                      placeholder="Votre nom"
+                      placeholder="Nom et prenom"
                       autoComplete="name"
                       aria-invalid={touchedFields.name && Boolean(fieldErrors.name)}
                     />
                     {touchedFields.name && fieldErrors.name ? (
                       <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.name}</p>
+                    ) : null}
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Ville *
+                    </span>
+                    <input
+                      type="text"
+                      value={checkoutForm.location}
+                      onChange={(event) => handleCheckoutFieldChange("location", event.target.value)}
+                      onBlur={() => handleFieldBlur("location")}
+                      className={getInputClassName("location")}
+                      placeholder="Ex: Fes"
+                      autoComplete="address-level2"
+                      aria-invalid={touchedFields.location && Boolean(fieldErrors.location)}
+                    />
+                    {touchedFields.location && fieldErrors.location ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.location}</p>
                     ) : null}
                   </label>
 
@@ -940,6 +971,23 @@ export default function PanierPage() {
                       Retrait en magasin selectionne. Aucune adresse n'est requise.
                     </p>
                   )}
+
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Note de commande (optionnel)
+                    </span>
+                    <textarea
+                      value={checkoutForm.note}
+                      onChange={(event) => handleCheckoutFieldChange("note", event.target.value)}
+                      onBlur={() => handleFieldBlur("note")}
+                      className={`${getInputClassName("note")} min-h-[88px] resize-y`}
+                      placeholder="Instruction de livraison, etage, point de repere..."
+                      aria-invalid={touchedFields.note && Boolean(fieldErrors.note)}
+                    />
+                    {touchedFields.note && fieldErrors.note ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.note}</p>
+                    ) : null}
+                  </label>
                 </section>
               </div>
 
@@ -1001,7 +1049,7 @@ export default function PanierPage() {
                   {isSubmitting
                     ? "Enregistrement de votre commande..."
                     : isCustomerAuthenticated
-                      ? "Confirmer la commande"
+                      ? "Confirmer sur le site"
                       : "Se connecter pour confirmer"}
                 </button>
 
@@ -1017,7 +1065,7 @@ export default function PanierPage() {
 
               {!isCustomerAuthenticated ? (
                 <div
-                  className={`mt-4 hidden rounded-xl border p-3 md:block ${
+                  className={`mt-4 rounded-xl border p-3 ${
                     authRequiredPrompt
                       ? "border-rose-300 bg-rose-50"
                       : "border-slate-200 bg-slate-50"
@@ -1086,14 +1134,28 @@ export default function PanierPage() {
                 <span>{formatDh(total)}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleConfirmWhatsApp}
-              disabled={isProductsLoading || detailedItems.length === 0}
-              className="block w-full rounded-xl bg-[#16a34a] px-4 py-3.5 text-center text-base font-bold text-white transition hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              Confirmer sur WhatsApp
-            </button>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmOrder}
+                disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
+                className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSubmitting
+                  ? "Enregistrement..."
+                  : isCustomerAuthenticated
+                    ? "Confirmer sur le site"
+                    : "Se connecter pour confirmer"}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmWhatsApp}
+                disabled={isProductsLoading || detailedItems.length === 0}
+                className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Continuer sur WhatsApp (optionnel)
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

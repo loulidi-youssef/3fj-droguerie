@@ -35,6 +35,7 @@ type IncomingOrderBody = {
     phone?: string;
     address?: string;
     location?: string;
+    note?: string;
   };
   items?: IncomingOrderItem[];
   fulfillmentMethod?: string;
@@ -48,6 +49,7 @@ type OrderErrorResponse = {
     phone?: string;
     address?: string;
     location?: string;
+    note?: string;
   };
 };
 
@@ -331,8 +333,11 @@ export async function POST(request: NextRequest) {
     phone: body.customer?.phone ?? "",
     address: body.customer?.address ?? "",
     location: body.customer?.location ?? "",
+    note: body.customer?.note ?? "",
   }, {
     requireAddress: requiresAddressForDeliveryOption(deliveryOption),
+    requireName: true,
+    requireLocation: true,
   });
 
   if (!customerValidation.isValid) {
@@ -341,6 +346,7 @@ export async function POST(request: NextRequest) {
       customerValidation.errors.phone ||
       customerValidation.errors.address ||
       customerValidation.errors.location ||
+      customerValidation.errors.note ||
       "Merci de corriger les champs du formulaire.";
 
     return NextResponse.json<OrderErrorResponse>(
@@ -353,6 +359,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { name, phone, address, location } = customerValidation.customer;
+  const customerNote = customerValidation.customer.note;
   const orderAddress =
     fulfillmentMethod === "pickup" ? "Retrait en magasin" : address;
   const orderUserId = authenticatedCustomer.id?.trim();
@@ -551,6 +558,7 @@ export async function POST(request: NextRequest) {
       phone: toCompactText(phone),
       address: toCompactText(orderAddress),
       location: toCompactText(location),
+      note: toCompactText(customerNote),
     },
     items: pricedItemsSnapshot,
     totals: {
@@ -595,11 +603,13 @@ export async function POST(request: NextRequest) {
       p_customer_phone: phone,
       p_customer_address: orderAddress,
       p_customer_location: location,
+      p_customer_note: customerNote || null,
       p_subtotal: subtotal,
       p_delivery_fee: deliveryFee,
       p_total: total,
       p_user_id: orderUserId,
       p_fulfillment_method: fulfillmentMethod,
+      p_delivery_option: deliveryOption,
       p_idempotency_key: idempotencyKey,
       p_request_fingerprint: requestFingerprint,
       p_items: orderItemsPayload,
@@ -660,6 +670,27 @@ export async function POST(request: NextRequest) {
         {
           error:
             "Stock insuffisant pour finaliser la commande. Merci d'actualiser votre panier.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (normalizedMessage.includes("INVALID_DELIVERY_OPTION")) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error: "Option de livraison invalide. Merci de selectionner une option valide.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (normalizedMessage.includes("INVALID_CUSTOMER_NOTE")) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error: "La note de commande est invalide.",
+          fieldErrors: {
+            note: "La note de commande est invalide.",
+          },
         },
         { status: 400 },
       );

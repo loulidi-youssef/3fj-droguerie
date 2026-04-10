@@ -27,6 +27,7 @@ type CustomerOrder = {
     | "delivered"
     | "cancelled";
   fulfillmentMethod: "delivery" | "pickup";
+  deliveryOption: "standard" | "express" | "pickup";
   subtotal: number;
   delivery_fee: number;
   total: number;
@@ -34,6 +35,12 @@ type CustomerOrder = {
   canCancel: boolean;
   cancellationDeadline: string | null;
   cannotCancelMessage: string | null;
+};
+
+const deliveryOptionLabel: Record<CustomerOrder["deliveryOption"], string> = {
+  standard: "Livraison Standard",
+  express: "Livraison Express",
+  pickup: "Retrait en magasin",
 };
 
 type OrdersApiResponse = {
@@ -324,7 +331,7 @@ export default function CompteCommandesPage() {
                       {formatOrderDate(order.created_at)}
                     </p>
                     <p className="mt-1 text-xs text-slate-600">
-                      Mode: {order.fulfillmentMethod === "pickup" ? "Retrait en magasin" : "Livraison"}
+                      Mode: {deliveryOptionLabel[order.deliveryOption]}
                     </p>
                   </div>
 

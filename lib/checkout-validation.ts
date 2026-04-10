@@ -5,6 +5,7 @@ export type CheckoutCustomerInput = {
   phone: string;
   address: string;
   location: string;
+  note: string;
 };
 
 export type CheckoutField = keyof CheckoutCustomerInput;
@@ -19,6 +20,8 @@ type CheckoutCustomerValidationResult = {
 
 type CheckoutValidationOptions = {
   requireAddress?: boolean;
+  requireName?: boolean;
+  requireLocation?: boolean;
 };
 
 const normalizeText = (value: string): string => {
@@ -29,6 +32,7 @@ const MAX_NAME_LENGTH = 120;
 const MAX_PHONE_LENGTH = 20;
 const MAX_ADDRESS_LENGTH = 240;
 const MAX_LOCATION_LENGTH = 120;
+const MAX_NOTE_LENGTH = 500;
 
 const isValidMoroccanPhone = (value: string): boolean => {
   const digits = value.replace(/\D/g, "");
@@ -51,14 +55,26 @@ export const validateCheckoutCustomer = (
   options?: CheckoutValidationOptions,
 ): CheckoutCustomerValidationResult => {
   const requireAddress = options?.requireAddress ?? true;
+  const requireName = options?.requireName ?? true;
+  const requireLocation = options?.requireLocation ?? true;
   const normalizedName = normalizeText(input.name);
   const normalizedPhone = input.phone.trim();
   const normalizedAddress = normalizeText(input.address);
-  const normalizedLocation = normalizeText(input.location || businessInfo.city);
+  const normalizedRawLocation = normalizeText(input.location);
+  const normalizedLocation = normalizedRawLocation || businessInfo.city;
+  const normalizedNote = normalizeText(input.note);
 
   const errors: CheckoutFieldErrors = {};
 
-  if (normalizedName) {
+  if (requireName) {
+    if (!normalizedName) {
+      errors.name = "Le nom complet est obligatoire.";
+    } else if (normalizedName.length < 2) {
+      errors.name = "Le nom complet doit contenir au moins 2 caracteres.";
+    } else if (normalizedName.length > MAX_NAME_LENGTH) {
+      errors.name = `Le nom complet ne doit pas depasser ${MAX_NAME_LENGTH} caracteres.`;
+    }
+  } else if (normalizedName) {
     if (normalizedName.length < 2) {
       errors.name = "Le nom complet doit contenir au moins 2 caracteres.";
     } else if (normalizedName.length > MAX_NAME_LENGTH) {
@@ -87,10 +103,26 @@ export const validateCheckoutCustomer = (
     errors.address = `L'adresse ne doit pas depasser ${MAX_ADDRESS_LENGTH} caracteres.`;
   }
 
-  if (input.location.trim() && normalizedLocation.length < 2) {
-    errors.location = "La localisation doit contenir au moins 2 caracteres.";
+  if (requireLocation) {
+    if (!normalizedRawLocation) {
+      errors.location = "La ville est obligatoire.";
+    } else if (normalizedRawLocation.length < 2) {
+      errors.location = "La ville doit contenir au moins 2 caracteres.";
+    } else if (normalizedRawLocation.length > MAX_LOCATION_LENGTH) {
+      errors.location = `La ville ne doit pas depasser ${MAX_LOCATION_LENGTH} caracteres.`;
+    }
+  } else if (normalizedRawLocation) {
+    if (normalizedRawLocation.length < 2) {
+      errors.location = "La ville doit contenir au moins 2 caracteres.";
+    } else if (normalizedRawLocation.length > MAX_LOCATION_LENGTH) {
+      errors.location = `La ville ne doit pas depasser ${MAX_LOCATION_LENGTH} caracteres.`;
+    }
   } else if (normalizedLocation.length > MAX_LOCATION_LENGTH) {
     errors.location = `La localisation ne doit pas depasser ${MAX_LOCATION_LENGTH} caracteres.`;
+  }
+
+  if (normalizedNote.length > MAX_NOTE_LENGTH) {
+    errors.note = `La note ne doit pas depasser ${MAX_NOTE_LENGTH} caracteres.`;
   }
 
   return {
@@ -101,6 +133,7 @@ export const validateCheckoutCustomer = (
       phone: normalizedPhone,
       address: normalizedAddress,
       location: normalizedLocation || businessInfo.city,
+      note: normalizedNote,
     },
   };
 };

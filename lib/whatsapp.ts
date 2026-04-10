@@ -22,6 +22,7 @@ type WhatsAppCustomerDetails = {
   phone?: string;
   address?: string;
   location?: string;
+  note?: string;
   orderId?: string;
 };
 
@@ -127,6 +128,7 @@ export const buildWhatsAppQuoteMessage = ({
     toTrimmedLine("Telephone", customerDetails?.phone),
     toTrimmedLine("Adresse", customerDetails?.address),
     toTrimmedLine("Localisation", customerDetails?.location),
+    toTrimmedLine("Note", customerDetails?.note),
     customerDetails?.orderId ? `Reference commande: ${customerDetails.orderId}` : null,
     fulfillmentMethod === "pickup"
       ? "Mode de reception: Retrait en magasin"
@@ -252,6 +254,7 @@ export const buildCartWhatsAppLink = (
     toTrimmedLine("Telephone", customerDetails?.phone),
     toTrimmedLine("Adresse", customerDetails?.address),
     toTrimmedLine("Localisation", customerDetails?.location),
+    toTrimmedLine("Note", customerDetails?.note),
     customerDetails?.orderId ? `Reference commande: ${customerDetails.orderId}` : null,
     fulfillmentLine,
     normalizedDeliveryOptionLabel

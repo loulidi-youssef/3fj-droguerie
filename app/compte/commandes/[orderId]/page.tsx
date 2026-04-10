@@ -28,10 +28,12 @@ type CustomerOrder = {
     | "delivered"
     | "cancelled";
   fulfillmentMethod: "delivery" | "pickup";
+  deliveryOption: "standard" | "express" | "pickup";
   customer_name: string;
   customer_phone: string;
   customer_address: string;
   customer_location: string;
+  customer_note: string | null;
   subtotal: number;
   delivery_fee: number;
   total: number;
@@ -67,6 +69,12 @@ const statusClassName: Record<CustomerOrder["status"], string> = {
   collected: "bg-emerald-100 text-emerald-700",
   delivered: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-rose-100 text-rose-700",
+};
+
+const deliveryOptionLabel: Record<CustomerOrder["deliveryOption"], string> = {
+  standard: "Livraison Standard",
+  express: "Livraison Express",
+  pickup: "Retrait en magasin",
 };
 
 const deliveryTrackingSteps = [
@@ -504,9 +512,9 @@ export default function CompteCommandeDetailsPage() {
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <p>
-                Mode de reception:{" "}
+                Mode de livraison:{" "}
                 <span className="font-semibold">
-                  {isPickupOrder ? "Retrait en magasin" : "Livraison"}
+                  {deliveryOptionLabel[order.deliveryOption]}
                 </span>
               </p>
               <p>
@@ -532,6 +540,11 @@ export default function CompteCommandeDetailsPage() {
               <p>
                 Localisation: <span className="font-semibold">{order.customer_location}</span>
               </p>
+              {order.customer_note ? (
+                <p>
+                  Note: <span className="font-semibold">{order.customer_note}</span>
+                </p>
+              ) : null}
               <p>
                 Paiement:{" "}
                 <span className="font-semibold">
