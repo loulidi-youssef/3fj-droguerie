@@ -225,6 +225,14 @@ const logNormalizationIssue = (
   });
 };
 
+const logLoaderFailure = (fn: string, error: unknown, extra?: Record<string, unknown>) => {
+  devError("[admin-products] Loader failure.", {
+    function: fn,
+    message: error instanceof Error ? error.message : String(error),
+    ...(extra ?? {}),
+  });
+};
+
 const toDatabaseBulkPriceTiers = (tiers: BulkPriceTier[]): Array<{ minQty: number; price: number }> => {
   return normalizeBulkPriceTiers(tiers).map((tier) => ({
     minQty: tier.minQty,
@@ -266,7 +274,7 @@ const toAdminProductVariant = (
 
 const toAdminProduct = (
   row: AdminProductRow,
-  variants: AdminProductVariant[],
+  variants: AdminProductVariant[] | unknown,
 ): AdminProduct => {
   const productId = toTrimmedString(row.id, toTrimmedString(row.slug, "unknown-product"));
   const slug = toTrimmedString(row.slug, productId);
@@ -277,18 +285,34 @@ const toAdminProduct = (
   const stock = Math.max(0, Math.round(toFiniteNumber(row.stock, 0)));
   const price = roundDhAmount(Math.max(0, toFiniteNumber(row.price, 0)));
   const rating = Math.max(0, Math.min(5, toFiniteNumber(row.rating, 0)));
+  const safeVariants = Array.isArray(variants) ? variants : [];
 
+  if (typeof row.name !== "string") {
+    logNormalizationIssue("product", productId, "name", row.name);
+  }
+  if (typeof row.price !== "number" || !Number.isFinite(row.price)) {
+    logNormalizationIssue("product", productId, "price", row.price);
+  }
+  if (typeof row.stock !== "number" || !Number.isFinite(row.stock)) {
+    logNormalizationIssue("product", productId, "stock", row.stock);
+  }
+  if (typeof row.category_slug !== "string" || row.category_slug.trim().length === 0) {
+    logNormalizationIssue("product", productId, "category_slug", row.category_slug);
+  }
   if (!Array.isArray(row.images)) {
     logNormalizationIssue("product", productId, "images", row.images);
   }
   if (!Array.isArray(row.bulk_price_tiers)) {
     logNormalizationIssue("product", productId, "bulk_price_tiers", row.bulk_price_tiers);
   }
+  if (!Array.isArray(variants)) {
+    logNormalizationIssue("product", productId, "variants", variants);
+  }
 
   return {
     id: productId,
     slug,
-    name: toTrimmedString(row.name, "Produit sans nom"),
+    name: toTrimmedString(row.name, ""),
     short_description: toTrimmedString(row.short_description),
     description: toTrimmedString(row.description),
     price,
@@ -300,7 +324,7 @@ const toAdminProduct = (
     is_active: toBoolean(row.is_active, false),
     created_at: toTrimmedString(row.created_at),
     updated_at: toTrimmedString(row.updated_at),
-    variants,
+    variants: safeVariants,
   };
 };
 
@@ -344,8 +368,8 @@ const normalizeDatabaseError = (
 };
 
 const normalizeAdminProductsQueryInput = (input?: AdminProductsQueryInput) => {
-  const categorySlug = input?.categorySlug?.trim().toLowerCase() ?? "";
-  const searchQuery = (input?.searchQuery?.trim() ?? "")
+  const categorySlug = toTrimmedString(input?.categorySlug).toLowerCase();
+  const searchQuery = toTrimmedString(input?.searchQuery)
     .replace(/[,%()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -399,31 +423,82 @@ const attachVariantsToAdminProducts = async (
   supabaseAdmin: SupabaseAdminClient,
   products: AdminProductRow[],
 ): Promise<AdminProduct[]> => {
-  const productIds = products
-    .map((product) => toTrimmedString(product.id))
-    .filter(Boolean);
-  const variantsByProductId = new Map<string, AdminProductVariant[]>();
+  try {
+    const productIds = products
+      .map((product) => toTrimmedString(product.id))
+      .filter(Boolean);
+    const variantsByProductId = new Map<string, AdminProductVariant[]>();
 
-  if (productIds.length > 0) {
-    const { data: variantsData, error: variantsError } = await supabaseAdmin
-      .from("product_variants")
-      .select("*")
-      .in("product_id", productIds)
-      .order("created_at", { ascending: true });
+    if (productIds.length > 0) {
+      try {
+        const { data: variantsData, error: variantsError } = await supabaseAdmin
+          .from("product_variants")
+          .select("*")
+          .in("product_id", productIds)
+          .order("created_at", { ascending: true });
 
-    if (!variantsError && variantsData) {
-      for (const [index, rawVariant] of (variantsData as AdminProductVariantRow[]).entries()) {
-        const variant = toAdminProductVariant(rawVariant, toTrimmedString(rawVariant.product_id), index);
-        const existing = variantsByProductId.get(variant.product_id) ?? [];
-        variantsByProductId.set(variant.product_id, [...existing, variant]);
+        if (variantsError) {
+          logLoaderFailure("attachVariantsToAdminProducts:loadVariants", variantsError, {
+            productIdsCount: productIds.length,
+          });
+        } else if (Array.isArray(variantsData)) {
+          for (const [index, rawVariant] of (variantsData as AdminProductVariantRow[]).entries()) {
+            const variant = toAdminProductVariant(
+              rawVariant,
+              toTrimmedString(rawVariant.product_id),
+              index,
+            );
+            const existing = variantsByProductId.get(variant.product_id) ?? [];
+            variantsByProductId.set(variant.product_id, [...existing, variant]);
+          }
+        } else {
+          logLoaderFailure(
+            "attachVariantsToAdminProducts:loadVariants",
+            "variantsData is not an array",
+            { productIdsCount: productIds.length },
+          );
+        }
+      } catch (error) {
+        logLoaderFailure("attachVariantsToAdminProducts:loadVariants", error, {
+          productIdsCount: productIds.length,
+        });
       }
     }
-  }
 
-  return products.map((product) => {
-    const normalizedProductId = toTrimmedString(product.id, toTrimmedString(product.slug));
-    return toAdminProduct(product, variantsByProductId.get(normalizedProductId) ?? []);
-  });
+    return products.map((product, index) => {
+      try {
+        const normalizedProductId = toTrimmedString(product.id, toTrimmedString(product.slug));
+        return toAdminProduct(product, variantsByProductId.get(normalizedProductId) ?? []);
+      } catch (error) {
+        const fallbackId = toTrimmedString(product.id, `unknown-product-${index + 1}`);
+        logLoaderFailure("attachVariantsToAdminProducts:normalizeProduct", error, {
+          productId: fallbackId,
+        });
+        return toAdminProduct(
+          {
+            id: fallbackId,
+            slug: fallbackId,
+            name: "",
+            short_description: "",
+            description: "",
+            price: 0,
+            category_slug: "non-classe",
+            stock: 0,
+            bulk_price_tiers: [],
+            rating: 0,
+            images: [],
+            is_active: false,
+            created_at: "",
+            updated_at: "",
+          },
+          [],
+        );
+      }
+    });
+  } catch (error) {
+    logLoaderFailure("attachVariantsToAdminProducts", error);
+    return [];
+  }
 };
 
 const replaceAdminProductVariants = async (
@@ -539,13 +614,23 @@ export const getAdminProducts = async (
     queryInput,
   );
 
-  const { data, error } = await query;
+  try {
+    const { data, error } = await query;
 
-  if (error || !data) {
+    if (error || !Array.isArray(data)) {
+      if (error) {
+        logLoaderFailure("getAdminProducts:loadProducts", error);
+      } else {
+        logLoaderFailure("getAdminProducts:loadProducts", "products data is not an array");
+      }
+      return [];
+    }
+
+    return attachVariantsToAdminProducts(supabaseAdmin, data as AdminProductRow[]);
+  } catch (error) {
+    logLoaderFailure("getAdminProducts", error);
     return [];
   }
-
-  return attachVariantsToAdminProducts(supabaseAdmin, data as AdminProductRow[]);
 };
 
 export const getAdminProductsPaginated = async (
@@ -554,70 +639,81 @@ export const getAdminProductsPaginated = async (
   const supabaseAdmin = getSupabaseAdminClient();
   const requestedPage = normalizePaginationPage(queryInput?.page);
   const pageSize = normalizePaginationPageSize(queryInput?.pageSize);
+  const emptyResult = {
+    products: [],
+    totalCount: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize,
+  } satisfies AdminProductsPaginatedResult;
 
   if (!supabaseAdmin) {
-    return {
-      products: [],
-      totalCount: 0,
-      totalPages: 1,
-      currentPage: 1,
-      pageSize,
-    };
+    return emptyResult;
   }
 
   const runPageQuery = async (page: number) => {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
-
-    return applyAdminProductsFilters(
-      supabaseAdmin
-        .from("products")
-        .select("*", { count: "exact" })
-        .order("updated_at", { ascending: false })
-        .range(from, to),
-      queryInput,
-    );
+    try {
+      return await applyAdminProductsFilters(
+        supabaseAdmin
+          .from("products")
+          .select("*", { count: "exact" })
+          .order("updated_at", { ascending: false })
+          .range(from, to),
+        queryInput,
+      );
+    } catch (error) {
+      logLoaderFailure("getAdminProductsPaginated:runPageQuery", error, { page, pageSize });
+      return null;
+    }
   };
 
-  const firstResult = await runPageQuery(requestedPage);
-  if (firstResult.error || !firstResult.data) {
+  try {
+    const firstResult = await runPageQuery(requestedPage);
+    if (!firstResult || firstResult.error || !Array.isArray(firstResult.data)) {
+      if (firstResult?.error) {
+        logLoaderFailure("getAdminProductsPaginated:firstResult", firstResult.error, {
+          requestedPage,
+          pageSize,
+        });
+      }
+      return emptyResult;
+    }
+
+    const totalCount = Math.max(0, firstResult.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const currentPage = Math.min(requestedPage, totalPages);
+
+    let pageRows = firstResult.data as AdminProductRow[];
+    if (currentPage !== requestedPage) {
+      const fallbackResult = await runPageQuery(currentPage);
+      if (!fallbackResult || fallbackResult.error || !Array.isArray(fallbackResult.data)) {
+        if (fallbackResult?.error) {
+          logLoaderFailure("getAdminProductsPaginated:fallbackResult", fallbackResult.error, {
+            requestedPage,
+            currentPage,
+            pageSize,
+          });
+        }
+        return emptyResult;
+      }
+      pageRows = fallbackResult.data as AdminProductRow[];
+    }
+
+    const products = await attachVariantsToAdminProducts(supabaseAdmin, pageRows);
+
     return {
-      products: [],
-      totalCount: 0,
-      totalPages: 1,
-      currentPage: 1,
+      products,
+      totalCount,
+      totalPages,
+      currentPage,
       pageSize,
     };
+  } catch (error) {
+    logLoaderFailure("getAdminProductsPaginated", error, { requestedPage, pageSize });
+    return emptyResult;
   }
-
-  const totalCount = Math.max(0, firstResult.count ?? 0);
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const currentPage = Math.min(requestedPage, totalPages);
-
-  let pageRows = firstResult.data as AdminProductRow[];
-  if (currentPage !== requestedPage) {
-    const fallbackResult = await runPageQuery(currentPage);
-    if (fallbackResult.error || !fallbackResult.data) {
-      return {
-        products: [],
-        totalCount: 0,
-        totalPages: 1,
-        currentPage: 1,
-        pageSize,
-      };
-    }
-    pageRows = fallbackResult.data as AdminProductRow[];
-  }
-
-  const products = await attachVariantsToAdminProducts(supabaseAdmin, pageRows);
-
-  return {
-    products,
-    totalCount,
-    totalPages,
-    currentPage,
-    pageSize,
-  };
 };
 
 export const getAdminProductsCategoryCounts = async (): Promise<Map<string, number>> => {
@@ -627,35 +723,44 @@ export const getAdminProductsCategoryCounts = async (): Promise<Map<string, numb
     return new Map();
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("category_slug")
-    .order("updated_at", { ascending: false });
-
-  if (error || !data) {
-    return new Map();
-  }
-
-  const counts = new Map<string, number>();
   try {
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .select("category_slug")
+      .order("updated_at", { ascending: false });
+
+    if (error || !Array.isArray(data)) {
+      if (error) {
+        logLoaderFailure("getAdminProductsCategoryCounts:loadCategories", error);
+      } else {
+        logLoaderFailure(
+          "getAdminProductsCategoryCounts:loadCategories",
+          "category data is not an array",
+        );
+      }
+      return new Map();
+    }
+
+    const counts = new Map<string, number>();
     for (const row of data as Array<{ category_slug?: unknown }>) {
       const slug = toNormalizedCategorySlug(row.category_slug, {
         context: "category-counts",
       });
       counts.set(slug, (counts.get(slug) ?? 0) + 1);
     }
+    return counts;
   } catch (error) {
-    devError("[admin-products] Failed while building category counts.", {
-      message: error instanceof Error ? error.message : String(error),
-    });
+    logLoaderFailure("getAdminProductsCategoryCounts", error);
     return new Map();
   }
-
-  return counts;
 };
 
 const parseUniqueProductIds = (productIds: string[]): string[] => {
-  return [...new Set(productIds.map((value) => value.trim()).filter(Boolean))];
+  return [
+    ...new Set(
+      productIds.map((value) => toTrimmedString(value)).filter(Boolean),
+    ),
+  ];
 };
 
 export const bulkUpdateAdminProducts = async (
@@ -819,16 +924,21 @@ export const createAdminProduct = async (
     return { ok: false, error: "Supabase admin non configure." };
   }
 
-  const id = input.id?.trim() || input.slug.trim();
+  const slug = toTrimmedString(input.slug);
+  const name = toTrimmedString(input.name);
+  const shortDescription = toTrimmedString(input.shortDescription);
+  const description = toTrimmedString(input.description);
+  const categorySlug = toTrimmedString(input.categorySlug);
+  const id = toTrimmedString(input.id) || slug;
 
   const { error } = await supabaseAdmin.from("products").insert({
     id,
-    slug: input.slug.trim(),
-    name: input.name.trim(),
-    short_description: input.shortDescription.trim(),
-    description: input.description.trim(),
+    slug,
+    name,
+    short_description: shortDescription,
+    description,
     price: roundDhAmount(input.price),
-    category_slug: input.categorySlug.trim(),
+    category_slug: categorySlug,
     stock: input.stock,
     bulk_price_tiers: toDatabaseBulkPriceTiers(input.bulkPriceTiers),
     rating: input.rating,
@@ -867,15 +977,21 @@ export const updateAdminProduct = async (
     return { ok: false, error: "Supabase admin non configure." };
   }
 
+  const slug = toTrimmedString(input.slug);
+  const name = toTrimmedString(input.name);
+  const shortDescription = toTrimmedString(input.shortDescription);
+  const description = toTrimmedString(input.description);
+  const categorySlug = toTrimmedString(input.categorySlug);
+
   const { error } = await supabaseAdmin
     .from("products")
     .update({
-      slug: input.slug.trim(),
-      name: input.name.trim(),
-      short_description: input.shortDescription.trim(),
-      description: input.description.trim(),
+      slug,
+      name,
+      short_description: shortDescription,
+      description,
       price: roundDhAmount(input.price),
-      category_slug: input.categorySlug.trim(),
+      category_slug: categorySlug,
       stock: input.stock,
       bulk_price_tiers: toDatabaseBulkPriceTiers(input.bulkPriceTiers),
       rating: input.rating,
