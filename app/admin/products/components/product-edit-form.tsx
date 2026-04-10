@@ -51,6 +51,48 @@ export const ProductEditForm = ({
   product,
   updateProductAction,
 }: ProductEditFormProps) => {
+  const normalizedProduct = {
+    ...product,
+    name:
+      typeof product.name === "string" && product.name.trim().length > 0
+        ? product.name
+        : "Produit sans nom",
+    slug:
+      typeof product.slug === "string" && product.slug.trim().length > 0
+        ? product.slug
+        : "slug-invalide",
+    category_slug:
+      typeof product.category_slug === "string" && product.category_slug.trim().length > 0
+        ? product.category_slug
+        : "non-classe",
+    short_description:
+      typeof product.short_description === "string" ? product.short_description : "",
+    description: typeof product.description === "string" ? product.description : "",
+    price:
+      typeof product.price === "number" && Number.isFinite(product.price)
+        ? product.price
+        : 0,
+    stock:
+      typeof product.stock === "number" && Number.isFinite(product.stock)
+        ? Math.max(0, Math.round(product.stock))
+        : 0,
+    rating:
+      typeof product.rating === "number" && Number.isFinite(product.rating)
+        ? Math.max(0, Math.min(5, product.rating))
+        : 0,
+    images: Array.isArray(product.images) ? product.images : [],
+    bulk_price_tiers: Array.isArray(product.bulk_price_tiers) ? product.bulk_price_tiers : [],
+    variants: Array.isArray(product.variants) ? product.variants : [],
+  };
+
+  console.info("[admin-products] Normalized product passed to edit form.", {
+    id: product.id,
+    slug: normalizedProduct.slug,
+    imagesCount: normalizedProduct.images.length,
+    variantsCount: normalizedProduct.variants.length,
+    bulkTiersCount: normalizedProduct.bulk_price_tiers.length,
+  });
+
   return (
     <form
       action={updateProductAction}
@@ -58,7 +100,7 @@ export const ProductEditForm = ({
       className="space-y-3"
     >
       <input type="hidden" name="productId" value={product.id} />
-      <input type="hidden" name="previousSlug" value={product.slug} />
+      <input type="hidden" name="previousSlug" value={normalizedProduct.slug} />
 
       <SectionCard
         title="Identite"
@@ -72,7 +114,7 @@ export const ProductEditForm = ({
               type="text"
               name="name"
               required
-              defaultValue={product.name}
+              defaultValue={normalizedProduct.name}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -83,7 +125,7 @@ export const ProductEditForm = ({
               type="text"
               name="slug"
               required
-              defaultValue={product.slug}
+              defaultValue={normalizedProduct.slug}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -97,7 +139,7 @@ export const ProductEditForm = ({
               type="text"
               name="categorySlug"
               required
-              defaultValue={product.category_slug}
+              defaultValue={normalizedProduct.category_slug}
               list="admin-category-options"
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
@@ -120,7 +162,7 @@ export const ProductEditForm = ({
               type="text"
               name="shortDescription"
               required
-              defaultValue={product.short_description}
+              defaultValue={normalizedProduct.short_description}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -131,7 +173,7 @@ export const ProductEditForm = ({
               name="description"
               rows={4}
               required
-              defaultValue={product.description}
+              defaultValue={normalizedProduct.description}
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
             />
           </label>
@@ -156,7 +198,7 @@ export const ProductEditForm = ({
               step="0.01"
               inputMode="decimal"
               required
-              defaultValue={product.price}
+              defaultValue={normalizedProduct.price}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -172,7 +214,7 @@ export const ProductEditForm = ({
               min="0"
               step="1"
               required
-              defaultValue={product.stock}
+              defaultValue={normalizedProduct.stock}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -186,7 +228,7 @@ export const ProductEditForm = ({
               max="5"
               step="0.1"
               required
-              defaultValue={product.rating}
+              defaultValue={normalizedProduct.rating}
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
             />
           </label>
@@ -205,7 +247,7 @@ export const ProductEditForm = ({
       >
         <AdminProductBulkPriceTiersInput
           inputName="bulkPriceTiersJson"
-          initialTiers={product.bulk_price_tiers.map((tier) => ({
+          initialTiers={normalizedProduct.bulk_price_tiers.map((tier) => ({
             minQty: tier.minQty,
             price: tier.price,
           }))}
@@ -232,7 +274,7 @@ export const ProductEditForm = ({
           <textarea
             name="existingImages"
             rows={3}
-            defaultValue={product.images.join("\n")}
+            defaultValue={normalizedProduct.images.join("\n")}
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
         </label>
@@ -246,7 +288,7 @@ export const ProductEditForm = ({
         <AdminProductVariantsInput
           inputName="variantsJson"
           productIdForValidation={product.id}
-          initialVariants={product.variants.map((variant) => ({
+          initialVariants={normalizedProduct.variants.map((variant) => ({
             id: variant.id,
             color: variant.color,
             size: variant.size,

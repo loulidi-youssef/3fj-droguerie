@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { formatDh } from "@/lib/currency";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -66,6 +67,7 @@ export default function SuccessContent() {
   const [order, setOrder] = useState<SuccessOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const trackedOrderIdRef = useRef<string | null>(null);
   const orderId = searchParams.get("orderId")?.trim() ?? "";
 
   useEffect(() => {
@@ -128,6 +130,25 @@ export default function SuccessContent() {
       isMounted = false;
     };
   }, [orderId, router, supabase]);
+
+  useEffect(() => {
+    if (!order || trackedOrderIdRef.current === order.id) {
+      return;
+    }
+
+    trackedOrderIdRef.current = order.id;
+    const cartSize = order.order_items.reduce((sum, item) => sum + item.quantity, 0);
+
+    trackEvent("order_success", {
+      source: "success-page",
+      orderId: order.id,
+      cartSize,
+      totalPrice: order.total,
+      deliveryOption: order.deliveryOption,
+      fulfillmentMethod: order.fulfillmentMethod,
+      orderStatus: order.status,
+    });
+  }, [order]);
 
   if (isLoading) {
     return (

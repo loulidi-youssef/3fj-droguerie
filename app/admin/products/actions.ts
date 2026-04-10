@@ -316,6 +316,14 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const productIdForValidation =
     (typeof rawProductId === "string" ? rawProductId.trim() : "") || "__new__";
 
+  console.info("[admin-products] Parsing product form.", {
+    productIdForValidation,
+    existingImagesRawLength:
+      typeof rawExistingImages === "string" ? rawExistingImages.length : 0,
+    variantsJsonLength: variantsJson.length,
+    bulkPriceTiersJsonLength: bulkPriceTiersJson.length,
+  });
+
   const price = toNumber(formData.get("price"));
   const stock = toNumber(formData.get("stock"));
   const rating = toNumber(formData.get("rating"));
@@ -323,6 +331,10 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
 
   const parsedVariants = parseProductVariantsJson(variantsJson, productIdForValidation);
   if (!parsedVariants.ok) {
+    console.error("[admin-products] Variants parsing failed.", {
+      productIdForValidation,
+      error: parsedVariants.error,
+    });
     return {
       ok: false,
       error: parsedVariants.error,
@@ -331,6 +343,10 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
 
   const parsedBulkPriceTiers = parseBulkPriceTiersJson(bulkPriceTiersJson);
   if (!parsedBulkPriceTiers.ok) {
+    console.error("[admin-products] Bulk tiers parsing failed.", {
+      productIdForValidation,
+      error: parsedBulkPriceTiers.error,
+    });
     return {
       ok: false,
       error: parsedBulkPriceTiers.error,

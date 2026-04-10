@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
+import { trackEvent } from "@/lib/analytics";
 import { clampQuantityToStock, getMaxAllowedQuantity } from "@/lib/quantity";
 import { useQuantityController } from "@/lib/use-quantity-controller";
 
@@ -181,6 +182,23 @@ export const AddToCartButton = ({
       selectedPreviousPrice,
       selectedImage,
     }, normalizedMaxQuantity ?? undefined);
+    const nextCartSize = items.reduce((sum, item) => sum + item.quantity, 0) + quantityToAdd;
+    const currentTrackedTotal = items.reduce(
+      (sum, item) => sum + (item.selectedPrice ?? 0) * item.quantity,
+      0,
+    );
+    const nextTrackedTotal = Number(
+      (currentTrackedTotal + (selectedPrice ?? 0) * quantityToAdd).toFixed(2),
+    );
+    trackEvent("add_to_cart", {
+      source: "add-to-cart-button",
+      productId,
+      variantId: variantId ?? null,
+      quantityAdded: quantityToAdd,
+      cartSize: nextCartSize,
+      totalPrice: nextTrackedTotal,
+      deliveryOption: null,
+    });
 
     if (quantityToAdd < requestedQuantity) {
       showToast(maxReachedLabel, { variant: "info" });

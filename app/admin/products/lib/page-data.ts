@@ -90,7 +90,10 @@ export const getAdminProductsPageData = async (
 
   const groupedProductsMap = new Map<string, AdminProduct[]>();
   for (const product of paginatedResult.products) {
-    const categorySlug = product.category_slug.trim().toLowerCase();
+    const categorySlug =
+      typeof product.category_slug === "string" && product.category_slug.trim().length > 0
+        ? product.category_slug.trim().toLowerCase()
+        : "non-classe";
     const existing = groupedProductsMap.get(categorySlug) ?? [];
     groupedProductsMap.set(categorySlug, [...existing, product]);
   }

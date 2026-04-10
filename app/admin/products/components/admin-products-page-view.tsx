@@ -93,7 +93,7 @@ export const AdminProductsPageView = ({
   const activeProductsOnPage = currentPageProducts.filter((product) => product.is_active).length;
   const lowStockProductsOnPage = currentPageProducts.filter((product) => product.stock <= 5).length;
   const productsWithBulkPricingOnPage = currentPageProducts.filter(
-    (product) => product.bulk_price_tiers.length > 0,
+    (product) => Array.isArray(product.bulk_price_tiers) && product.bulk_price_tiers.length > 0,
   ).length;
 
   return (

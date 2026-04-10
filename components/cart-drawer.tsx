@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
+import { trackEvent } from "@/lib/analytics";
 import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
@@ -119,6 +120,7 @@ const CartDrawerQuantityControls = ({
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const { items, itemCount, updateQuantity, removeItem } = useCart();
   const { showToast } = useToast();
+  const hasTrackedCurrentOpenRef = useRef(false);
   const handleStockReconciled = useCallback(
     (payload: { message: string }) => {
       showToast(payload.message, { variant: "info", durationMs: 3200 });
@@ -135,6 +137,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
   useEffect(() => {
     if (!isOpen) {
+      hasTrackedCurrentOpenRef.current = false;
       return;
     }
 
@@ -163,12 +166,34 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     };
   }, [isOpen, onClose]);
 
-
   const subtotal = useMemo(
     () => roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0)),
     [detailedItems],
   );
   const estimatedDeliveryCost = roundDhAmount(getDeliveryCost(subtotal));
+  const fallbackTrackedTotal = useMemo(
+    () =>
+      roundDhAmount(
+        items.reduce((sum, item) => sum + (item.selectedPrice ?? 0) * item.quantity, 0),
+      ),
+    [items],
+  );
+  const trackedTotal = subtotal > 0 || itemCount === 0 ? subtotal : fallbackTrackedTotal;
+
+  useEffect(() => {
+    if (!isOpen || hasTrackedCurrentOpenRef.current) {
+      return;
+    }
+
+    hasTrackedCurrentOpenRef.current = true;
+    trackEvent("cart_view", {
+      source: "cart-drawer",
+      cartSize: itemCount,
+      totalPrice: trackedTotal,
+      deliveryOption: null,
+    });
+  }, [isOpen, itemCount, trackedTotal]);
+
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
       name: item.variantLabel ? `${item.product.name} (${item.variantLabel})` : item.product.name,

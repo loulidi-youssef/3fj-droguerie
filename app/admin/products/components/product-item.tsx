@@ -3,6 +3,8 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 import type { AdminProduct } from "@/lib/admin-products";
 import { formatCategoryLabel } from "@/app/admin/products/lib/formatters";
 import { ProductEditForm } from "@/app/admin/products/components/product-edit-form";
+import { ProductDetailsShell } from "@/app/admin/products/components/product-details-shell";
+import { ProductEditPanelBoundary } from "@/app/admin/products/components/product-edit-panel-boundary";
 import {
   AdminIconBulk,
   AdminIconCategory,
@@ -53,8 +55,47 @@ export const ProductItem = ({
   toggleProductActiveAction,
   deleteProductAction,
 }: ProductItemProps) => {
+  const safeProductName =
+    typeof product.name === "string" && product.name.trim().length > 0
+      ? product.name
+      : "Produit sans nom";
+  const safeSlug =
+    typeof product.slug === "string" && product.slug.trim().length > 0
+      ? product.slug
+      : "slug-invalide";
+  const safeCategorySlug =
+    typeof product.category_slug === "string" && product.category_slug.trim().length > 0
+      ? product.category_slug
+      : "non-classe";
+  const safeStock =
+    typeof product.stock === "number" && Number.isFinite(product.stock)
+      ? Math.max(0, Math.round(product.stock))
+      : 0;
+  const safePrice =
+    typeof product.price === "number" && Number.isFinite(product.price)
+      ? product.price
+      : 0;
+  const safeVariants = Array.isArray(product.variants) ? product.variants : [];
+  const safeBulkPriceTiers = Array.isArray(product.bulk_price_tiers)
+    ? product.bulk_price_tiers
+    : [];
+  const safeImages = Array.isArray(product.images) ? product.images : [];
+
   return (
-    <details className="group rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+    <ProductDetailsShell
+      className="group rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
+      productSnapshot={{
+        id: product.id,
+        slug: safeSlug,
+        name: safeProductName,
+        categorySlug: safeCategorySlug,
+        stock: safeStock,
+        price: safePrice,
+        variantsCount: safeVariants.length,
+        imagesCount: safeImages.length,
+        bulkTiersCount: safeBulkPriceTiers.length,
+      }}
+    >
       <div className="flex justify-end p-3 pb-0">
         <label className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
           <input
@@ -63,7 +104,7 @@ export const ProductItem = ({
             value={product.id}
             form="admin-products-bulk-form"
             data-admin-product-select="true"
-            aria-label={`Selectionner ${product.name}`}
+            aria-label={`Selectionner ${safeProductName}`}
           />
           Selectionner
         </label>
@@ -76,9 +117,9 @@ export const ProductItem = ({
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
                 <AdminIconProducts className="h-4 w-4" />
               </span>
-              <p className="truncate text-base font-bold text-brand-blue">{product.name}</p>
+              <p className="truncate text-base font-bold text-brand-blue">{safeProductName}</p>
             </div>
-            <p className="mt-1 truncate text-xs text-slate-500">Slug: {product.slug}</p>
+            <p className="mt-1 truncate text-xs text-slate-500">Slug: {safeSlug}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -94,11 +135,11 @@ export const ProductItem = ({
             </span>
             <span
               className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getStockBadgeClassName(
-                product.stock,
+                safeStock,
               )}`}
             >
               <AdminIconStock className="mr-1 h-3.5 w-3.5" />
-              {getStockLabel(product.stock)}
+              {getStockLabel(safeStock)}
             </span>
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition group-hover:border-brand-blue group-hover:text-brand-blue">
               <AdminIconChevronDown className="h-4 w-4 transition group-open:rotate-180" />
@@ -109,23 +150,23 @@ export const ProductItem = ({
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
             <AdminIconPrice className="h-4 w-4 text-brand-blue" />
-            {formatDh(product.price)}
+            {formatDh(safePrice)}
           </p>
           <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
             <AdminIconStock className="h-4 w-4 text-slate-500" />
-            Stock: <span className="font-semibold">{product.stock}</span>
+            Stock: <span className="font-semibold">{safeStock}</span>
           </p>
           <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
             <AdminIconCategory className="h-4 w-4 text-slate-500" />
-            {formatCategoryLabel(product.category_slug)}
+            {formatCategoryLabel(safeCategorySlug)}
           </p>
           <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
             <AdminIconVariants className="h-4 w-4 text-slate-500" />
-            {product.variants.length} variante(s)
+            {safeVariants.length} variante(s)
           </p>
           <p className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
             <AdminIconBulk className="h-4 w-4 text-slate-500" />
-            {product.bulk_price_tiers.length} palier(s) gros
+            {safeBulkPriceTiers.length} palier(s) gros
           </p>
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             ID: <span className="font-mono">{product.id}</span>
@@ -134,10 +175,12 @@ export const ProductItem = ({
       </summary>
 
       <div className="border-t border-slate-200 bg-slate-50/45 px-4 pb-4 pt-4 sm:px-5">
-        <ProductEditForm
-          product={product}
-          updateProductAction={updateProductAction}
-        />
+        <ProductEditPanelBoundary productId={product.id} productSlug={safeSlug}>
+          <ProductEditForm
+            product={product}
+            updateProductAction={updateProductAction}
+          />
+        </ProductEditPanelBoundary>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
           <form action={toggleProductActiveAction}>
@@ -156,7 +199,7 @@ export const ProductItem = ({
 
           <form action={deleteProductAction}>
             <input type="hidden" name="productId" value={product.id} />
-            <input type="hidden" name="productSlug" value={product.slug} />
+            <input type="hidden" name="productSlug" value={safeSlug} />
             <FormSubmitButton
               idleLabel="Supprimer"
               pendingLabel="Suppression..."
@@ -165,7 +208,6 @@ export const ProductItem = ({
           </form>
         </div>
       </div>
-    </details>
+    </ProductDetailsShell>
   );
 };
-

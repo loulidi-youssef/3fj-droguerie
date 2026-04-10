@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
+import { trackEvent } from "@/lib/analytics";
 import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import {
   type CheckoutCustomerInput,
@@ -264,6 +265,9 @@ export default function PanierPage() {
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState<DeliveryOption>(
     getDefaultDeliveryOption(),
   );
+  const checkoutSectionRef = useRef<HTMLElement | null>(null);
+  const hasTrackedCartViewRef = useRef(false);
+  const hasTrackedCheckoutStartRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -325,6 +329,10 @@ export default function PanierPage() {
     window.localStorage.setItem(CHECKOUT_DRAFT_STORAGE_KEY, JSON.stringify(checkoutForm));
   }, [checkoutForm]);
 
+  const cartSize = useMemo(
+    () => detailedItems.reduce((sum, item) => sum + item.quantity, 0),
+    [detailedItems],
+  );
   const subtotal = roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0));
   const deliveryOptions = useMemo(() => getCheckoutDeliveryOptions(subtotal), [subtotal]);
   const selectedDeliveryDetails = useMemo(
@@ -349,6 +357,75 @@ export default function PanierPage() {
   const hasWhatsAppCustomerDetails = Boolean(
     checkoutName || checkoutPhone || checkoutAddress || checkoutLocation || checkoutNote,
   );
+
+  useEffect(() => {
+    if (hasTrackedCartViewRef.current) {
+      return;
+    }
+
+    if (items.length > 0 && isProductsLoading) {
+      return;
+    }
+
+    hasTrackedCartViewRef.current = true;
+    trackEvent("cart_view", {
+      source: "panier-page",
+      cartSize,
+      totalPrice: total,
+      deliveryOption: selectedDeliveryOption,
+    });
+  }, [cartSize, isProductsLoading, items.length, selectedDeliveryOption, total]);
+
+  const trackCheckoutStart = useCallback(() => {
+    if (hasTrackedCheckoutStartRef.current) {
+      return;
+    }
+
+    hasTrackedCheckoutStartRef.current = true;
+    trackEvent("checkout_start", {
+      source: "checkout-section",
+      cartSize,
+      totalPrice: total,
+      deliveryOption: selectedDeliveryOption,
+    });
+  }, [cartSize, selectedDeliveryOption, total]);
+
+  useEffect(() => {
+    if (hasTrackedCheckoutStartRef.current || cartSize <= 0) {
+      return;
+    }
+
+    const target = checkoutSectionRef.current;
+    if (!target) {
+      return;
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      trackCheckoutStart();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            continue;
+          }
+
+          trackCheckoutStart();
+          observer.disconnect();
+          break;
+        }
+      },
+      { threshold: 0.15 },
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [cartSize, trackCheckoutStart]);
 
   const directWhatsAppLink = buildCartWhatsAppLink(
     detailedItems.map((item) => ({
@@ -515,6 +592,13 @@ export default function PanierPage() {
   const handleConfirmOrder = async () => {
     setSubmitError(null);
     setSubmitInfo(null);
+    trackEvent("checkout_submit", {
+      source: "confirm-order-button",
+      cartSize,
+      totalPrice: total,
+      deliveryOption: selectedDeliveryOption,
+      fulfillmentMethod,
+    });
 
     if (isProductsLoading) {
       setSubmitError("Chargement des produits en cours. Merci de patienter.");
@@ -597,6 +681,14 @@ export default function PanierPage() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Une erreur est survenue.";
+      trackEvent("order_error", {
+        source: "checkout-submit",
+        cartSize,
+        totalPrice: total,
+        deliveryOption: selectedDeliveryOption,
+        fulfillmentMethod,
+        errorMessage: message,
+      });
       setSubmitError(message);
     } finally {
       setIsSubmitting(false);
@@ -712,7 +804,7 @@ export default function PanierPage() {
               )}
             </div>
 
-            <aside className="rounded-2xl bg-white p-4 shadow-card md:p-5">
+            <aside ref={checkoutSectionRef} className="rounded-2xl bg-white p-4 shadow-card md:p-5">
               <h2 className="text-xl font-extrabold text-brand-blue">Confirmation rapide</h2>
               <p className="mt-1 text-sm text-slate-600">
                 1) Completez vos coordonnees 2) Choisissez la livraison 3) Confirmez votre commande.

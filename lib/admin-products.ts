@@ -71,8 +71,36 @@ type AdminActionResult = {
   error?: string;
 };
 
-type AdminProductRow = Omit<AdminProduct, "variants" | "bulk_price_tiers"> & {
+type AdminProductRow = {
+  id?: unknown;
+  slug?: unknown;
+  name?: unknown;
+  short_description?: unknown;
+  description?: unknown;
+  price?: unknown;
+  category_slug?: unknown;
+  stock?: unknown;
   bulk_price_tiers?: unknown;
+  rating?: unknown;
+  images?: unknown;
+  is_active?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
+type AdminProductVariantRow = {
+  id?: unknown;
+  product_id?: unknown;
+  color?: unknown;
+  size?: unknown;
+  price?: unknown;
+  previous_price?: unknown;
+  stock?: unknown;
+  sku?: unknown;
+  image?: unknown;
+  is_active?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
 };
 
 export type AdminProductsQueryInput = {
@@ -120,6 +148,60 @@ const toNullableTrimmed = (value: string | null | undefined): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const toTrimmedString = (value: unknown, fallback = ""): string => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
+
+const toNormalizedOptionalString = (value: unknown): string | null => {
+  const normalized = toTrimmedString(value);
+  return normalized.length > 0 ? normalized : null;
+};
+
+const toFiniteNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return value;
+};
+
+const toBoolean = (value: unknown, fallback = false): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return fallback;
+};
+
+const normalizeImages = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter(Boolean);
+};
+
+const logNormalizationIssue = (
+  scope: "product" | "variant",
+  id: string,
+  field: string,
+  rawValue: unknown,
+) => {
+  console.warn("[admin-products] Normalized malformed field.", {
+    scope,
+    id,
+    field,
+    rawType: rawValue === null ? "null" : typeof rawValue,
+  });
+};
+
 const toDatabaseBulkPriceTiers = (tiers: BulkPriceTier[]): Array<{ minQty: number; price: number }> => {
   return normalizeBulkPriceTiers(tiers).map((tier) => ({
     minQty: tier.minQty,
@@ -127,14 +209,72 @@ const toDatabaseBulkPriceTiers = (tiers: BulkPriceTier[]): Array<{ minQty: numbe
   }));
 };
 
+const toAdminProductVariant = (
+  row: AdminProductVariantRow,
+  fallbackProductId: string,
+  index: number,
+): AdminProductVariant => {
+  const productId = toTrimmedString(row.product_id, fallbackProductId);
+  const variantId = toTrimmedString(row.id, `${fallbackProductId}-variant-${index + 1}`);
+  const price = roundDhAmount(Math.max(0, toFiniteNumber(row.price, 0)));
+  const previousPriceRaw = toFiniteNumber(row.previous_price, 0);
+  const previousPrice = previousPriceRaw > price ? roundDhAmount(previousPriceRaw) : null;
+  const stock = Math.max(0, Math.round(toFiniteNumber(row.stock, 0)));
+
+  if (typeof row.price !== "number" || !Number.isFinite(row.price)) {
+    logNormalizationIssue("variant", variantId, "price", row.price);
+  }
+
+  return {
+    id: variantId,
+    product_id: productId,
+    color: toNormalizedOptionalString(row.color),
+    size: toNormalizedOptionalString(row.size),
+    price,
+    previous_price: previousPrice,
+    stock,
+    sku: toNormalizedOptionalString(row.sku),
+    image: toNormalizedOptionalString(row.image),
+    is_active: toBoolean(row.is_active, true),
+    created_at: toTrimmedString(row.created_at),
+    updated_at: toTrimmedString(row.updated_at),
+  };
+};
+
 const toAdminProduct = (
   row: AdminProductRow,
   variants: AdminProductVariant[],
 ): AdminProduct => {
+  const productId = toTrimmedString(row.id, toTrimmedString(row.slug, "unknown-product"));
+  const slug = toTrimmedString(row.slug, productId);
+  const categorySlug = toTrimmedString(row.category_slug, "non-classe").toLowerCase();
+  const images = normalizeImages(row.images);
+  const stock = Math.max(0, Math.round(toFiniteNumber(row.stock, 0)));
+  const price = roundDhAmount(Math.max(0, toFiniteNumber(row.price, 0)));
+  const rating = Math.max(0, Math.min(5, toFiniteNumber(row.rating, 0)));
+
+  if (!Array.isArray(row.images)) {
+    logNormalizationIssue("product", productId, "images", row.images);
+  }
+  if (!Array.isArray(row.bulk_price_tiers)) {
+    logNormalizationIssue("product", productId, "bulk_price_tiers", row.bulk_price_tiers);
+  }
+
   return {
-    ...row,
-    stock: typeof row.stock === "number" ? row.stock : 0,
+    id: productId,
+    slug,
+    name: toTrimmedString(row.name, "Produit sans nom"),
+    short_description: toTrimmedString(row.short_description),
+    description: toTrimmedString(row.description),
+    price,
+    category_slug: categorySlug,
+    stock,
     bulk_price_tiers: normalizeBulkPriceTiers(row.bulk_price_tiers),
+    rating,
+    images,
+    is_active: toBoolean(row.is_active, false),
+    created_at: toTrimmedString(row.created_at),
+    updated_at: toTrimmedString(row.updated_at),
     variants,
   };
 };
@@ -234,7 +374,9 @@ const attachVariantsToAdminProducts = async (
   supabaseAdmin: SupabaseAdminClient,
   products: AdminProductRow[],
 ): Promise<AdminProduct[]> => {
-  const productIds = products.map((product) => String(product.id));
+  const productIds = products
+    .map((product) => toTrimmedString(product.id))
+    .filter(Boolean);
   const variantsByProductId = new Map<string, AdminProductVariant[]>();
 
   if (productIds.length > 0) {
@@ -245,16 +387,18 @@ const attachVariantsToAdminProducts = async (
       .order("created_at", { ascending: true });
 
     if (!variantsError && variantsData) {
-      for (const variant of variantsData as AdminProductVariant[]) {
+      for (const [index, rawVariant] of (variantsData as AdminProductVariantRow[]).entries()) {
+        const variant = toAdminProductVariant(rawVariant, toTrimmedString(rawVariant.product_id), index);
         const existing = variantsByProductId.get(variant.product_id) ?? [];
         variantsByProductId.set(variant.product_id, [...existing, variant]);
       }
     }
   }
 
-  return products.map((product) =>
-    toAdminProduct(product, variantsByProductId.get(product.id) ?? []),
-  );
+  return products.map((product) => {
+    const normalizedProductId = toTrimmedString(product.id, toTrimmedString(product.slug));
+    return toAdminProduct(product, variantsByProductId.get(normalizedProductId) ?? []);
+  });
 };
 
 const replaceAdminProductVariants = async (
