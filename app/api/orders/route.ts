@@ -86,6 +86,11 @@ type RpcErrorLike = {
   code?: string;
 };
 
+type OrderRpcAttempt = {
+  label: string;
+  payload: Record<string, unknown>;
+};
+
 const toRpcErrorLike = (value: unknown): RpcErrorLike => {
   if (!value || typeof value !== "object") {
     return {};
@@ -121,6 +126,31 @@ const isCreateOrderRpcSignatureMismatch = (error: unknown): boolean => {
     normalizedMessage.includes("no function matches") ||
     normalizedMessage.includes("p_customer_note") ||
     normalizedMessage.includes("p_delivery_option")
+  );
+};
+
+const isCreateOrderRpcRecoverableCompatibilityError = (error: unknown): boolean => {
+  const rpcError = toRpcErrorLike(error);
+  const normalized = [rpcError.message, rpcError.details, rpcError.hint]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+  if (!normalized.includes("create_order_with_items_atomic")) {
+    return false;
+  }
+
+  return (
+    normalized.includes("could not find the function") ||
+    normalized.includes("no function matches") ||
+    (normalized.includes("function") && normalized.includes("does not exist")) ||
+    normalized.includes("relation \"order_idempotency_keys\" does not exist") ||
+    normalized.includes("column \"request_fingerprint\" does not exist") ||
+    normalized.includes("column \"delivery_option\" does not exist") ||
+    normalized.includes("column \"customer_note\" does not exist") ||
+    normalized.includes("p_delivery_option") ||
+    normalized.includes("p_customer_note") ||
+    normalized.includes("p_request_fingerprint")
   );
 };
 
@@ -671,23 +701,102 @@ export async function POST(request: NextRequest) {
     p_items: orderItemsPayload,
   };
 
-  let usedLegacyRpcSignature = false;
-  let createOrderRpcResult = await supabaseAdmin.rpc("create_order_with_items_atomic", {
-    ...rpcPayloadBase,
-    p_customer_note: customerNote || null,
-    p_delivery_option: deliveryOption,
-  });
+  const rpcAttemptSequence: OrderRpcAttempt[] = [
+    {
+      label: "latest-v20260410124500",
+      payload: {
+        ...rpcPayloadBase,
+        p_customer_note: customerNote || null,
+        p_delivery_option: deliveryOption,
+      },
+    },
+    {
+      label: "idempotency-v20260407201000",
+      payload: {
+        ...rpcPayloadBase,
+      },
+    },
+    {
+      label: "fulfillment-v20260407092000",
+      payload: {
+        p_customer_name: name,
+        p_customer_phone: phone,
+        p_customer_address: orderAddress,
+        p_customer_location: location,
+        p_subtotal: subtotal,
+        p_delivery_fee: deliveryFee,
+        p_total: total,
+        p_user_id: orderUserId,
+        p_items: orderItemsPayload,
+        p_fulfillment_method: fulfillmentMethod,
+      },
+    },
+    {
+      label: "baseline-v20260405090000",
+      payload: {
+        p_customer_name: name,
+        p_customer_phone: phone,
+        p_customer_address: orderAddress,
+        p_customer_location: location,
+        p_subtotal: subtotal,
+        p_delivery_fee: deliveryFee,
+        p_total: total,
+        p_user_id: orderUserId,
+        p_items: orderItemsPayload,
+      },
+    },
+  ];
 
-  if (createOrderRpcResult.error && isCreateOrderRpcSignatureMismatch(createOrderRpcResult.error)) {
-    usedLegacyRpcSignature = true;
-    console.warn("[api/orders] Retrying order RPC with legacy signature.", {
-      actor: orderActorLogSuffix,
-      reason: toRpcErrorLike(createOrderRpcResult.error).message ?? "signature_mismatch",
-    });
+  let usedLegacyRpcSignature = false;
+  let createOrderRpcResult: Awaited<
+    ReturnType<typeof supabaseAdmin.rpc>
+  > | null = null;
+  let rpcAttemptUsed = "";
+
+  for (let index = 0; index < rpcAttemptSequence.length; index += 1) {
+    const attempt = rpcAttemptSequence[index];
+    rpcAttemptUsed = attempt.label;
     createOrderRpcResult = await supabaseAdmin.rpc(
       "create_order_with_items_atomic",
-      rpcPayloadBase,
+      attempt.payload,
     );
+
+    if (!createOrderRpcResult.error) {
+      usedLegacyRpcSignature = index > 0;
+      break;
+    }
+
+    const shouldFallback =
+      index < rpcAttemptSequence.length - 1 &&
+      isCreateOrderRpcRecoverableCompatibilityError(createOrderRpcResult.error);
+
+    if (!shouldFallback) {
+      usedLegacyRpcSignature = index > 0;
+      break;
+    }
+
+    console.warn("[api/orders] Retrying order RPC with compatibility signature.", {
+      actor: orderActorLogSuffix,
+      fromAttempt: attempt.label,
+      nextAttempt: rpcAttemptSequence[index + 1]?.label ?? "none",
+      reason: toRpcErrorLike(createOrderRpcResult.error).message ?? "compatibility_mismatch",
+    });
+  }
+
+  if (!createOrderRpcResult) {
+    createOrderRpcResult = {
+      data: null,
+      error: {
+        name: "PostgrestError",
+        message: "ORDER_RPC_UNAVAILABLE",
+        details: "No RPC compatibility attempt returned a result.",
+        hint: "",
+        code: "ORDER_RPC_UNAVAILABLE",
+      },
+      count: null,
+      status: 500,
+      statusText: "Internal Server Error",
+    };
   }
 
   const { data: createdOrderId, error: createOrderError } = createOrderRpcResult;
@@ -696,6 +805,7 @@ export async function POST(request: NextRequest) {
     const rpcErrorInfo = toRpcErrorLike(createOrderError);
     console.error("[api/orders] Direct order creation failed.", {
       actor: orderActorLogSuffix,
+      rpcAttemptUsed,
       usedLegacyRpcSignature,
       code: rpcErrorInfo.code ?? null,
       message: rpcErrorInfo.message ?? null,
@@ -704,6 +814,15 @@ export async function POST(request: NextRequest) {
     });
 
     const normalizedMessage = (createOrderError?.message ?? "").toUpperCase();
+    const normalizedDetails = (createOrderError?.details ?? "").toUpperCase();
+    const normalizedHint = (createOrderError?.hint ?? "").toUpperCase();
+    const normalizedCombinedMessage = [
+      normalizedMessage,
+      normalizedDetails,
+      normalizedHint,
+    ]
+      .filter(Boolean)
+      .join(" ");
     if (isCreateOrderRpcSignatureMismatch(createOrderError)) {
       return NextResponse.json<OrderErrorResponse>(
         {
@@ -714,7 +833,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (normalizedMessage.includes("AUTH_REQUIRED")) {
+    if (
+      normalizedCombinedMessage.includes("AUTH_REQUIRED") ||
+      (!orderUserId &&
+        normalizedCombinedMessage.includes("NULL VALUE IN COLUMN") &&
+        normalizedCombinedMessage.includes("USER_ID") &&
+        normalizedCombinedMessage.includes("NOT-NULL"))
+    ) {
       if (!orderUserId) {
         return NextResponse.json<OrderErrorResponse>(
           {
