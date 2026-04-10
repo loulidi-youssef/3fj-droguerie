@@ -17,4 +17,5 @@ export const businessInfo = {
 export const deliveryRules = {
   freeFrom: 300,
   fee: 20,
+  expressFee: 40,
 };

@@ -33,6 +33,7 @@ type ProductWhatsAppOptions = {
 
 type CartWhatsAppOptions = {
   fulfillmentMethod?: "delivery" | "pickup";
+  deliveryOptionLabel?: string;
 };
 
 type ProductWhatsAppQuoteOptions = {
@@ -46,6 +47,7 @@ type ProductWhatsAppQuoteOptions = {
 
 type CartWhatsAppQuoteOptions = {
   fulfillmentMethod?: "delivery" | "pickup";
+  deliveryOptionLabel?: string;
   note?: string;
 };
 
@@ -54,6 +56,7 @@ type WhatsAppQuoteMessageOptions = {
   items: WhatsAppQuoteLineItem[];
   customerDetails?: WhatsAppCustomerDetails;
   fulfillmentMethod?: "delivery" | "pickup";
+  deliveryOptionLabel?: string;
   note?: string;
 };
 
@@ -115,8 +118,10 @@ export const buildWhatsAppQuoteMessage = ({
   items,
   customerDetails,
   fulfillmentMethod,
+  deliveryOptionLabel,
   note,
 }: WhatsAppQuoteMessageOptions): string => {
+  const normalizedDeliveryOptionLabel = deliveryOptionLabel?.trim();
   const customerLines = [
     toTrimmedLine("Client", customerDetails?.name),
     toTrimmedLine("Telephone", customerDetails?.phone),
@@ -128,6 +133,9 @@ export const buildWhatsAppQuoteMessage = ({
       : fulfillmentMethod === "delivery"
         ? "Mode de reception: Livraison"
         : null,
+    normalizedDeliveryOptionLabel
+      ? `Option choisie: ${normalizedDeliveryOptionLabel}`
+      : null,
   ].filter((line): line is string => Boolean(line));
 
   const itemSections = items.flatMap((item, index) => {
@@ -238,6 +246,7 @@ export const buildCartWhatsAppLink = (
       : options?.fulfillmentMethod === "delivery"
         ? "Mode de reception: Livraison"
         : null;
+  const normalizedDeliveryOptionLabel = options?.deliveryOptionLabel?.trim();
   const customerLines = [
     toTrimmedLine("Client", customerDetails?.name),
     toTrimmedLine("Telephone", customerDetails?.phone),
@@ -245,6 +254,9 @@ export const buildCartWhatsAppLink = (
     toTrimmedLine("Localisation", customerDetails?.location),
     customerDetails?.orderId ? `Reference commande: ${customerDetails.orderId}` : null,
     fulfillmentLine,
+    normalizedDeliveryOptionLabel
+      ? `Option choisie: ${normalizedDeliveryOptionLabel}`
+      : null,
   ].filter((line): line is string => Boolean(line));
 
   const message = [
@@ -276,6 +288,7 @@ export const buildCartWhatsAppQuoteLink = (
     items,
     customerDetails,
     fulfillmentMethod: options?.fulfillmentMethod,
+    deliveryOptionLabel: options?.deliveryOptionLabel,
     note: options?.note ?? "Je souhaite un prix de gros.",
   });
 

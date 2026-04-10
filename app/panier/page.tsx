@@ -18,7 +18,15 @@ import {
   validateCheckoutCustomer,
 } from "@/lib/checkout-validation";
 import { formatDh, roundDhAmount } from "@/lib/currency";
-import { getDeliveryCost } from "@/lib/delivery";
+import {
+  getCheckoutDeliveryOptions,
+  getDefaultDeliveryOption,
+  getFulfillmentMethodForDeliveryOption,
+  requiresAddressForDeliveryOption,
+  type DeliveryOption,
+  type DeliveryOptionIcon as DeliveryOptionIconKey,
+  type FulfillmentMethod,
+} from "@/lib/delivery";
 import {
   clampQuantityToStock,
   getStockStatusClassName,
@@ -37,11 +45,10 @@ type OrderApiResponse = {
   deliveryFee?: number;
   total?: number;
   fulfillmentMethod?: "delivery" | "pickup";
+  deliveryOption?: DeliveryOption;
   error?: string;
   fieldErrors?: CheckoutFieldErrors;
 };
-
-type FulfillmentMethod = "delivery" | "pickup";
 
 const initialCheckoutForm: CheckoutFormValues = {
   name: "",
@@ -62,12 +69,76 @@ const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
 const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 const BULK_STEPS = [10, 50, 100];
 
-const getRequiredFieldsForMethod = (
-  method: FulfillmentMethod,
+const getRequiredFieldsForDeliveryOption = (
+  deliveryOption: DeliveryOption,
 ): CheckoutField[] => {
-  return method === "delivery"
+  return requiresAddressForDeliveryOption(deliveryOption)
     ? [...baseRequiredFields, "address"]
     : [...baseRequiredFields];
+};
+
+const DeliveryModeIcon = ({
+  icon,
+  className,
+}: {
+  icon: DeliveryOptionIconKey;
+  className?: string;
+}) => {
+  if (icon === "zap") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        className={className ?? "h-4 w-4"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M13 2L4 14h7l-1 8 10-13h-7l0-7z" />
+      </svg>
+    );
+  }
+
+  if (icon === "store") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        className={className ?? "h-4 w-4"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 9h18" />
+        <path d="M4 9l2-5h12l2 5" />
+        <path d="M5 9v11h14V9" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className ?? "h-4 w-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 7h11v8H3z" />
+      <path d="M14 10h3l4 3v2h-2" />
+      <path d="M7 17a2 2 0 100 4 2 2 0 000-4z" />
+      <path d="M17 17a2 2 0 100 4 2 2 0 000-4z" />
+      <path d="M14 19h1" />
+    </svg>
+  );
 };
 
 type CartPageQuantityControlsProps = {
@@ -180,8 +251,9 @@ export default function PanierPage() {
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
   const [authRequiredPrompt, setAuthRequiredPrompt] = useState(false);
-  const [fulfillmentMethod, setFulfillmentMethod] =
-    useState<FulfillmentMethod>("delivery");
+  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState<DeliveryOption>(
+    getDefaultDeliveryOption(),
+  );
 
   useEffect(() => {
     try {
@@ -355,9 +427,20 @@ export default function PanierPage() {
 
   const missingProductsCount = items.length - detailedItems.length;
   const subtotal = roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0));
-  const deliveryCost =
-    fulfillmentMethod === "pickup" ? 0 : roundDhAmount(getDeliveryCost(subtotal));
+  const deliveryOptions = useMemo(() => getCheckoutDeliveryOptions(subtotal), [subtotal]);
+  const selectedDeliveryDetails = useMemo(
+    () =>
+      deliveryOptions.find((option) => option.id === selectedDeliveryOption) ??
+      deliveryOptions[0],
+    [deliveryOptions, selectedDeliveryOption],
+  );
+  const fulfillmentMethod: FulfillmentMethod = getFulfillmentMethodForDeliveryOption(
+    selectedDeliveryOption,
+  );
+  const requiresAddress = requiresAddressForDeliveryOption(selectedDeliveryOption);
+  const deliveryCost = roundDhAmount(selectedDeliveryDetails?.price ?? 0);
   const total = roundDhAmount(subtotal + deliveryCost);
+  const selectedDeliveryTitle = selectedDeliveryDetails?.title ?? "Livraison Standard";
   const checkoutName = checkoutForm.name.trim();
   const checkoutPhone = checkoutForm.phone.trim();
   const checkoutAddress = checkoutForm.address.trim();
@@ -384,6 +467,7 @@ export default function PanierPage() {
       : undefined,
     {
       fulfillmentMethod,
+      deliveryOptionLabel: selectedDeliveryTitle,
     },
   );
   const bulkEligibleItems = detailedItems.filter((item) => {
@@ -420,6 +504,7 @@ export default function PanierPage() {
       : undefined,
     {
       fulfillmentMethod,
+      deliveryOptionLabel: selectedDeliveryTitle,
       note:
         bulkTriggeredItemNames.length === 1
           ? `Je souhaite un prix de gros pour ${bulkTriggeredItemNames[0]}.`
@@ -451,21 +536,21 @@ export default function PanierPage() {
 
   const validateAndSetErrors = (
     nextForm: CheckoutFormValues,
-    method: FulfillmentMethod = fulfillmentMethod,
+    deliveryOption: DeliveryOption = selectedDeliveryOption,
   ) => {
     const validation = validateCheckoutCustomer(nextForm, {
-      requireAddress: method === "delivery",
+      requireAddress: requiresAddressForDeliveryOption(deliveryOption),
     });
     setFieldErrors(validation.errors);
     return validation;
   };
 
-  const handleFulfillmentMethodChange = (nextMethod: FulfillmentMethod) => {
-    setFulfillmentMethod(nextMethod);
+  const handleDeliveryOptionChange = (nextOption: DeliveryOption) => {
+    setSelectedDeliveryOption(nextOption);
     setSubmitError(null);
     setSubmitInfo(null);
     setAuthRequiredPrompt(false);
-    validateAndSetErrors(checkoutForm, nextMethod);
+    validateAndSetErrors(checkoutForm, nextOption);
   };
 
   const handleCheckoutFieldChange = (field: CheckoutField, value: string) => {
@@ -494,7 +579,7 @@ export default function PanierPage() {
   };
 
   const markAllRequiredFieldsTouched = () => {
-    const requiredFields = getRequiredFieldsForMethod(fulfillmentMethod);
+    const requiredFields = getRequiredFieldsForDeliveryOption(selectedDeliveryOption);
     setTouchedFields((current) => {
       const next = { ...current };
       for (const field of requiredFields) {
@@ -578,6 +663,7 @@ export default function PanierPage() {
         body: JSON.stringify({
           customer,
           fulfillmentMethod,
+          deliveryOption: selectedDeliveryOption,
           items: detailedItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -724,52 +810,70 @@ export default function PanierPage() {
             <aside className="rounded-2xl bg-white p-4 shadow-card md:p-5">
               <h2 className="text-xl font-extrabold text-brand-blue">Confirmation rapide</h2>
               <p className="mt-1 text-sm text-slate-600">
-                1) Renseignez votre telephone 2) Choisissez la reception 3) Confirmez sur WhatsApp.
+                1) Renseignez votre telephone 2) Choisissez la livraison 3) Confirmez sur WhatsApp.
               </p>
 
               <div className="mt-5 space-y-4">
                 <section>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Mode de reception
+                    Choisissez votre mode de livraison
                   </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleFulfillmentMethodChange("delivery")}
-                      className={`rounded-xl border px-3 py-3 text-left transition ${
-                        fulfillmentMethod === "delivery"
-                          ? "border-brand-blue bg-brand-blue text-white"
-                          : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange"
-                      }`}
-                    >
-                      <span className="block text-sm font-bold">Livraison</span>
-                      <span
-                        className={`mt-0.5 block text-[11px] ${
-                          fulfillmentMethod === "delivery" ? "text-white/90" : "text-slate-500"
-                        }`}
-                      >
-                        A votre adresse
-                      </span>
-                    </button>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {deliveryOptions.map((option, index) => {
+                      const isSelected = option.id === selectedDeliveryOption;
+                      const priceLabel = option.price === 0 ? "Gratuit" : formatDh(option.price);
 
-                    <button
-                      type="button"
-                      onClick={() => handleFulfillmentMethodChange("pickup")}
-                      className={`rounded-xl border px-3 py-3 text-left transition ${
-                        fulfillmentMethod === "pickup"
-                          ? "border-brand-blue bg-brand-blue text-white"
-                          : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange"
-                      }`}
-                    >
-                      <span className="block text-sm font-bold">Retrait</span>
-                      <span
-                        className={`mt-0.5 block text-[11px] ${
-                          fulfillmentMethod === "pickup" ? "text-white/90" : "text-slate-500"
-                        }`}
-                      >
-                        En magasin
-                      </span>
-                    </button>
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleDeliveryOptionChange(option.id)}
+                          className={`min-h-[92px] rounded-xl border px-3 py-3 text-left shadow-sm transition ${
+                            index === 2 ? "sm:col-span-2" : ""
+                          } ${
+                            isSelected
+                              ? "border-brand-orange bg-orange-50 ring-1 ring-orange-200"
+                              : "border-slate-200 bg-white hover:border-brand-orange/70"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2">
+                              <span
+                                className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border ${
+                                  isSelected
+                                    ? "border-brand-orange bg-white text-brand-orange"
+                                    : "border-slate-300 text-slate-500"
+                                }`}
+                              >
+                                <DeliveryModeIcon icon={option.icon} className="h-4 w-4" />
+                              </span>
+                              <div>
+                                <span className="block text-sm font-bold text-brand-blue">
+                                  {option.title}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-slate-600">
+                                  {option.description}
+                                </span>
+                              </div>
+                            </div>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                isSelected
+                                  ? "bg-brand-orange text-white"
+                                  : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {priceLabel}
+                            </span>
+                          </div>
+                          {option.condition ? (
+                            <p className="mt-2 text-[11px] font-medium text-slate-500">
+                              {option.condition}
+                            </p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -812,7 +916,7 @@ export default function PanierPage() {
                     ) : null}
                   </label>
 
-                  {fulfillmentMethod === "delivery" ? (
+                  {requiresAddress ? (
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                         Adresse *
@@ -833,7 +937,7 @@ export default function PanierPage() {
                     </label>
                   ) : (
                     <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-                      Retrait en magasin selectionne.
+                      Retrait en magasin selectionne. Aucune adresse n'est requise.
                     </p>
                   )}
                 </section>
@@ -851,9 +955,19 @@ export default function PanierPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 border-t border-slate-200 pt-3">
-                  <div className="flex items-center justify-between text-lg font-extrabold text-brand-blue">
-                    <span>Total</span>
+                <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-700">
+                  <div className="flex items-center justify-between">
+                    <span>Total produits</span>
+                    <span className="font-semibold">{formatDh(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Livraison ({selectedDeliveryTitle})</span>
+                    <span className="font-semibold">
+                      {deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-lg font-extrabold text-brand-blue">
+                    <span>Total final</span>
                     <span>{formatDh(total)}</span>
                   </div>
                 </div>
@@ -958,9 +1072,19 @@ export default function PanierPage() {
       {items.length > 0 ? (
         <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 md:hidden">
           <div className="rounded-2xl border border-emerald-300 bg-white p-2 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
-            <div className="mb-2 flex items-center justify-between px-1 text-xs font-semibold text-slate-600">
-              <span>Total</span>
-              <span className="text-base font-extrabold text-brand-blue">{formatDh(total)}</span>
+            <div className="mb-2 space-y-1 rounded-xl bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between">
+                <span>Total produits</span>
+                <span>{formatDh(subtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Livraison</span>
+                <span>{deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm font-extrabold text-brand-blue">
+                <span>Total final</span>
+                <span>{formatDh(total)}</span>
+              </div>
             </div>
             <button
               type="button"

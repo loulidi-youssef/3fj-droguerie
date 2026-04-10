@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getUnitPriceForQuantity } from "@/lib/bulk-pricing";
 import { validateCheckoutCustomer } from "@/lib/checkout-validation";
-import { getDeliveryCost } from "@/lib/delivery";
+import {
+  getDeliveryCostByOption,
+  getDeliveryOptionForFulfillmentMethod,
+  getFulfillmentMethodForDeliveryOption,
+  normalizeDeliveryOption,
+  requiresAddressForDeliveryOption,
+  type DeliveryOption,
+  type FulfillmentMethod,
+} from "@/lib/delivery";
 import { getActiveOfferRulesByProductIdsStrict } from "@/lib/offers";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import { roundDhAmount } from "@/lib/currency";
@@ -30,6 +38,7 @@ type IncomingOrderBody = {
   };
   items?: IncomingOrderItem[];
   fulfillmentMethod?: string;
+  deliveryOption?: string;
 };
 
 type OrderErrorResponse = {
@@ -57,8 +66,6 @@ type ParseOrderItemsResult =
       ok: false;
       error: string;
     };
-
-type FulfillmentMethod = "delivery" | "pickup";
 
 const MAX_ORDER_REQUEST_BYTES = 20_000;
 const DEFAULT_MAX_DISTINCT_ITEMS_PER_ORDER = 30;
@@ -300,21 +307,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const fulfillmentMethod = normalizeFulfillmentMethod(body.fulfillmentMethod);
-  if (!fulfillmentMethod) {
+  const parsedDeliveryOption = normalizeDeliveryOption(body.deliveryOption);
+  const parsedFulfillmentMethod = normalizeFulfillmentMethod(body.fulfillmentMethod);
+  const deliveryOption: DeliveryOption | null =
+    parsedDeliveryOption ??
+    (parsedFulfillmentMethod
+      ? getDeliveryOptionForFulfillmentMethod(parsedFulfillmentMethod)
+      : null);
+
+  if (!deliveryOption) {
     return NextResponse.json<OrderErrorResponse>(
-      { error: "Choisissez un mode de reception valide (livraison ou retrait)." },
+      {
+        error:
+          "Choisissez un mode de livraison valide (standard, express ou retrait).",
+      },
       { status: 400 },
     );
   }
 
+  const fulfillmentMethod = getFulfillmentMethodForDeliveryOption(deliveryOption);
   const customerValidation = validateCheckoutCustomer({
     name: body.customer?.name ?? "",
     phone: body.customer?.phone ?? "",
     address: body.customer?.address ?? "",
     location: body.customer?.location ?? "",
   }, {
-    requireAddress: fulfillmentMethod === "delivery",
+    requireAddress: requiresAddressForDeliveryOption(deliveryOption),
   });
 
   if (!customerValidation.isValid) {
@@ -502,8 +520,7 @@ export async function POST(request: NextRequest) {
   }
 
   const subtotal = roundDhAmount(lineItems.reduce((sum, item) => sum + item.lineTotal, 0));
-  const deliveryFee =
-    fulfillmentMethod === "pickup" ? 0 : roundDhAmount(getDeliveryCost(subtotal));
+  const deliveryFee = roundDhAmount(getDeliveryCostByOption(deliveryOption, subtotal));
   const total = roundDhAmount(subtotal + deliveryFee);
   const normalizedHeaderIdempotencyKey = request.headers.get("idempotency-key")?.trim() ?? "";
   if (normalizedHeaderIdempotencyKey.length > MAX_IDEMPOTENCY_KEY_HEADER_LENGTH) {
@@ -528,6 +545,7 @@ export async function POST(request: NextRequest) {
   const requestFingerprintPayload = {
     userId: orderUserId,
     fulfillmentMethod,
+    deliveryOption,
     customer: {
       name: toCompactText(name),
       phone: toCompactText(phone),
@@ -659,5 +677,6 @@ export async function POST(request: NextRequest) {
     deliveryFee,
     total,
     fulfillmentMethod,
+    deliveryOption,
   });
 }
