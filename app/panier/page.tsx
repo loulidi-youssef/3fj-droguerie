@@ -707,7 +707,7 @@ export default function PanierPage() {
       setAuthRequiredPrompt(false);
       showToast("Commande enregistree avec succes.");
       setSubmitInfo(`Commande enregistree (ref: ${payload.orderId}). Redirection...`);
-      router.push(`/commande/succes?orderId=${encodeURIComponent(payload.orderId)}`);
+      router.push(`/commande/success?orderId=${encodeURIComponent(payload.orderId)}`);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Une erreur est survenue.";
