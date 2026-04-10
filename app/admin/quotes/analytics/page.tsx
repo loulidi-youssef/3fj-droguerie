@@ -1,14 +1,27 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  Activity,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  PieChart as PieChartIcon,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 import { AnalyticsSectionHeader } from "./components/analytics-section-header";
-import { AnalyticsChartCard } from "./components/analytics-chart-card";
-import { AnalyticsTableCard } from "./components/analytics-table-card";
+import { ChartCard } from "./components/chart-card";
 import { EmptyAnalyticsState } from "./components/empty-analytics-state";
 import { MetricWidget } from "./components/metric-widget";
-import { PremiumStatCard } from "./components/premium-stat-card";
+import { OrdersTable } from "./components/orders-table";
 import { QuoteTrendChart } from "./components/quote-trend-chart";
-import { StatusBadge, type AnalyticsOrderStatus } from "./components/status-badge";
-import { StatusDonutCard } from "./components/status-donut-card";
+import { StatCard } from "./components/stat-card";
+import {
+  StatusDistributionChart,
+  type StatusDistributionDatum,
+} from "./components/status-distribution-chart";
+import { type AnalyticsOrderStatus } from "./components/status-badge";
 import {
   getAdminOrders,
   type AdminOrder,
@@ -18,7 +31,7 @@ import { hasValidAdminSession, isAdminAuthConfigured } from "@/lib/admin-auth";
 import { resolveQuoteAnalyticsRange, type QuoteAnalyticsRangeKey } from "@/lib/admin-quotes";
 import { formatDh } from "@/lib/currency";
 
-type AdminQuoteAnalyticsPageProps = {
+type AdminOrdersAnalyticsPageProps = {
   searchParams?: {
     range?: string | string[];
     from?: string | string[];
@@ -30,26 +43,23 @@ type StatusBreakdown = Record<AnalyticsOrderStatus, number>;
 type DailyPoint = { date: string; count: number };
 
 const RANGE_OPTIONS: Array<{ value: QuoteAnalyticsRangeKey; label: string }> = [
-  { value: "today", label: "Aujourd'hui" },
-  { value: "7d", label: "7 jours" },
-  { value: "30d", label: "30 jours" },
+  { value: "today", label: "Today" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
 ];
 
 const STATUS_COLOR: Record<AnalyticsOrderStatus, string> = {
   pending: "#f59e0b",
   confirmed: "#10b981",
+  delivered: "#2563eb",
   cancelled: "#ef4444",
 };
 
 const STATUS_LABEL: Record<AnalyticsOrderStatus, string> = {
   pending: "En attente",
   confirmed: "Confirmee",
+  delivered: "Livree",
   cancelled: "Annulee",
-};
-
-const MODE_LABEL: Record<string, string> = {
-  delivery: "Livraison",
-  pickup: "Retrait magasin",
 };
 
 const toSingleValue = (value: string | string[] | undefined): string => {
@@ -86,23 +96,17 @@ const normalizeOrderStatus = (
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  if (
-    normalized === "cancelled" ||
-    normalized === "canceled" ||
-    normalized === "annulee" ||
-    normalized === "annule"
-  ) {
+  if (normalized === "cancelled" || normalized === "canceled") {
     return "cancelled";
   }
-
-  if (
-    normalized === "confirmed" ||
-    normalized === "delivered" ||
-    normalized === "livree" ||
-    normalized === "livre" ||
-    normalized === "collected"
-  ) {
+  if (normalized === "delivered" || normalized === "livree" || normalized === "livre") {
+    return "delivered";
+  }
+  if (normalized === "confirmed") {
     return "confirmed";
+  }
+  if (normalized === "new") {
+    return "pending";
   }
 
   return "pending";
@@ -111,6 +115,7 @@ const normalizeOrderStatus = (
 const createEmptyBreakdown = (): StatusBreakdown => ({
   pending: 0,
   confirmed: 0,
+  delivered: 0,
   cancelled: 0,
 });
 
@@ -184,95 +189,47 @@ const formatDateTime = (value: string): string => {
   }).format(parsed);
 };
 
-const formatPercent = (value: number): string => {
-  return `${Math.round(value * 10) / 10}%`;
-};
-
-const getTrendNote = (ratio: number): string => {
-  if (ratio >= 75) return "Volume eleve";
-  if (ratio >= 40) return "Volume stable";
-  if (ratio > 0) return "Volume modere";
-  return "Aucune activite";
-};
-
-const getModeLabel = (mode: string | null | undefined): string => {
-  const key = (mode ?? "").trim().toLowerCase();
-  if (!key) return "Inconnu";
-  return MODE_LABEL[key] ?? "Inconnu";
-};
-
-const getTopMode = (orders: AdminOrder[]): string => {
-  const counts = new Map<string, number>();
-  for (const order of orders) {
-    const key = (order.fulfillment_method ?? "").trim().toLowerCase() || "unknown";
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+const toOrderTotal = (order: AdminOrder): number => {
+  if (typeof order.total === "number" && Number.isFinite(order.total)) {
+    return order.total;
   }
-
-  let bestKey = "unknown";
-  let bestCount = 0;
-  for (const [key, count] of counts.entries()) {
-    if (count > bestCount) {
-      bestCount = count;
-      bestKey = key;
-    }
-  }
-
-  return getModeLabel(bestKey);
+  const maybeTotalPrice = Number((order as unknown as { total_price?: unknown }).total_price ?? 0);
+  return Number.isFinite(maybeTotalPrice) ? maybeTotalPrice : 0;
 };
 
-const TotalIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path d="M4 5h16v14H4z" />
-    <path d="M8 9h8M8 13h5" />
-  </svg>
-);
+const toOrderPhone = (order: AdminOrder): string => {
+  const customerPhone = (order.customer_phone ?? "").trim();
+  if (customerPhone) {
+    return customerPhone;
+  }
+  const fallbackPhone = (order as unknown as { phone?: string }).phone;
+  return typeof fallbackPhone === "string" && fallbackPhone.trim() ? fallbackPhone.trim() : "-";
+};
 
-const CheckIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path d="M20 6L9 17l-5-5" />
-  </svg>
-);
+const toOrderName = (order: AdminOrder): string => {
+  const customerName = (order.customer_name ?? "").trim();
+  if (customerName) {
+    return customerName;
+  }
+  return "Client anonyme";
+};
 
-const ClockIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
+const toPercent = (value: number): string => `${Math.round(value * 10) / 10}%`;
 
-const CloseIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
-
-const SparkIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path d="M12 3l1.6 4.1L18 8.7l-4.4 1.6L12 14.5l-1.6-4.2L6 8.7l4.4-1.6z" />
-  </svg>
-);
-
-const CalendarIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <rect x="4" y="5" width="16" height="15" rx="2" />
-    <path d="M8 3v4M16 3v4M4 10h16" />
-  </svg>
-);
-
-export default async function AdminQuoteAnalyticsPage({
+export default async function AdminOrdersAnalyticsPage({
   searchParams,
-}: AdminQuoteAnalyticsPageProps) {
+}: AdminOrdersAnalyticsPageProps) {
   if (!isAdminAuthConfigured()) {
     return (
       <section className="bg-brand-light py-12">
         <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-card">
-          <h1 className="text-2xl font-extrabold text-brand-blue">Quote Analytics</h1>
+          <h1 className="text-2xl font-extrabold text-brand-blue">Commandes Analytics</h1>
           <p className="mt-3 text-sm text-slate-700">
             Configurez
             <span className="font-semibold"> ADMIN_ACCESS_PASSWORD_HASH </span>
             et
             <span className="font-semibold"> ADMIN_SESSION_SECRET </span>
-            (obligatoires en production), puis redemarrez le serveur.
+            puis redemarrez le serveur.
           </p>
         </div>
       </section>
@@ -301,53 +258,52 @@ export default async function AdminQuoteAnalyticsPage({
   const now = new Date();
   const todayStart = toUtcStartOfDay(now);
   const todayInput = toIsoDateInput(todayStart);
-  const weekFromInput = toIsoDateInput(addUtcDays(todayStart, -6));
-  const dayAgoIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-
   const ordersToday = allOrders.filter((order) =>
     isWithinInclusiveDateRange(order.created_at, todayInput, todayInput),
   ).length;
-  const ordersThisWeek = allOrders.filter((order) =>
-    isWithinInclusiveDateRange(order.created_at, weekFromInput, todayInput),
-  ).length;
-  const recentActivityCount = allOrders.filter((order) => order.created_at >= dayAgoIso).length;
 
   const breakdown = getStatusBreakdown(filteredOrders);
   const totalOrders = filteredOrders.length;
-  const confirmedOrders = breakdown.confirmed;
-  const pendingOrders = breakdown.pending;
-  const cancelledOrders = breakdown.cancelled;
-  const totalAmount = filteredOrders.reduce((sum, order) => sum + order.total, 0);
-  const averageOrderValue = totalOrders > 0 ? totalAmount / totalOrders : 0;
-  const confirmationRate = totalOrders > 0 ? (confirmedOrders / totalOrders) * 100 : 0;
-  const cancellationRate = totalOrders > 0 ? (cancelledOrders / totalOrders) * 100 : 0;
-  const pendingShare = totalOrders > 0 ? (pendingOrders / totalOrders) * 100 : 0;
-  const trendShare = totalOrders > 0 ? (totalOrders / Math.max(1, allOrders.length)) * 100 : 0;
+  const totalCa = filteredOrders.reduce((sum, order) => sum + toOrderTotal(order), 0);
+  const confirmationRate = totalOrders > 0 ? (breakdown.confirmed / totalOrders) * 100 : 0;
+  const cancellationRate = totalOrders > 0 ? (breakdown.cancelled / totalOrders) * 100 : 0;
+  const dailySeries = getDailyActivity(allOrders, range.fromDateInput, range.toDateInput);
 
-  const dailyActivity = getDailyActivity(allOrders, range.fromDateInput, range.toDateInput);
   const recentOrders = [...filteredOrders]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 30);
-  const lastActivity = recentOrders[0]?.created_at ?? allOrders[0]?.created_at ?? null;
-  const topMode = getTopMode(filteredOrders);
+    .slice(0, 25)
+    .map((order) => ({
+      id: order.id,
+      customerName: toOrderName(order),
+      customerPhone: toOrderPhone(order),
+      createdAt: order.created_at,
+      status: normalizeOrderStatus(order.status),
+      total: toOrderTotal(order),
+    }));
 
-  const donutData = [
+  const distributionData: StatusDistributionDatum[] = [
     {
       key: "pending",
       label: STATUS_LABEL.pending,
-      value: pendingOrders,
+      value: breakdown.pending,
       color: STATUS_COLOR.pending,
     },
     {
       key: "confirmed",
       label: STATUS_LABEL.confirmed,
-      value: confirmedOrders,
+      value: breakdown.confirmed,
       color: STATUS_COLOR.confirmed,
+    },
+    {
+      key: "delivered",
+      label: STATUS_LABEL.delivered,
+      value: breakdown.delivered,
+      color: STATUS_COLOR.delivered,
     },
     {
       key: "cancelled",
       label: STATUS_LABEL.cancelled,
-      value: cancelledOrders,
+      value: breakdown.cancelled,
       color: STATUS_COLOR.cancelled,
     },
   ];
@@ -356,8 +312,8 @@ export default async function AdminQuoteAnalyticsPage({
     <section className="min-h-screen bg-gradient-to-b from-brand-light via-slate-50 to-sky-50/60 py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
         <AnalyticsSectionHeader
-          title="Analytics Commandes"
-          description="Dashboard CRM moderne pour piloter les performances et la qualite operationnelle."
+          title="Commandes Analytics"
+          description="Dashboard CRM premium base sur les vraies commandes (orders)."
           actions={
             <>
               <Link
@@ -384,7 +340,7 @@ export default async function AdminQuoteAnalyticsPage({
           <div className="grid gap-3 md:grid-cols-4">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Periode
+                Range
               </span>
               <select
                 name="range"
@@ -396,12 +352,12 @@ export default async function AdminQuoteAnalyticsPage({
                     {option.label}
                   </option>
                 ))}
-                <option value="custom">Personnalise</option>
+                <option value="custom">Custom</option>
               </select>
             </label>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Du
+                From
               </span>
               <input
                 type="date"
@@ -412,7 +368,7 @@ export default async function AdminQuoteAnalyticsPage({
             </label>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Au
+                To
               </span>
               <input
                 type="date"
@@ -426,192 +382,145 @@ export default async function AdminQuoteAnalyticsPage({
                 type="submit"
                 className="w-full rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95"
               >
-                Appliquer
+                Apply
               </button>
             </div>
           </div>
         </form>
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <PremiumStatCard
-            title="Total Orders"
+          <StatCard
+            title="Total Commandes"
             value={totalOrders}
-            subtitle="Volume sur la periode"
-            note={getTrendNote(trendShare)}
+            subtitle="Total orders"
+            note={`Periode: ${range.label}`}
             tone="blue"
-            icon={<TotalIcon />}
+            icon={<BarChart3 className="h-5 w-5 text-sky-700" />}
           />
-          <PremiumStatCard
-            title="Confirmed"
-            value={confirmedOrders}
-            subtitle="Confirmees / livrees"
-            note={formatPercent(confirmationRate)}
+          <StatCard
+            title="Confirmees"
+            value={breakdown.confirmed}
+            subtitle="Status confirmed"
+            note={toPercent(confirmationRate)}
             tone="green"
-            icon={<CheckIcon />}
+            icon={<CheckCircle2 className="h-5 w-5 text-emerald-700" />}
           />
-          <PremiumStatCard
-            title="Pending"
-            value={pendingOrders}
-            subtitle="A traiter rapidement"
-            note={formatPercent(pendingShare)}
+          <StatCard
+            title="En attente"
+            value={breakdown.pending}
+            subtitle="Status pending"
+            note="Suivi requis"
             tone="orange"
-            icon={<ClockIcon />}
+            icon={<Clock3 className="h-5 w-5 text-amber-700" />}
           />
-          <PremiumStatCard
-            title="Cancelled"
-            value={cancelledOrders}
-            subtitle="Annulations periode"
-            note={formatPercent(cancellationRate)}
+          <StatCard
+            title="Annulees"
+            value={breakdown.cancelled}
+            subtitle="Status cancelled"
+            note={toPercent(cancellationRate)}
             tone="red"
-            icon={<CloseIcon />}
+            icon={<XCircle className="h-5 w-5 text-rose-700" />}
           />
         </div>
 
         {totalOrders === 0 ? (
           <EmptyAnalyticsState
             title="Aucune commande sur cette periode"
-            description="Le dashboard est pret. Changez la plage de dates pour visualiser les KPIs et l'evolution."
+            description="Le layout est pret. Ajustez la plage de dates pour afficher les KPI, charts et tableau."
           />
         ) : (
           <>
             <div className="mb-6 grid gap-5 xl:grid-cols-5">
-              <AnalyticsChartCard
+              <ChartCard
                 className="xl:col-span-3"
-                title="Evolution"
-                subtitle="Tendance des commandes par jour"
+                title="Evolution des commandes"
+                subtitle="Volume journalier base sur created_at"
                 actions={
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                     {range.label}
                   </span>
                 }
               >
-                <QuoteTrendChart data={dailyActivity} valueLabel="commandes" />
-              </AnalyticsChartCard>
+                <QuoteTrendChart data={dailySeries} valueLabel="commandes" />
+              </ChartCard>
 
               <div className="grid gap-3 xl:col-span-2">
                 <MetricWidget
                   label="Taux de confirmation"
-                  value={formatPercent(confirmationRate)}
-                  helper="Performance commerciale"
+                  value={toPercent(confirmationRate)}
+                  helper="confirmed / total"
                   tone="green"
-                  icon={<CheckIcon />}
+                  icon={<CheckCircle2 className="h-4 w-4" />}
                 />
                 <MetricWidget
                   label="Taux d'annulation"
-                  value={formatPercent(cancellationRate)}
-                  helper="Qualite de parcours"
+                  value={toPercent(cancellationRate)}
+                  helper="cancelled / total"
                   tone="red"
-                  icon={<CloseIcon />}
+                  icon={<XCircle className="h-4 w-4" />}
                 />
                 <MetricWidget
-                  label="Part en attente"
-                  value={formatPercent(pendingShare)}
-                  helper="Charge operationnelle"
+                  label="Commandes aujourd'hui"
+                  value={`${ordersToday}`}
+                  helper="Date locale"
                   tone="orange"
-                  icon={<ClockIcon />}
+                  icon={<CalendarDays className="h-4 w-4" />}
                 />
                 <MetricWidget
-                  label="Activite 24h"
-                  value={`${recentActivityCount}`}
-                  helper="Commandes recentes"
-                  tone="violet"
-                  icon={<SparkIcon />}
+                  label="Total CA"
+                  value={formatDh(totalCa)}
+                  helper="Somme total_price/total"
+                  tone="blue"
+                  icon={<Wallet className="h-4 w-4" />}
                 />
               </div>
             </div>
 
             <div className="mb-6 grid gap-5 xl:grid-cols-5">
-              <AnalyticsChartCard
+              <ChartCard
                 className="xl:col-span-3"
                 title="Distribution des statuts"
-                subtitle="Repartition pending, confirmed, cancelled"
+                subtitle="pending / confirmed / delivered / cancelled"
+                actions={
+                  <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                    <PieChartIcon className="h-3.5 w-3.5" />
+                    Donut
+                  </span>
+                }
               >
-                <StatusDonutCard data={donutData} totalLabel="Commandes" />
-              </AnalyticsChartCard>
+                <StatusDistributionChart data={distributionData} />
+              </ChartCard>
 
-              <div className="grid gap-3 xl:col-span-2">
-                <MetricWidget
-                  label="Aujourd'hui"
-                  value={`${ordersToday}`}
-                  helper="Nouvelles commandes"
-                  tone="blue"
-                  icon={<CalendarIcon />}
-                />
-                <MetricWidget
-                  label="Cette semaine"
-                  value={`${ordersThisWeek}`}
-                  helper="7 derniers jours"
-                  tone="violet"
-                  icon={<CalendarIcon />}
-                />
-                <MetricWidget
-                  label="Panier moyen"
-                  value={formatDh(averageOrderValue)}
-                  helper="Montant moyen"
-                  tone="green"
-                  icon={<SparkIcon />}
-                />
-                <MetricWidget
-                  label="Mode dominant"
-                  value={topMode}
-                  helper={
-                    lastActivity
-                      ? `Derniere activite: ${formatDateTime(lastActivity)}`
-                      : "Aucune activite recente"
-                  }
-                  tone="blue"
-                  icon={<TotalIcon />}
-                />
-              </div>
+              <ChartCard
+                className="xl:col-span-2"
+                title="Insights"
+                subtitle="Indicateurs rapides"
+              >
+                <div className="grid gap-3">
+                  <MetricWidget
+                    label="Livrees"
+                    value={`${breakdown.delivered}`}
+                    helper="Commandes terminees"
+                    tone="blue"
+                    icon={<Activity className="h-4 w-4" />}
+                  />
+                  <MetricWidget
+                    label="Confirmees + Livrees"
+                    value={`${breakdown.confirmed + breakdown.delivered}`}
+                    helper="Succes global"
+                    tone="green"
+                    icon={<CheckCircle2 className="h-4 w-4" />}
+                  />
+                </div>
+              </ChartCard>
             </div>
 
-            <AnalyticsTableCard
-              title="Commandes recentes"
-              subtitle="Vue detaillee des operations recentes"
+            <ChartCard
+              title="Recent Orders"
+              subtitle="Commandes recentes avec statuts normalises"
             >
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50">
-                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-3 py-2">Client</th>
-                      <th className="px-3 py-2">Telephone</th>
-                      <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Statut</th>
-                      <th className="px-3 py-2">Montant</th>
-                      <th className="px-3 py-2">Mode</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentOrders.map((order) => {
-                      const customerName =
-                        (order.customer_name ?? "").trim() || "Client anonyme";
-                      const customerPhone = (order.customer_phone ?? "").trim() || "-";
-                      const normalizedStatus = normalizeOrderStatus(order.status);
-
-                      return (
-                        <tr
-                          key={order.id}
-                          className="border-b border-slate-100 text-slate-700 transition hover:bg-sky-50/40"
-                        >
-                          <td className="px-3 py-3 font-medium">{customerName}</td>
-                          <td className="px-3 py-3">{customerPhone}</td>
-                          <td className="px-3 py-3">{formatDateTime(order.created_at)}</td>
-                          <td className="px-3 py-3">
-                            <StatusBadge status={normalizedStatus} />
-                          </td>
-                          <td className="px-3 py-3 font-semibold text-slate-900">
-                            {formatDh(order.total)}
-                          </td>
-                          <td className="px-3 py-3 text-slate-600">
-                            {getModeLabel(order.fulfillment_method)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </AnalyticsTableCard>
+              <OrdersTable rows={recentOrders} formatDate={formatDateTime} />
+            </ChartCard>
           </>
         )}
       </div>
