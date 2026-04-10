@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeBulkPriceTiers } from "@/lib/bulk-pricing";
 import { roundDhAmount } from "@/lib/currency";
+import { devWarn } from "@/lib/dev-log";
 import type { BulkPriceTier } from "@/types";
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
@@ -194,7 +195,7 @@ const logNormalizationIssue = (
   field: string,
   rawValue: unknown,
 ) => {
-  console.warn("[admin-products] Normalized malformed field.", {
+  devWarn("[admin-products] Normalized malformed field.", {
     scope,
     id,
     field,

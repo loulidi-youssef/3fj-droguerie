@@ -4,6 +4,7 @@ import { AdminProductVariantsInput } from "@/components/admin-product-variants-i
 import { FormSubmitButton } from "@/components/form-submit-button";
 import type { ReactNode } from "react";
 import type { AdminProduct } from "@/lib/admin-products";
+import { devLog } from "@/lib/dev-log";
 import {
   AdminIconBulk,
   AdminIconCategory,
@@ -85,7 +86,7 @@ export const ProductEditForm = ({
     variants: Array.isArray(product.variants) ? product.variants : [],
   };
 
-  console.info("[admin-products] Normalized product passed to edit form.", {
+  devLog("[admin-products] Normalized product passed to edit form.", {
     id: product.id,
     slug: normalizedProduct.slug,
     imagesCount: normalizedProduct.images.length,

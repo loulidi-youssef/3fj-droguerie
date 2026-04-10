@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-products";
 import { clearAdminSession } from "@/lib/admin-auth";
 import { parseDecimalInput, roundDhAmount } from "@/lib/currency";
+import { devError, devLog } from "@/lib/dev-log";
 import type { BulkPriceTier } from "@/types";
 import {
   normalizeSlug,
@@ -316,7 +317,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
   const productIdForValidation =
     (typeof rawProductId === "string" ? rawProductId.trim() : "") || "__new__";
 
-  console.info("[admin-products] Parsing product form.", {
+  devLog("[admin-products] Parsing product form.", {
     productIdForValidation,
     existingImagesRawLength:
       typeof rawExistingImages === "string" ? rawExistingImages.length : 0,
@@ -331,7 +332,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
 
   const parsedVariants = parseProductVariantsJson(variantsJson, productIdForValidation);
   if (!parsedVariants.ok) {
-    console.error("[admin-products] Variants parsing failed.", {
+    devError("[admin-products] Variants parsing failed.", {
       productIdForValidation,
       error: parsedVariants.error,
     });
@@ -343,7 +344,7 @@ const parseProductForm = (formData: FormData): ParsedProductForm => {
 
   const parsedBulkPriceTiers = parseBulkPriceTiersJson(bulkPriceTiersJson);
   if (!parsedBulkPriceTiers.ok) {
-    console.error("[admin-products] Bulk tiers parsing failed.", {
+    devError("[admin-products] Bulk tiers parsing failed.", {
       productIdForValidation,
       error: parsedBulkPriceTiers.error,
     });

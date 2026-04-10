@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { ReactNode } from "react";
+import { devLog } from "@/lib/dev-log";
 
 type ProductClickSnapshot = {
   id: string;
@@ -34,7 +35,7 @@ export const ProductDetailsShell = ({
       onToggle={(event) => {
         const isOpen = event.currentTarget.open;
         if (isOpen && !wasOpenRef.current) {
-          console.info("[admin-products] Product row opened.", productSnapshot);
+          devLog("[admin-products] Product row opened.", productSnapshot);
         }
         wasOpenRef.current = isOpen;
       }}
