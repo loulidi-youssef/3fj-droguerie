@@ -480,15 +480,20 @@ const getValidatedProductInput = async (formData: FormData): Promise<ProductForm
   };
 };
 
-const revalidateProductPages = (slug: string, previousSlug?: string): void => {
+const revalidateProductsStorefrontPaths = (): void => {
   revalidatePath("/admin/products");
   revalidatePath("/produits");
+  revalidatePath("/produits/[slug]", "page");
+  revalidatePath("/offres");
+  revalidatePath("/");
+};
+
+const revalidateProductPages = (slug: string, previousSlug?: string): void => {
+  revalidateProductsStorefrontPaths();
   if (previousSlug) {
     revalidatePath(`/produits/${previousSlug}`);
   }
   revalidatePath(`/produits/${slug}`);
-  revalidatePath("/offres");
-  revalidatePath("/");
 };
 
 export const logoutAdminAction = async (): Promise<void> => {
@@ -557,10 +562,7 @@ export const toggleProductActiveAction = async (formData: FormData): Promise<voi
     return redirectWithError(updated.error ?? "Impossible de changer le statut du produit.");
   }
 
-  revalidatePath("/admin/products");
-  revalidatePath("/produits");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateProductsStorefrontPaths();
   redirectWithSuccess(nextActive ? "Produit active." : "Produit desactive.");
 };
 
@@ -586,13 +588,10 @@ export const deleteProductAction = async (formData: FormData): Promise<void> => 
     );
   }
 
-  revalidatePath("/admin/products");
-  revalidatePath("/produits");
+  revalidateProductsStorefrontPaths();
   if (productSlug) {
     revalidatePath(`/produits/${productSlug}`);
   }
-  revalidatePath("/offres");
-  revalidatePath("/");
   redirectWithSuccess("Produit supprime.");
 };
 
@@ -651,10 +650,7 @@ export const bulkUpdateProductsAction = async (formData: FormData): Promise<void
     });
   }
 
-  revalidatePath("/admin/products");
-  revalidatePath("/produits");
-  revalidatePath("/offres");
-  revalidatePath("/");
+  revalidateProductsStorefrontPaths();
 
   return redirectWithFlashAndFilters({
     success: `${result.updatedCount} produit(s) mis a jour.`,

@@ -17,6 +17,7 @@ type ProductsPageProps = {
 };
 
 const PRODUCTS_PER_PAGE = 24;
+export const revalidate = 300;
 
 const getSingleSearchParam = (value: string | string[] | undefined): string => {
   if (typeof value === "string") return value;

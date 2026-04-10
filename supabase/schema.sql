@@ -1,5 +1,6 @@
--- 3FJ Droguerie - Supabase schema
--- Run this SQL in Supabase SQL Editor.
+-- 3FJ Droguerie - Supabase schema snapshot
+-- Canonical source of truth: supabase/migrations/*
+-- This file is a convenience snapshot aligned to migration end-state.
 
 create extension if not exists "pgcrypto";
 
@@ -675,3 +676,2187 @@ on public.favorites
 for delete
 to authenticated
 using (auth.uid() = user_id);
+
+-- MIGRATION-ALIGNED SNAPSHOT (AUTO-APPENDED FROM CANONICAL MIGRATIONS)
+
+
+-- >>> BEGIN MIGRATION: 20260407130000_harden_admin_auth_sessions.sql
+
+-- Harden admin authentication with server-side sessions and login throttling.
+-- Tables are accessed only via the service-role key from server code.
+
+create extension if not exists "pgcrypto";
+
+create table if not exists public.admin_auth_sessions (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  revoked_at timestamptz null,
+  last_seen_at timestamptz null,
+  created_at timestamptz not null default now(),
+  constraint admin_auth_sessions_expiry_check check (expires_at > created_at)
+);
+
+create index if not exists idx_admin_auth_sessions_expires_at
+on public.admin_auth_sessions(expires_at);
+
+create index if not exists idx_admin_auth_sessions_revoked_at
+on public.admin_auth_sessions(revoked_at);
+
+create index if not exists idx_admin_auth_sessions_created_at
+on public.admin_auth_sessions(created_at desc);
+
+create table if not exists public.admin_login_attempts (
+  key_hash text primary key,
+  failure_count integer not null default 0,
+  window_started_at timestamptz not null default now(),
+  locked_until timestamptz null,
+  updated_at timestamptz not null default now(),
+  constraint admin_login_attempts_failure_count_check check (failure_count >= 0),
+  constraint admin_login_attempts_lock_window_check check (
+    locked_until is null or locked_until >= window_started_at
+  )
+);
+
+create index if not exists idx_admin_login_attempts_locked_until
+on public.admin_login_attempts(locked_until);
+
+create index if not exists idx_admin_login_attempts_updated_at
+on public.admin_login_attempts(updated_at desc);
+
+alter table public.admin_auth_sessions enable row level security;
+alter table public.admin_login_attempts enable row level security;
+
+-- <<< END MIGRATION: 20260407130000_harden_admin_auth_sessions.sql
+
+
+-- >>> BEGIN MIGRATION: 20260407150000_add_ad_event_stats_aggregation.sql
+
+-- Aggregate ad analytics counters to avoid scanning raw ad_events rows.
+-- Keeps ad_events as source of truth while maintaining per-ad counters.
+
+create table if not exists public.ad_event_stats (
+  ad_id uuid primary key references public.ads(id) on delete cascade,
+  views bigint not null default 0,
+  clicks bigint not null default 0,
+  updated_at timestamptz not null default now(),
+  constraint ad_event_stats_views_check check (views >= 0),
+  constraint ad_event_stats_clicks_check check (clicks >= 0)
+);
+
+create index if not exists idx_ad_event_stats_updated_at
+on public.ad_event_stats(updated_at desc);
+
+create or replace function public.sync_ad_event_stats_on_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.ad_event_stats (ad_id, views, clicks, updated_at)
+  values (
+    new.ad_id,
+    case when new.event_type = 'view' then 1 else 0 end,
+    case when new.event_type = 'click' then 1 else 0 end,
+    now()
+  )
+  on conflict (ad_id)
+  do update set
+    views = public.ad_event_stats.views + excluded.views,
+    clicks = public.ad_event_stats.clicks + excluded.clicks,
+    updated_at = now();
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_ad_event_stats_on_insert on public.ad_events;
+create trigger trg_sync_ad_event_stats_on_insert
+after insert on public.ad_events
+for each row
+execute function public.sync_ad_event_stats_on_insert();
+
+insert into public.ad_event_stats (ad_id, views, clicks, updated_at)
+select
+  ad_id,
+  count(*) filter (where event_type = 'view')::bigint as views,
+  count(*) filter (where event_type = 'click')::bigint as clicks,
+  now() as updated_at
+from public.ad_events
+group by ad_id
+on conflict (ad_id)
+do update set
+  views = excluded.views,
+  clicks = excluded.clicks,
+  updated_at = now();
+
+alter table public.ad_event_stats enable row level security;
+
+
+-- <<< END MIGRATION: 20260407150000_add_ad_event_stats_aggregation.sql
+
+
+-- >>> BEGIN MIGRATION: 20260407160000_add_order_idempotency_guard.sql
+
+-- Idempotency guard for order creation.
+-- Prevent duplicate order inserts and duplicate stock decrements on retries.
+
+create table if not exists public.order_idempotency_keys (
+  idempotency_key text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  request_fingerprint text null,
+  order_id uuid null references public.orders(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint order_idempotency_keys_key_not_blank check (btrim(idempotency_key) <> '')
+);
+
+drop trigger if exists trg_order_idempotency_keys_updated_at on public.order_idempotency_keys;
+create trigger trg_order_idempotency_keys_updated_at
+before update on public.order_idempotency_keys
+for each row
+execute function public.set_updated_at();
+
+create index if not exists idx_order_idempotency_keys_user_created_at
+on public.order_idempotency_keys(user_id, created_at desc);
+
+create index if not exists idx_order_idempotency_keys_order_id
+on public.order_idempotency_keys(order_id);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  integer,
+  integer,
+  integer,
+  uuid,
+  jsonb,
+  text
+);
+
+create or replace function public.create_order_with_items_atomic(
+  p_customer_name text,
+  p_customer_phone text,
+  p_customer_address text,
+  p_customer_location text,
+  p_subtotal integer,
+  p_delivery_fee integer,
+  p_total integer,
+  p_user_id uuid,
+  p_items jsonb,
+  p_fulfillment_method text,
+  p_idempotency_key text,
+  p_request_fingerprint text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_order_id uuid;
+  v_item record;
+  v_rows integer;
+  v_fulfillment_method text;
+  v_idempotency_key text;
+  v_request_fingerprint text;
+  v_existing_order_id uuid;
+  v_existing_user_id uuid;
+  v_existing_request_fingerprint text;
+begin
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'ORDER_ITEMS_EMPTY';
+  end if;
+
+  if p_subtotal < 0 or p_delivery_fee < 0 or p_total < 0 or p_total <> (p_subtotal + p_delivery_fee) then
+    raise exception 'INVALID_ORDER_TOTALS';
+  end if;
+
+  if p_user_id is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  v_fulfillment_method := coalesce(nullif(btrim(p_fulfillment_method), ''), 'delivery');
+  if v_fulfillment_method not in ('delivery', 'pickup') then
+    raise exception 'INVALID_FULFILLMENT_METHOD';
+  end if;
+
+  v_idempotency_key := nullif(btrim(p_idempotency_key), '');
+  if v_idempotency_key is null then
+    raise exception 'IDEMPOTENCY_KEY_REQUIRED';
+  end if;
+
+  v_request_fingerprint := nullif(btrim(p_request_fingerprint), '');
+
+  insert into public.order_idempotency_keys (
+    idempotency_key,
+    user_id,
+    request_fingerprint
+  )
+  values (
+    v_idempotency_key,
+    p_user_id,
+    v_request_fingerprint
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    select
+      existing.order_id,
+      existing.user_id,
+      existing.request_fingerprint
+    into
+      v_existing_order_id,
+      v_existing_user_id,
+      v_existing_request_fingerprint
+    from public.order_idempotency_keys as existing
+    where existing.idempotency_key = v_idempotency_key
+    for update;
+
+    if not found then
+      raise exception 'IDEMPOTENCY_KEY_LOOKUP_FAILED';
+    end if;
+
+    if v_existing_user_id is distinct from p_user_id then
+      raise exception 'IDEMPOTENCY_KEY_OWNERSHIP_MISMATCH';
+    end if;
+
+    if v_request_fingerprint is not null
+      and v_existing_request_fingerprint is not null
+      and v_existing_request_fingerprint <> v_request_fingerprint then
+      raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD';
+    end if;
+
+    if v_existing_order_id is not null then
+      return v_existing_order_id;
+    end if;
+
+    raise exception 'IDEMPOTENCY_KEY_IN_PROGRESS';
+  end if;
+
+  for v_item in
+    select *
+    from jsonb_to_recordset(p_items) as item(
+      product_id text,
+      variant_id text,
+      selected_color text,
+      selected_size text,
+      product_name text,
+      quantity integer,
+      unit_price integer,
+      line_total integer
+    )
+  loop
+    if v_item.product_id is null or btrim(v_item.product_id) = '' then
+      raise exception 'INVALID_PRODUCT_ID';
+    end if;
+
+    if v_item.product_name is null or btrim(v_item.product_name) = '' then
+      raise exception 'INVALID_PRODUCT_NAME';
+    end if;
+
+    if v_item.quantity is null or v_item.quantity <= 0 then
+      raise exception 'INVALID_ITEM_QUANTITY';
+    end if;
+
+    if v_item.unit_price is null or v_item.unit_price < 0 then
+      raise exception 'INVALID_UNIT_PRICE';
+    end if;
+
+    if v_item.line_total is null or v_item.line_total <> (v_item.quantity * v_item.unit_price) then
+      raise exception 'INVALID_LINE_TOTAL';
+    end if;
+
+    if v_item.variant_id is null or btrim(v_item.variant_id) = '' then
+      update public.products
+      set stock = stock - v_item.quantity
+      where id = v_item.product_id
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_STOCK';
+      end if;
+    else
+      update public.product_variants
+      set stock = stock - v_item.quantity
+      where id = v_item.variant_id::uuid
+        and product_id = v_item.product_id
+        and is_active = true
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_VARIANT_STOCK';
+      end if;
+    end if;
+  end loop;
+
+  insert into public.orders (
+    user_id,
+    fulfillment_method,
+    customer_name,
+    customer_phone,
+    customer_address,
+    customer_location,
+    subtotal,
+    delivery_fee,
+    total
+  )
+  values (
+    p_user_id,
+    v_fulfillment_method,
+    p_customer_name,
+    p_customer_phone,
+    p_customer_address,
+    p_customer_location,
+    p_subtotal,
+    p_delivery_fee,
+    p_total
+  )
+  returning id into v_order_id;
+
+  insert into public.order_items (
+    order_id,
+    product_id,
+    variant_id,
+    selected_color,
+    selected_size,
+    product_name,
+    quantity,
+    unit_price,
+    line_total
+  )
+  select
+    v_order_id,
+    item.product_id,
+    item.variant_id::uuid,
+    item.selected_color,
+    item.selected_size,
+    item.product_name,
+    item.quantity,
+    item.unit_price,
+    item.line_total
+  from jsonb_to_recordset(p_items) as item(
+    product_id text,
+    variant_id text,
+    selected_color text,
+    selected_size text,
+    product_name text,
+    quantity integer,
+    unit_price integer,
+    line_total integer
+  );
+
+  update public.order_idempotency_keys
+  set
+    order_id = v_order_id,
+    request_fingerprint = coalesce(v_request_fingerprint, request_fingerprint),
+    updated_at = now()
+  where idempotency_key = v_idempotency_key;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'IDEMPOTENCY_KEY_UPDATE_FAILED';
+  end if;
+
+  return v_order_id;
+end;
+$$;
+
+-- <<< END MIGRATION: 20260407160000_add_order_idempotency_guard.sql
+
+
+-- >>> BEGIN MIGRATION: 20260407161000_create_shared_rate_limit_table.sql
+
+-- Shared DB-backed rate limiter for sensitive HTTP mutations.
+-- Designed for multi-instance/serverless deployments (no process-memory coupling).
+
+create table if not exists public.request_rate_limits (
+  scope text not null,
+  key_hash text not null,
+  hit_count integer not null default 0,
+  window_started_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint request_rate_limits_scope_not_blank check (btrim(scope) <> ''),
+  constraint request_rate_limits_key_hash_not_blank check (btrim(key_hash) <> ''),
+  constraint request_rate_limits_hit_count_non_negative check (hit_count >= 0),
+  primary key (scope, key_hash)
+);
+
+drop trigger if exists trg_request_rate_limits_updated_at on public.request_rate_limits;
+create trigger trg_request_rate_limits_updated_at
+before update on public.request_rate_limits
+for each row
+execute function public.set_updated_at();
+
+create index if not exists idx_request_rate_limits_updated_at
+on public.request_rate_limits(updated_at desc);
+
+drop function if exists public.consume_rate_limit(text, text, integer, integer);
+
+create or replace function public.consume_rate_limit(
+  p_scope text,
+  p_key_hash text,
+  p_limit integer,
+  p_window_ms integer
+)
+returns table (
+  allowed boolean,
+  retry_after_seconds integer,
+  hit_count integer,
+  window_started_at timestamptz
+)
+language plpgsql
+as $$
+declare
+  v_scope text;
+  v_key_hash text;
+  v_now timestamptz;
+  v_row public.request_rate_limits%rowtype;
+  v_elapsed_ms bigint;
+  v_retry_after_seconds integer;
+begin
+  v_scope := nullif(btrim(p_scope), '');
+  v_key_hash := nullif(btrim(p_key_hash), '');
+  v_now := now();
+
+  if v_scope is null then
+    raise exception 'RATE_LIMIT_SCOPE_REQUIRED';
+  end if;
+
+  if v_key_hash is null then
+    raise exception 'RATE_LIMIT_KEY_REQUIRED';
+  end if;
+
+  if p_limit is null or p_limit <= 0 then
+    raise exception 'RATE_LIMIT_LIMIT_INVALID';
+  end if;
+
+  if p_window_ms is null or p_window_ms <= 0 then
+    raise exception 'RATE_LIMIT_WINDOW_INVALID';
+  end if;
+
+  insert into public.request_rate_limits (
+    scope,
+    key_hash,
+    hit_count,
+    window_started_at
+  )
+  values (
+    v_scope,
+    v_key_hash,
+    0,
+    v_now
+  )
+  on conflict (scope, key_hash) do nothing;
+
+  loop
+    select *
+    into v_row
+    from public.request_rate_limits
+    where scope = v_scope
+      and key_hash = v_key_hash
+    for update;
+
+    exit when found;
+
+    insert into public.request_rate_limits (
+      scope,
+      key_hash,
+      hit_count,
+      window_started_at
+    )
+    values (
+      v_scope,
+      v_key_hash,
+      0,
+      v_now
+    )
+    on conflict (scope, key_hash) do nothing;
+  end loop;
+
+  v_elapsed_ms := floor(extract(epoch from (v_now - v_row.window_started_at)) * 1000)::bigint;
+
+  if v_elapsed_ms >= p_window_ms then
+    update public.request_rate_limits
+    set
+      hit_count = 1,
+      window_started_at = v_now,
+      updated_at = v_now
+    where scope = v_scope
+      and key_hash = v_key_hash;
+
+    return query
+    select true, 0, 1, v_now;
+    return;
+  end if;
+
+  if v_row.hit_count >= p_limit then
+    v_retry_after_seconds := greatest(
+      1,
+      ceil((p_window_ms - v_elapsed_ms) / 1000.0)::integer
+    );
+
+    return query
+    select false, v_retry_after_seconds, v_row.hit_count, v_row.window_started_at;
+    return;
+  end if;
+
+  update public.request_rate_limits
+  set
+    hit_count = v_row.hit_count + 1,
+    updated_at = v_now
+  where scope = v_scope
+    and key_hash = v_key_hash;
+
+  return query
+  select true, 0, v_row.hit_count + 1, v_row.window_started_at;
+end;
+$$;
+
+-- <<< END MIGRATION: 20260407161000_create_shared_rate_limit_table.sql
+
+
+-- >>> BEGIN MIGRATION: 20260407201000_enable_decimal_prices_and_order_totals.sql
+
+-- Decimal prices support:
+-- - store catalog and order monetary fields with 2 decimals
+-- - keep create_order_with_items_atomic aligned with decimal totals
+
+alter table if exists public.products
+alter column price type numeric(12, 2) using round(price::numeric, 2);
+
+alter table if exists public.product_variants
+alter column price type numeric(12, 2) using round(price::numeric, 2),
+alter column previous_price type numeric(12, 2) using
+  case
+    when previous_price is null then null
+    else round(previous_price::numeric, 2)
+  end;
+
+alter table if exists public.offers
+alter column discounted_price type numeric(12, 2) using
+  case
+    when discounted_price is null then null
+    else round(discounted_price::numeric, 2)
+  end;
+
+alter table if exists public.orders
+alter column subtotal type numeric(12, 2) using round(subtotal::numeric, 2),
+alter column delivery_fee type numeric(12, 2) using round(delivery_fee::numeric, 2),
+alter column total type numeric(12, 2) using round(total::numeric, 2);
+
+alter table if exists public.order_items
+alter column unit_price type numeric(12, 2) using round(unit_price::numeric, 2),
+alter column line_total type numeric(12, 2) using round(line_total::numeric, 2);
+
+alter table if exists public.products
+drop constraint if exists products_price_check;
+alter table if exists public.products
+add constraint products_price_check
+check (price > 0);
+
+alter table if exists public.product_variants
+drop constraint if exists product_variants_price_check;
+alter table if exists public.product_variants
+add constraint product_variants_price_check
+check (price > 0);
+
+alter table if exists public.product_variants
+drop constraint if exists product_variants_previous_price_check;
+alter table if exists public.product_variants
+add constraint product_variants_previous_price_check
+check (previous_price is null or previous_price > price);
+
+alter table if exists public.offers
+drop constraint if exists offers_discounted_price_check;
+alter table if exists public.offers
+add constraint offers_discounted_price_check
+check (discounted_price is null or discounted_price > 0);
+
+alter table if exists public.orders
+drop constraint if exists orders_subtotal_check;
+alter table if exists public.orders
+add constraint orders_subtotal_check
+check (subtotal >= 0);
+
+alter table if exists public.orders
+drop constraint if exists orders_delivery_fee_check;
+alter table if exists public.orders
+add constraint orders_delivery_fee_check
+check (delivery_fee >= 0);
+
+alter table if exists public.orders
+drop constraint if exists orders_total_check;
+alter table if exists public.orders
+add constraint orders_total_check
+check (total >= 0);
+
+alter table if exists public.order_items
+drop constraint if exists order_items_unit_price_check;
+alter table if exists public.order_items
+add constraint order_items_unit_price_check
+check (unit_price >= 0);
+
+alter table if exists public.order_items
+drop constraint if exists order_items_line_total_check;
+alter table if exists public.order_items
+add constraint order_items_line_total_check
+check (line_total >= 0);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  integer,
+  integer,
+  integer,
+  uuid,
+  jsonb,
+  text
+);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  integer,
+  integer,
+  integer,
+  uuid,
+  jsonb,
+  text,
+  text,
+  text
+);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  numeric,
+  numeric,
+  uuid,
+  jsonb,
+  text
+);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  numeric,
+  numeric,
+  uuid,
+  jsonb,
+  text,
+  text,
+  text
+);
+
+create or replace function public.create_order_with_items_atomic(
+  p_customer_name text,
+  p_customer_phone text,
+  p_customer_address text,
+  p_customer_location text,
+  p_subtotal numeric(12, 2),
+  p_delivery_fee numeric(12, 2),
+  p_total numeric(12, 2),
+  p_user_id uuid,
+  p_items jsonb,
+  p_fulfillment_method text,
+  p_idempotency_key text,
+  p_request_fingerprint text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_order_id uuid;
+  v_item record;
+  v_rows integer;
+  v_fulfillment_method text;
+  v_idempotency_key text;
+  v_request_fingerprint text;
+  v_existing_order_id uuid;
+  v_existing_user_id uuid;
+  v_existing_request_fingerprint text;
+begin
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'ORDER_ITEMS_EMPTY';
+  end if;
+
+  if p_subtotal < 0
+    or p_delivery_fee < 0
+    or p_total < 0
+    or round(p_total, 2) <> round(p_subtotal + p_delivery_fee, 2) then
+    raise exception 'INVALID_ORDER_TOTALS';
+  end if;
+
+  if p_user_id is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  v_fulfillment_method := coalesce(nullif(btrim(p_fulfillment_method), ''), 'delivery');
+  if v_fulfillment_method not in ('delivery', 'pickup') then
+    raise exception 'INVALID_FULFILLMENT_METHOD';
+  end if;
+
+  v_idempotency_key := nullif(btrim(p_idempotency_key), '');
+  if v_idempotency_key is null then
+    raise exception 'IDEMPOTENCY_KEY_REQUIRED';
+  end if;
+
+  v_request_fingerprint := nullif(btrim(p_request_fingerprint), '');
+
+  insert into public.order_idempotency_keys (
+    idempotency_key,
+    user_id,
+    request_fingerprint
+  )
+  values (
+    v_idempotency_key,
+    p_user_id,
+    v_request_fingerprint
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    select
+      existing.order_id,
+      existing.user_id,
+      existing.request_fingerprint
+    into
+      v_existing_order_id,
+      v_existing_user_id,
+      v_existing_request_fingerprint
+    from public.order_idempotency_keys as existing
+    where existing.idempotency_key = v_idempotency_key
+    for update;
+
+    if not found then
+      raise exception 'IDEMPOTENCY_KEY_LOOKUP_FAILED';
+    end if;
+
+    if v_existing_user_id is distinct from p_user_id then
+      raise exception 'IDEMPOTENCY_KEY_OWNERSHIP_MISMATCH';
+    end if;
+
+    if v_request_fingerprint is not null
+      and v_existing_request_fingerprint is not null
+      and v_existing_request_fingerprint <> v_request_fingerprint then
+      raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD';
+    end if;
+
+    if v_existing_order_id is not null then
+      return v_existing_order_id;
+    end if;
+
+    raise exception 'IDEMPOTENCY_KEY_IN_PROGRESS';
+  end if;
+
+  for v_item in
+    select *
+    from jsonb_to_recordset(p_items) as item(
+      product_id text,
+      variant_id text,
+      selected_color text,
+      selected_size text,
+      product_name text,
+      quantity integer,
+      unit_price numeric(12, 2),
+      line_total numeric(12, 2)
+    )
+  loop
+    if v_item.product_id is null or btrim(v_item.product_id) = '' then
+      raise exception 'INVALID_PRODUCT_ID';
+    end if;
+
+    if v_item.product_name is null or btrim(v_item.product_name) = '' then
+      raise exception 'INVALID_PRODUCT_NAME';
+    end if;
+
+    if v_item.quantity is null or v_item.quantity <= 0 then
+      raise exception 'INVALID_ITEM_QUANTITY';
+    end if;
+
+    if v_item.unit_price is null or v_item.unit_price < 0 then
+      raise exception 'INVALID_UNIT_PRICE';
+    end if;
+
+    if v_item.line_total is null
+      or round(v_item.line_total, 2) <> round(v_item.quantity::numeric * v_item.unit_price, 2) then
+      raise exception 'INVALID_LINE_TOTAL';
+    end if;
+
+    if v_item.variant_id is null or btrim(v_item.variant_id) = '' then
+      update public.products
+      set stock = stock - v_item.quantity
+      where id = v_item.product_id
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_STOCK';
+      end if;
+    else
+      update public.product_variants
+      set stock = stock - v_item.quantity
+      where id = v_item.variant_id::uuid
+        and product_id = v_item.product_id
+        and is_active = true
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_VARIANT_STOCK';
+      end if;
+    end if;
+  end loop;
+
+  insert into public.orders (
+    user_id,
+    fulfillment_method,
+    customer_name,
+    customer_phone,
+    customer_address,
+    customer_location,
+    subtotal,
+    delivery_fee,
+    total
+  )
+  values (
+    p_user_id,
+    v_fulfillment_method,
+    p_customer_name,
+    p_customer_phone,
+    p_customer_address,
+    p_customer_location,
+    round(p_subtotal, 2),
+    round(p_delivery_fee, 2),
+    round(p_total, 2)
+  )
+  returning id into v_order_id;
+
+  insert into public.order_items (
+    order_id,
+    product_id,
+    variant_id,
+    selected_color,
+    selected_size,
+    product_name,
+    quantity,
+    unit_price,
+    line_total
+  )
+  select
+    v_order_id,
+    item.product_id,
+    item.variant_id::uuid,
+    item.selected_color,
+    item.selected_size,
+    item.product_name,
+    item.quantity,
+    round(item.unit_price, 2),
+    round(item.line_total, 2)
+  from jsonb_to_recordset(p_items) as item(
+    product_id text,
+    variant_id text,
+    selected_color text,
+    selected_size text,
+    product_name text,
+    quantity integer,
+    unit_price numeric(12, 2),
+    line_total numeric(12, 2)
+  );
+
+  update public.order_idempotency_keys
+  set
+    order_id = v_order_id,
+    request_fingerprint = coalesce(v_request_fingerprint, request_fingerprint),
+    updated_at = now()
+  where idempotency_key = v_idempotency_key;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'IDEMPOTENCY_KEY_UPDATE_FAILED';
+  end if;
+
+  return v_order_id;
+end;
+$$;
+
+-- <<< END MIGRATION: 20260407201000_enable_decimal_prices_and_order_totals.sql
+
+
+-- >>> BEGIN MIGRATION: 20260407214500_harden_cancellation_and_infra_rls.sql
+
+-- Priority-1 hardening:
+-- 1) transactional cancellation with stock restoration
+-- 2) strict RLS on infra tables used for idempotency and rate limiting
+
+create or replace function public.cancel_order_and_restore_stock_atomic(
+  p_order_id uuid,
+  p_user_id uuid default null,
+  p_cancellation_boundary timestamptz default null,
+  p_allowed_statuses text[] default array['new']
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order record;
+  v_item record;
+  v_rows integer;
+begin
+  if p_order_id is null then
+    raise exception 'ORDER_ID_REQUIRED';
+  end if;
+
+  if p_allowed_statuses is null or cardinality(p_allowed_statuses) = 0 then
+    raise exception 'ALLOWED_STATUSES_REQUIRED';
+  end if;
+
+  select
+    o.id,
+    o.user_id,
+    o.status,
+    o.created_at
+  into v_order
+  from public.orders as o
+  where o.id = p_order_id
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if p_user_id is not null and v_order.user_id is distinct from p_user_id then
+    return false;
+  end if;
+
+  if p_cancellation_boundary is not null and v_order.created_at < p_cancellation_boundary then
+    return false;
+  end if;
+
+  if not (v_order.status = any(p_allowed_statuses)) then
+    return false;
+  end if;
+
+  for v_item in
+    select
+      oi.product_id,
+      oi.variant_id,
+      oi.quantity
+    from public.order_items as oi
+    where oi.order_id = v_order.id
+  loop
+    if v_item.variant_id is null then
+      update public.products
+      set stock = stock + v_item.quantity
+      where id = v_item.product_id;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'PRODUCT_STOCK_RESTORE_FAILED';
+      end if;
+    else
+      update public.product_variants
+      set stock = stock + v_item.quantity
+      where id = v_item.variant_id
+        and product_id = v_item.product_id;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'VARIANT_STOCK_RESTORE_FAILED';
+      end if;
+    end if;
+  end loop;
+
+  update public.orders
+  set
+    status = 'cancelled',
+    updated_at = now()
+  where id = v_order.id
+    and status = any(p_allowed_statuses);
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'ORDER_CANCEL_UPDATE_FAILED';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.cancel_order_and_restore_stock_atomic(uuid, uuid, timestamptz, text[]) from public;
+grant execute on function public.cancel_order_and_restore_stock_atomic(uuid, uuid, timestamptz, text[]) to service_role;
+
+alter table if exists public.order_idempotency_keys enable row level security;
+alter table if exists public.request_rate_limits enable row level security;
+
+revoke all on table public.order_idempotency_keys from public, anon, authenticated;
+revoke all on table public.request_rate_limits from public, anon, authenticated;
+
+-- <<< END MIGRATION: 20260407214500_harden_cancellation_and_infra_rls.sql
+
+
+-- >>> BEGIN MIGRATION: 20260408162000_add_quote_follow_up_and_notes.sql
+
+-- Lightweight quote CRM upgrade:
+-- 1) Add follow-up fields on quote requests.
+-- 2) Add internal admin notes per quote request.
+
+alter table if exists public.quote_requests
+add column if not exists contacted_at timestamptz null;
+
+alter table if exists public.quote_requests
+add column if not exists converted_at timestamptz null;
+
+alter table if exists public.quote_requests
+add column if not exists closed_at timestamptz null;
+
+alter table if exists public.quote_requests
+add column if not exists next_action text null;
+
+update public.quote_requests
+set contacted_at = coalesce(contacted_at, updated_at)
+where status in ('contacted', 'converted', 'closed')
+  and contacted_at is null;
+
+update public.quote_requests
+set converted_at = coalesce(converted_at, updated_at)
+where status in ('converted', 'closed')
+  and converted_at is null;
+
+update public.quote_requests
+set closed_at = coalesce(closed_at, updated_at)
+where status = 'closed'
+  and closed_at is null;
+
+alter table if exists public.quote_requests
+drop constraint if exists quote_requests_next_action_length_check;
+
+alter table if exists public.quote_requests
+add constraint quote_requests_next_action_length_check
+check (
+  next_action is null
+  or char_length(btrim(next_action)) <= 1000
+);
+
+create or replace function public.quote_requests_apply_follow_up_defaults()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.next_action is not null then
+    new.next_action := nullif(btrim(new.next_action), '');
+  end if;
+
+  if new.status = 'contacted' then
+    new.contacted_at := coalesce(new.contacted_at, now());
+  elsif new.status = 'converted' then
+    new.contacted_at := coalesce(new.contacted_at, now());
+    new.converted_at := coalesce(new.converted_at, now());
+  elsif new.status = 'closed' then
+    new.closed_at := coalesce(new.closed_at, now());
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_quote_requests_follow_up_defaults on public.quote_requests;
+create trigger trg_quote_requests_follow_up_defaults
+before insert or update on public.quote_requests
+for each row
+execute function public.quote_requests_apply_follow_up_defaults();
+
+create table if not exists public.quote_request_notes (
+  id bigserial primary key,
+  quote_request_id uuid not null references public.quote_requests(id) on delete cascade,
+  content text not null,
+  admin_identifier text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table if exists public.quote_request_notes
+add column if not exists quote_request_id uuid references public.quote_requests(id) on delete cascade;
+
+alter table if exists public.quote_request_notes
+add column if not exists content text;
+
+alter table if exists public.quote_request_notes
+add column if not exists admin_identifier text;
+
+alter table if exists public.quote_request_notes
+add column if not exists created_at timestamptz not null default now();
+
+alter table if exists public.quote_request_notes
+add column if not exists updated_at timestamptz not null default now();
+
+delete from public.quote_request_notes
+where quote_request_id is null;
+
+update public.quote_request_notes
+set content = coalesce(nullif(btrim(content), ''), 'Note legacy importee')
+where content is null or btrim(content) = '';
+
+update public.quote_request_notes
+set admin_identifier = nullif(btrim(admin_identifier), '')
+where admin_identifier is not null;
+
+alter table if exists public.quote_request_notes
+alter column quote_request_id set not null;
+
+alter table if exists public.quote_request_notes
+alter column content set not null;
+
+alter table if exists public.quote_request_notes
+drop constraint if exists quote_request_notes_content_check;
+
+alter table if exists public.quote_request_notes
+add constraint quote_request_notes_content_check
+check (
+  char_length(btrim(content)) between 1 and 2000
+);
+
+alter table if exists public.quote_request_notes
+drop constraint if exists quote_request_notes_admin_identifier_length_check;
+
+alter table if exists public.quote_request_notes
+add constraint quote_request_notes_admin_identifier_length_check
+check (
+  admin_identifier is null
+  or char_length(btrim(admin_identifier)) between 3 and 120
+);
+
+drop trigger if exists trg_quote_request_notes_updated_at on public.quote_request_notes;
+create trigger trg_quote_request_notes_updated_at
+before update on public.quote_request_notes
+for each row
+execute function public.set_updated_at();
+
+create index if not exists idx_quote_request_notes_quote_request_id_created_at
+on public.quote_request_notes(quote_request_id, created_at desc);
+
+create index if not exists idx_quote_request_notes_created_at
+on public.quote_request_notes(created_at desc);
+
+alter table public.quote_request_notes enable row level security;
+
+drop policy if exists "Service role can read quote request notes" on public.quote_request_notes;
+create policy "Service role can read quote request notes"
+on public.quote_request_notes
+for select
+to service_role
+using (true);
+
+drop policy if exists "Service role can create quote request notes" on public.quote_request_notes;
+create policy "Service role can create quote request notes"
+on public.quote_request_notes
+for insert
+to service_role
+with check (true);
+
+drop policy if exists "Service role can update quote request notes" on public.quote_request_notes;
+create policy "Service role can update quote request notes"
+on public.quote_request_notes
+for update
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role can delete quote request notes" on public.quote_request_notes;
+create policy "Service role can delete quote request notes"
+on public.quote_request_notes
+for delete
+to service_role
+using (true);
+
+-- <<< END MIGRATION: 20260408162000_add_quote_follow_up_and_notes.sql
+
+
+-- >>> BEGIN MIGRATION: 20260408170000_add_quote_next_action_due_at.sql
+
+alter table if exists public.quote_requests
+add column if not exists next_action_due_at timestamptz null;
+
+update public.quote_requests
+set next_action_due_at = null
+where status in ('converted', 'closed');
+
+create index if not exists idx_quote_requests_next_action_due_at
+on public.quote_requests(next_action_due_at)
+where next_action_due_at is not null;
+
+-- <<< END MIGRATION: 20260408170000_add_quote_next_action_due_at.sql
+
+
+-- >>> BEGIN MIGRATION: 20260408173000_harden_rls_and_policies.sql
+
+-- Critical RLS hardening sweep for production.
+-- Goals:
+-- 1) ensure RLS is enabled on every app table
+-- 2) reset policies to least privilege
+-- 3) preserve server-side service-role flows
+
+create or replace function public.current_request_header(header_name text)
+returns text
+language sql
+stable
+as $$
+  select nullif(
+    btrim(
+      coalesce(
+        (
+          nullif(current_setting('request.headers', true), '')::jsonb
+          ->> lower(header_name)
+        ),
+        ''
+      )
+    ),
+    ''
+  );
+$$;
+
+-- Ensure RLS is enabled across all app tables.
+alter table if exists public.products enable row level security;
+alter table if exists public.product_variants enable row level security;
+alter table if exists public.orders enable row level security;
+alter table if exists public.order_items enable row level security;
+alter table if exists public.offers enable row level security;
+alter table if exists public.ads enable row level security;
+alter table if exists public.ad_plans enable row level security;
+alter table if exists public.ad_events enable row level security;
+alter table if exists public.ad_event_stats enable row level security;
+alter table if exists public.blog_posts enable row level security;
+alter table if exists public.reviews enable row level security;
+alter table if exists public.favorites enable row level security;
+alter table if exists public.quote_requests enable row level security;
+alter table if exists public.quote_request_notes enable row level security;
+alter table if exists public.admin_auth_sessions enable row level security;
+alter table if exists public.admin_login_attempts enable row level security;
+alter table if exists public.order_idempotency_keys enable row level security;
+alter table if exists public.request_rate_limits enable row level security;
+
+-- Public catalog tables: read-only for anon/authenticated.
+drop policy if exists "Public can read active products" on public.products;
+create policy "Public can read active products"
+on public.products
+for select
+to anon, authenticated
+using (is_active = true);
+
+drop policy if exists "Service role full access products" on public.products;
+create policy "Service role full access products"
+on public.products
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Public can read active product variants" on public.product_variants;
+create policy "Public can read active product variants"
+on public.product_variants
+for select
+to anon, authenticated
+using (is_active = true);
+
+drop policy if exists "Service role full access product variants" on public.product_variants;
+create policy "Service role full access product variants"
+on public.product_variants
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Public can read active offers" on public.offers;
+create policy "Public can read active offers"
+on public.offers
+for select
+to anon, authenticated
+using (
+  is_active = true
+  and (start_at is null or start_at <= now())
+  and (end_at is null or end_at > now())
+);
+
+drop policy if exists "Service role full access offers" on public.offers;
+create policy "Service role full access offers"
+on public.offers
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Public can read active scheduled ads" on public.ads;
+create policy "Public can read active scheduled ads"
+on public.ads
+for select
+to anon, authenticated
+using (
+  is_active = true
+  and (start_date is null or start_date <= now())
+  and (end_date is null or end_date > now())
+);
+
+drop policy if exists "Service role full access ads" on public.ads;
+create policy "Service role full access ads"
+on public.ads
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Public can read published blog posts" on public.blog_posts;
+create policy "Public can read published blog posts"
+on public.blog_posts
+for select
+to anon, authenticated
+using (
+  is_published = true
+  and (published_at is null or published_at <= now())
+);
+
+drop policy if exists "Service role full access blog posts" on public.blog_posts;
+create policy "Service role full access blog posts"
+on public.blog_posts
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Public can read active reviews" on public.reviews;
+create policy "Public can read active reviews"
+on public.reviews
+for select
+to anon, authenticated
+using (is_active = true);
+
+drop policy if exists "Service role full access reviews" on public.reviews;
+create policy "Service role full access reviews"
+on public.reviews
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Orders: user-owned reads, all writes via backend service-role paths.
+drop policy if exists "Authenticated users can read own orders" on public.orders;
+create policy "Authenticated users can read own orders"
+on public.orders
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can cancel own recent new orders" on public.orders;
+
+drop policy if exists "Service role full access orders" on public.orders;
+create policy "Service role full access orders"
+on public.orders
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Order items: only owner can read, writes via backend service role.
+drop policy if exists "Authenticated users can read own order items" on public.order_items;
+create policy "Authenticated users can read own order items"
+on public.order_items
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.orders
+    where orders.id = order_items.order_id
+      and orders.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Service role full access order items" on public.order_items;
+create policy "Service role full access order items"
+on public.order_items
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Favorites: authenticated users manage only their rows.
+drop policy if exists "Authenticated users can read own favorites" on public.favorites;
+create policy "Authenticated users can read own favorites"
+on public.favorites
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can add own favorites" on public.favorites;
+create policy "Authenticated users can add own favorites"
+on public.favorites
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can update own favorites" on public.favorites;
+create policy "Authenticated users can update own favorites"
+on public.favorites
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users can remove own favorites" on public.favorites;
+create policy "Authenticated users can remove own favorites"
+on public.favorites
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Service role full access favorites" on public.favorites;
+create policy "Service role full access favorites"
+on public.favorites
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Quote requests:
+-- - read: own user rows (authenticated) OR matching anonymous id header (anon)
+-- - write: backend service role only (API validation path)
+
+drop policy if exists "Authenticated users can read own quote requests" on public.quote_requests;
+create policy "Authenticated users can read own quote requests"
+on public.quote_requests
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Anonymous users can read own quote requests by anonymous id" on public.quote_requests;
+create policy "Anonymous users can read own quote requests by anonymous id"
+on public.quote_requests
+for select
+to anon
+using (
+  anonymous_id = public.current_request_header('x-quote-anonymous-id')
+);
+
+drop policy if exists "Authenticated users can create own quote requests" on public.quote_requests;
+drop policy if exists "Anonymous users can create quote requests" on public.quote_requests;
+
+drop policy if exists "Service role can read quote requests" on public.quote_requests;
+drop policy if exists "Service role can update quote requests" on public.quote_requests;
+drop policy if exists "Service role full access quote requests" on public.quote_requests;
+create policy "Service role full access quote requests"
+on public.quote_requests
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Quote notes: admin/service-role only.
+drop policy if exists "Service role can read quote request notes" on public.quote_request_notes;
+drop policy if exists "Service role can create quote request notes" on public.quote_request_notes;
+drop policy if exists "Service role can update quote request notes" on public.quote_request_notes;
+drop policy if exists "Service role can delete quote request notes" on public.quote_request_notes;
+drop policy if exists "Service role full access quote request notes" on public.quote_request_notes;
+create policy "Service role full access quote request notes"
+on public.quote_request_notes
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Ads monetization/internal analytics: backend service-role only.
+drop policy if exists "Service role full access ad plans" on public.ad_plans;
+create policy "Service role full access ad plans"
+on public.ad_plans
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role full access ad events" on public.ad_events;
+create policy "Service role full access ad events"
+on public.ad_events
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role full access ad event stats" on public.ad_event_stats;
+create policy "Service role full access ad event stats"
+on public.ad_event_stats
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Admin auth + infra guards: service-role only.
+drop policy if exists "Service role full access admin auth sessions" on public.admin_auth_sessions;
+create policy "Service role full access admin auth sessions"
+on public.admin_auth_sessions
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role full access admin login attempts" on public.admin_login_attempts;
+create policy "Service role full access admin login attempts"
+on public.admin_login_attempts
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role full access order idempotency keys" on public.order_idempotency_keys;
+create policy "Service role full access order idempotency keys"
+on public.order_idempotency_keys
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "Service role full access request rate limits" on public.request_rate_limits;
+create policy "Service role full access request rate limits"
+on public.request_rate_limits
+for all
+to service_role
+using (true)
+with check (true);
+
+-- Defensive privilege revocations for sensitive tables.
+revoke all on table public.quote_request_notes from public, anon, authenticated;
+revoke all on table public.admin_auth_sessions from public, anon, authenticated;
+revoke all on table public.admin_login_attempts from public, anon, authenticated;
+revoke all on table public.order_idempotency_keys from public, anon, authenticated;
+revoke all on table public.request_rate_limits from public, anon, authenticated;
+revoke all on table public.ad_events from public, anon, authenticated;
+revoke all on table public.ad_event_stats from public, anon, authenticated;
+revoke all on table public.ad_plans from public, anon, authenticated;
+
+-- <<< END MIGRATION: 20260408173000_harden_rls_and_policies.sql
+
+
+-- >>> BEGIN MIGRATION: 20260410113000_add_delivery_option_and_customer_note_to_orders.sql
+
+-- Persist checkout delivery option + customer note.
+-- Keep atomic order creation aligned with idempotency and strict stock checks.
+
+alter table if exists public.orders
+add column if not exists delivery_option text;
+
+update public.orders
+set delivery_option = case
+  when fulfillment_method = 'pickup' then 'pickup'
+  else 'standard'
+end
+where delivery_option is null;
+
+alter table if exists public.orders
+alter column delivery_option set not null;
+
+alter table if exists public.orders
+drop constraint if exists orders_delivery_option_check;
+
+alter table if exists public.orders
+add constraint orders_delivery_option_check
+check (delivery_option in ('standard', 'express', 'pickup'));
+
+alter table if exists public.orders
+drop constraint if exists orders_delivery_option_fulfillment_check;
+
+alter table if exists public.orders
+add constraint orders_delivery_option_fulfillment_check
+check (
+  (
+    fulfillment_method = 'pickup'
+    and delivery_option = 'pickup'
+  )
+  or (
+    fulfillment_method = 'delivery'
+    and delivery_option in ('standard', 'express')
+  )
+);
+
+alter table if exists public.orders
+add column if not exists customer_note text null;
+
+alter table if exists public.orders
+drop constraint if exists orders_customer_note_length_check;
+
+alter table if exists public.orders
+add constraint orders_customer_note_length_check
+check (
+  customer_note is null
+  or char_length(btrim(customer_note)) <= 500
+);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  numeric,
+  numeric,
+  uuid,
+  jsonb,
+  text,
+  text,
+  text
+);
+
+drop function if exists public.create_order_with_items_atomic(
+  text,
+  text,
+  text,
+  text,
+  integer,
+  integer,
+  integer,
+  uuid,
+  jsonb,
+  text,
+  text,
+  text
+);
+
+create or replace function public.create_order_with_items_atomic(
+  p_customer_name text,
+  p_customer_phone text,
+  p_customer_address text,
+  p_customer_location text,
+  p_subtotal numeric(12, 2),
+  p_delivery_fee numeric(12, 2),
+  p_total numeric(12, 2),
+  p_user_id uuid,
+  p_items jsonb,
+  p_fulfillment_method text,
+  p_idempotency_key text,
+  p_request_fingerprint text,
+  p_delivery_option text,
+  p_customer_note text default null
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_order_id uuid;
+  v_item record;
+  v_rows integer;
+  v_fulfillment_method text;
+  v_delivery_option text;
+  v_customer_note text;
+  v_idempotency_key text;
+  v_request_fingerprint text;
+  v_existing_order_id uuid;
+  v_existing_user_id uuid;
+  v_existing_request_fingerprint text;
+begin
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'ORDER_ITEMS_EMPTY';
+  end if;
+
+  if p_subtotal < 0
+    or p_delivery_fee < 0
+    or p_total < 0
+    or round(p_total, 2) <> round(p_subtotal + p_delivery_fee, 2) then
+    raise exception 'INVALID_ORDER_TOTALS';
+  end if;
+
+  if p_user_id is null then
+    raise exception 'AUTH_REQUIRED';
+  end if;
+
+  v_fulfillment_method := coalesce(nullif(lower(btrim(p_fulfillment_method)), ''), 'delivery');
+  if v_fulfillment_method not in ('delivery', 'pickup') then
+    raise exception 'INVALID_FULFILLMENT_METHOD';
+  end if;
+
+  v_delivery_option := coalesce(
+    nullif(lower(btrim(p_delivery_option)), ''),
+    case when v_fulfillment_method = 'pickup' then 'pickup' else 'standard' end
+  );
+  if v_fulfillment_method = 'pickup' and v_delivery_option <> 'pickup' then
+    raise exception 'INVALID_DELIVERY_OPTION';
+  end if;
+  if v_fulfillment_method = 'delivery' and v_delivery_option not in ('standard', 'express') then
+    raise exception 'INVALID_DELIVERY_OPTION';
+  end if;
+
+  v_customer_note := nullif(btrim(p_customer_note), '');
+  if v_customer_note is not null and char_length(v_customer_note) > 500 then
+    raise exception 'INVALID_CUSTOMER_NOTE';
+  end if;
+
+  v_idempotency_key := nullif(btrim(p_idempotency_key), '');
+  if v_idempotency_key is null then
+    raise exception 'IDEMPOTENCY_KEY_REQUIRED';
+  end if;
+
+  v_request_fingerprint := nullif(btrim(p_request_fingerprint), '');
+
+  insert into public.order_idempotency_keys (
+    idempotency_key,
+    user_id,
+    request_fingerprint
+  )
+  values (
+    v_idempotency_key,
+    p_user_id,
+    v_request_fingerprint
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    select
+      existing.order_id,
+      existing.user_id,
+      existing.request_fingerprint
+    into
+      v_existing_order_id,
+      v_existing_user_id,
+      v_existing_request_fingerprint
+    from public.order_idempotency_keys as existing
+    where existing.idempotency_key = v_idempotency_key
+    for update;
+
+    if not found then
+      raise exception 'IDEMPOTENCY_KEY_LOOKUP_FAILED';
+    end if;
+
+    if v_existing_user_id is distinct from p_user_id then
+      raise exception 'IDEMPOTENCY_KEY_OWNERSHIP_MISMATCH';
+    end if;
+
+    if v_request_fingerprint is not null
+      and v_existing_request_fingerprint is not null
+      and v_existing_request_fingerprint <> v_request_fingerprint then
+      raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD';
+    end if;
+
+    if v_existing_order_id is not null then
+      return v_existing_order_id;
+    end if;
+
+    raise exception 'IDEMPOTENCY_KEY_IN_PROGRESS';
+  end if;
+
+  for v_item in
+    select *
+    from jsonb_to_recordset(p_items) as item(
+      product_id text,
+      variant_id text,
+      selected_color text,
+      selected_size text,
+      product_name text,
+      quantity integer,
+      unit_price numeric(12, 2),
+      line_total numeric(12, 2)
+    )
+  loop
+    if v_item.product_id is null or btrim(v_item.product_id) = '' then
+      raise exception 'INVALID_PRODUCT_ID';
+    end if;
+
+    if v_item.product_name is null or btrim(v_item.product_name) = '' then
+      raise exception 'INVALID_PRODUCT_NAME';
+    end if;
+
+    if v_item.quantity is null or v_item.quantity <= 0 then
+      raise exception 'INVALID_ITEM_QUANTITY';
+    end if;
+
+    if v_item.unit_price is null or v_item.unit_price < 0 then
+      raise exception 'INVALID_UNIT_PRICE';
+    end if;
+
+    if v_item.line_total is null
+      or round(v_item.line_total, 2) <> round(v_item.quantity::numeric * v_item.unit_price, 2) then
+      raise exception 'INVALID_LINE_TOTAL';
+    end if;
+
+    if v_item.variant_id is null or btrim(v_item.variant_id) = '' then
+      update public.products
+      set stock = stock - v_item.quantity
+      where id = v_item.product_id
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_STOCK';
+      end if;
+    else
+      update public.product_variants
+      set stock = stock - v_item.quantity
+      where id = v_item.variant_id::uuid
+        and product_id = v_item.product_id
+        and is_active = true
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_VARIANT_STOCK';
+      end if;
+    end if;
+  end loop;
+
+  insert into public.orders (
+    user_id,
+    fulfillment_method,
+    delivery_option,
+    customer_name,
+    customer_phone,
+    customer_address,
+    customer_location,
+    customer_note,
+    subtotal,
+    delivery_fee,
+    total
+  )
+  values (
+    p_user_id,
+    v_fulfillment_method,
+    v_delivery_option,
+    p_customer_name,
+    p_customer_phone,
+    p_customer_address,
+    p_customer_location,
+    v_customer_note,
+    round(p_subtotal, 2),
+    round(p_delivery_fee, 2),
+    round(p_total, 2)
+  )
+  returning id into v_order_id;
+
+  insert into public.order_items (
+    order_id,
+    product_id,
+    variant_id,
+    selected_color,
+    selected_size,
+    product_name,
+    quantity,
+    unit_price,
+    line_total
+  )
+  select
+    v_order_id,
+    item.product_id,
+    item.variant_id::uuid,
+    item.selected_color,
+    item.selected_size,
+    item.product_name,
+    item.quantity,
+    round(item.unit_price, 2),
+    round(item.line_total, 2)
+  from jsonb_to_recordset(p_items) as item(
+    product_id text,
+    variant_id text,
+    selected_color text,
+    selected_size text,
+    product_name text,
+    quantity integer,
+    unit_price numeric(12, 2),
+    line_total numeric(12, 2)
+  );
+
+  update public.order_idempotency_keys
+  set
+    order_id = v_order_id,
+    request_fingerprint = coalesce(v_request_fingerprint, request_fingerprint),
+    updated_at = now()
+  where idempotency_key = v_idempotency_key;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'IDEMPOTENCY_KEY_UPDATE_FAILED';
+  end if;
+
+  return v_order_id;
+end;
+$$;
+
+-- <<< END MIGRATION: 20260410113000_add_delivery_option_and_customer_note_to_orders.sql
+
+
+-- >>> BEGIN MIGRATION: 20260410124500_enable_guest_checkout_orders.sql
+
+-- Enable guest checkout while preserving idempotency + stock safety.
+-- - order_idempotency_keys.user_id can be null for guest orders
+-- - atomic order function accepts null p_user_id (guest), no AUTH_REQUIRED gate
+
+alter table if exists public.order_idempotency_keys
+alter column user_id drop not null;
+
+create or replace function public.create_order_with_items_atomic(
+  p_customer_name text,
+  p_customer_phone text,
+  p_customer_address text,
+  p_customer_location text,
+  p_subtotal numeric(12, 2),
+  p_delivery_fee numeric(12, 2),
+  p_total numeric(12, 2),
+  p_user_id uuid,
+  p_items jsonb,
+  p_fulfillment_method text,
+  p_idempotency_key text,
+  p_request_fingerprint text,
+  p_delivery_option text,
+  p_customer_note text default null
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_order_id uuid;
+  v_item record;
+  v_rows integer;
+  v_fulfillment_method text;
+  v_delivery_option text;
+  v_customer_note text;
+  v_idempotency_key text;
+  v_request_fingerprint text;
+  v_existing_order_id uuid;
+  v_existing_user_id uuid;
+  v_existing_request_fingerprint text;
+begin
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'ORDER_ITEMS_EMPTY';
+  end if;
+
+  if p_subtotal < 0
+    or p_delivery_fee < 0
+    or p_total < 0
+    or round(p_total, 2) <> round(p_subtotal + p_delivery_fee, 2) then
+    raise exception 'INVALID_ORDER_TOTALS';
+  end if;
+
+  v_fulfillment_method := coalesce(nullif(lower(btrim(p_fulfillment_method)), ''), 'delivery');
+  if v_fulfillment_method not in ('delivery', 'pickup') then
+    raise exception 'INVALID_FULFILLMENT_METHOD';
+  end if;
+
+  v_delivery_option := coalesce(
+    nullif(lower(btrim(p_delivery_option)), ''),
+    case when v_fulfillment_method = 'pickup' then 'pickup' else 'standard' end
+  );
+  if v_fulfillment_method = 'pickup' and v_delivery_option <> 'pickup' then
+    raise exception 'INVALID_DELIVERY_OPTION';
+  end if;
+  if v_fulfillment_method = 'delivery' and v_delivery_option not in ('standard', 'express') then
+    raise exception 'INVALID_DELIVERY_OPTION';
+  end if;
+
+  v_customer_note := nullif(btrim(p_customer_note), '');
+  if v_customer_note is not null and char_length(v_customer_note) > 500 then
+    raise exception 'INVALID_CUSTOMER_NOTE';
+  end if;
+
+  v_idempotency_key := nullif(btrim(p_idempotency_key), '');
+  if v_idempotency_key is null then
+    raise exception 'IDEMPOTENCY_KEY_REQUIRED';
+  end if;
+
+  v_request_fingerprint := nullif(btrim(p_request_fingerprint), '');
+
+  insert into public.order_idempotency_keys (
+    idempotency_key,
+    user_id,
+    request_fingerprint
+  )
+  values (
+    v_idempotency_key,
+    p_user_id,
+    v_request_fingerprint
+  )
+  on conflict (idempotency_key) do nothing;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    select
+      existing.order_id,
+      existing.user_id,
+      existing.request_fingerprint
+    into
+      v_existing_order_id,
+      v_existing_user_id,
+      v_existing_request_fingerprint
+    from public.order_idempotency_keys as existing
+    where existing.idempotency_key = v_idempotency_key
+    for update;
+
+    if not found then
+      raise exception 'IDEMPOTENCY_KEY_LOOKUP_FAILED';
+    end if;
+
+    if v_existing_user_id is distinct from p_user_id then
+      raise exception 'IDEMPOTENCY_KEY_OWNERSHIP_MISMATCH';
+    end if;
+
+    if v_request_fingerprint is not null
+      and v_existing_request_fingerprint is not null
+      and v_existing_request_fingerprint <> v_request_fingerprint then
+      raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD';
+    end if;
+
+    if v_existing_order_id is not null then
+      return v_existing_order_id;
+    end if;
+
+    raise exception 'IDEMPOTENCY_KEY_IN_PROGRESS';
+  end if;
+
+  for v_item in
+    select *
+    from jsonb_to_recordset(p_items) as item(
+      product_id text,
+      variant_id text,
+      selected_color text,
+      selected_size text,
+      product_name text,
+      quantity integer,
+      unit_price numeric(12, 2),
+      line_total numeric(12, 2)
+    )
+  loop
+    if v_item.product_id is null or btrim(v_item.product_id) = '' then
+      raise exception 'INVALID_PRODUCT_ID';
+    end if;
+
+    if v_item.product_name is null or btrim(v_item.product_name) = '' then
+      raise exception 'INVALID_PRODUCT_NAME';
+    end if;
+
+    if v_item.quantity is null or v_item.quantity <= 0 then
+      raise exception 'INVALID_ITEM_QUANTITY';
+    end if;
+
+    if v_item.unit_price is null or v_item.unit_price < 0 then
+      raise exception 'INVALID_UNIT_PRICE';
+    end if;
+
+    if v_item.line_total is null
+      or round(v_item.line_total, 2) <> round(v_item.quantity::numeric * v_item.unit_price, 2) then
+      raise exception 'INVALID_LINE_TOTAL';
+    end if;
+
+    if v_item.variant_id is null or btrim(v_item.variant_id) = '' then
+      update public.products
+      set stock = stock - v_item.quantity
+      where id = v_item.product_id
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_STOCK';
+      end if;
+    else
+      update public.product_variants
+      set stock = stock - v_item.quantity
+      where id = v_item.variant_id::uuid
+        and product_id = v_item.product_id
+        and is_active = true
+        and stock >= v_item.quantity;
+
+      get diagnostics v_rows = row_count;
+      if v_rows <> 1 then
+        raise exception 'INSUFFICIENT_VARIANT_STOCK';
+      end if;
+    end if;
+  end loop;
+
+  insert into public.orders (
+    user_id,
+    fulfillment_method,
+    delivery_option,
+    customer_name,
+    customer_phone,
+    customer_address,
+    customer_location,
+    customer_note,
+    subtotal,
+    delivery_fee,
+    total
+  )
+  values (
+    p_user_id,
+    v_fulfillment_method,
+    v_delivery_option,
+    p_customer_name,
+    p_customer_phone,
+    p_customer_address,
+    p_customer_location,
+    v_customer_note,
+    round(p_subtotal, 2),
+    round(p_delivery_fee, 2),
+    round(p_total, 2)
+  )
+  returning id into v_order_id;
+
+  insert into public.order_items (
+    order_id,
+    product_id,
+    variant_id,
+    selected_color,
+    selected_size,
+    product_name,
+    quantity,
+    unit_price,
+    line_total
+  )
+  select
+    v_order_id,
+    item.product_id,
+    item.variant_id::uuid,
+    item.selected_color,
+    item.selected_size,
+    item.product_name,
+    item.quantity,
+    round(item.unit_price, 2),
+    round(item.line_total, 2)
+  from jsonb_to_recordset(p_items) as item(
+    product_id text,
+    variant_id text,
+    selected_color text,
+    selected_size text,
+    product_name text,
+    quantity integer,
+    unit_price numeric(12, 2),
+    line_total numeric(12, 2)
+  );
+
+  update public.order_idempotency_keys
+  set
+    order_id = v_order_id,
+    request_fingerprint = coalesce(v_request_fingerprint, request_fingerprint),
+    updated_at = now()
+  where idempotency_key = v_idempotency_key;
+
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'IDEMPOTENCY_KEY_UPDATE_FAILED';
+  end if;
+
+  return v_order_id;
+end;
+$$;
+
+-- <<< END MIGRATION: 20260410124500_enable_guest_checkout_orders.sql
+

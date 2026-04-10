@@ -15,8 +15,9 @@
 
 ## Supabase integration
 - Setup guide: `SUPABASE_SETUP.md`
-- SQL files: `supabase/schema.sql`, `supabase/seed-products.sql`, `supabase/seed-offers.sql`, `supabase/seed-blog-posts.sql`, `supabase/seed-reviews.sql`
-- Migrations: `supabase/migrations/*`
+- Source of truth: `supabase/migrations/*`
+- Convenience snapshot: `supabase/schema.sql` (reference/audit; migrations remain canonical)
+- Seed files: `supabase/seed-products.sql`, `supabase/seed-offers.sql`, `supabase/seed-blog-posts.sql`, `supabase/seed-reviews.sql`
 - Admin orders: `/admin/login` then `/admin/orders`
 - Admin products: `/admin/login` then `/admin/products`
 - Admin offers: `/admin/login` then `/admin/offres`

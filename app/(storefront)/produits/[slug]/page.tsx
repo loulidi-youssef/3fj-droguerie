@@ -19,6 +19,8 @@ type ProductDetailProps = {
   };
 };
 
+export const revalidate = 300;
+
 const tokenize = (value: string): string[] => {
   return value
     .toLocaleLowerCase("fr")

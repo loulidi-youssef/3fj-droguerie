@@ -2,26 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
-import {
-  buildDetailedCartItems,
-  fetchCartProductsLookup,
-  type CartProductsLookup,
-} from "@/lib/cart-display";
 import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import { formatDh, roundDhAmount } from "@/lib/currency";
 import { getDeliveryCost } from "@/lib/delivery";
 import { getSafeNextImageProps } from "@/lib/image-optimization";
 import { PRODUCT_IMAGE_FALLBACK_SRC } from "@/lib/product-image-variants";
-import {
-  clampQuantityToStock,
-  getStockStatusClassName,
-  getStockStatusLabel,
-} from "@/lib/quantity";
+import { getStockStatusClassName, getStockStatusLabel } from "@/lib/quantity";
 import { captureQuoteRequestAndRedirectToWhatsApp } from "@/lib/quote-request-client";
 import { useQuantityController } from "@/lib/use-quantity-controller";
+import {
+  getMissingProductsWarningMessage,
+  useResolvedCartItems,
+} from "@/lib/use-resolved-cart-items";
 import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
 
 type CartDrawerProps = {
@@ -124,16 +119,19 @@ const CartDrawerQuantityControls = ({
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const { items, itemCount, updateQuantity, removeItem } = useCart();
   const { showToast } = useToast();
-  const [cartLookup, setCartLookup] = useState<CartProductsLookup>({
-    productsById: {},
-    activeOfferRulesByProductId: {},
-  });
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-
-  const uniqueProductIds = useMemo(
-    () => [...new Set(items.map((item) => item.productId))],
-    [items],
+  const handleStockReconciled = useCallback(
+    (payload: { message: string }) => {
+      showToast(payload.message, { variant: "info", durationMs: 3200 });
+    },
+    [showToast],
   );
+  const { detailedItems, isLoadingProducts, missingProductsCount } = useResolvedCartItems({
+    items,
+    updateQuantity,
+    isActive: isOpen,
+    onStockReconciled: handleStockReconciled,
+  });
+  const missingProductsMessage = getMissingProductsWarningMessage(missingProductsCount);
 
   useEffect(() => {
     if (!isOpen) {
@@ -165,98 +163,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     };
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    if (uniqueProductIds.length === 0) {
-      setCartLookup({
-        productsById: {},
-        activeOfferRulesByProductId: {},
-      });
-      setIsLoadingProducts(false);
-      return;
-    }
-
-    let isActive = true;
-
-    const fetchProducts = async () => {
-      setIsLoadingProducts(true);
-
-      try {
-        const nextLookup = await fetchCartProductsLookup(uniqueProductIds);
-        if (!isActive) {
-          return;
-        }
-        setCartLookup(nextLookup);
-      } catch {
-        if (!isActive) {
-          return;
-        }
-        setCartLookup({
-          productsById: {},
-          activeOfferRulesByProductId: {},
-        });
-      } finally {
-        if (isActive) {
-          setIsLoadingProducts(false);
-        }
-      }
-    };
-
-    void fetchProducts();
-
-    return () => {
-      isActive = false;
-    };
-  }, [isOpen, uniqueProductIds]);
-
-  const detailedItems = useMemo(
-    () => buildDetailedCartItems(items, cartLookup),
-    [items, cartLookup],
-  );
-
-  useEffect(() => {
-    if (!isOpen || isLoadingProducts || detailedItems.length === 0) {
-      return;
-    }
-
-    const itemsAboveStock = detailedItems.filter(
-      (item) => {
-        const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
-          minQuantity: 1,
-          allowZeroWhenOutOfStock: true,
-        });
-        return clampedQuantity !== item.quantity;
-      },
-    );
-
-    if (itemsAboveStock.length === 0) {
-      return;
-    }
-
-    for (const item of itemsAboveStock) {
-      const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
-        minQuantity: 1,
-        allowZeroWhenOutOfStock: true,
-      });
-
-      updateQuantity(
-        item.productId,
-        clampedQuantity,
-        item.variantId,
-        item.maxAvailableQuantity ?? undefined,
-      );
-    }
-
-    showToast(
-      itemsAboveStock.length === 1
-        ? "La quantité a été ajustée selon le stock disponible"
-        : `${itemsAboveStock.length} quantités ont été ajustées selon le stock disponible`,
-      { variant: "info", durationMs: 3200 },
-    );
-  }, [detailedItems, isLoadingProducts, isOpen, showToast, updateQuantity]);
 
   const subtotal = useMemo(
     () => roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0)),
@@ -395,9 +301,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 </p>
               ) : null}
 
-              {!isLoadingProducts && detailedItems.length === 0 ? (
+              {!isLoadingProducts && detailedItems.length === 0 && missingProductsMessage ? (
                 <p className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-                  Certains produits de votre panier sont indisponibles actuellement.
+                  {missingProductsMessage}
                 </p>
               ) : null}
 

@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
 
   revalidatePath("/admin/products");
   revalidatePath("/produits");
+  revalidatePath("/produits/[slug]", "page");
   revalidatePath("/offres");
   revalidatePath("/");
 

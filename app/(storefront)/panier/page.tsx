@@ -2,14 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useCart } from "@/components/cart-provider";
 import { useToast } from "@/components/toast-provider";
-import {
-  buildDetailedCartItems,
-  fetchCartProductsLookup,
-  type CartProductsLookup,
-} from "@/lib/cart-display";
 import { isBulkQuoteQuantity, resolveBulkQuoteThreshold } from "@/lib/bulk-quote";
 import {
   type CheckoutCustomerInput,
@@ -27,14 +22,14 @@ import {
   type DeliveryOptionIcon as DeliveryOptionIconKey,
   type FulfillmentMethod,
 } from "@/lib/delivery";
-import {
-  clampQuantityToStock,
-  getStockStatusClassName,
-  getStockStatusLabel,
-} from "@/lib/quantity";
+import { getStockStatusClassName, getStockStatusLabel } from "@/lib/quantity";
 import { captureQuoteRequestAndRedirectToWhatsApp } from "@/lib/quote-request-client";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useQuantityController } from "@/lib/use-quantity-controller";
+import {
+  getMissingProductsWarningMessage,
+  useResolvedCartItems,
+} from "@/lib/use-resolved-cart-items";
 import { buildCartWhatsAppLink, buildCartWhatsAppQuoteLink } from "@/lib/whatsapp";
 
 type CheckoutFormValues = CheckoutCustomerInput;
@@ -243,12 +238,21 @@ export default function PanierPage() {
   const router = useRouter();
   const { items, updateQuantity, removeItem, clearCart } = useCart();
   const { showToast } = useToast();
-
-  const [cartLookup, setCartLookup] = useState<CartProductsLookup>({
-    productsById: {},
-    activeOfferRulesByProductId: {},
+  const handleStockReconciled = useCallback(
+    (payload: { message: string }) => {
+      showToast(payload.message, { variant: "info", durationMs: 3200 });
+    },
+    [showToast],
+  );
+  const { detailedItems, isLoadingProducts: isProductsLoading, missingProductsCount } =
+    useResolvedCartItems({
+      items,
+      updateQuantity,
+      onStockReconciled: handleStockReconciled,
+    });
+  const missingProductsMessage = getMissingProductsWarningMessage(missingProductsCount, {
+    includeCount: true,
   });
-  const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutFormValues>(initialCheckoutForm);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [touchedFields, setTouchedFields] =
@@ -286,51 +290,6 @@ export default function PanierPage() {
   }, []);
 
   useEffect(() => {
-    const uniqueProductIds = [...new Set(items.map((item) => item.productId))];
-
-    if (uniqueProductIds.length === 0) {
-      setCartLookup({
-        productsById: {},
-        activeOfferRulesByProductId: {},
-      });
-      setIsProductsLoading(false);
-      return;
-    }
-
-    let isActive = true;
-
-    const fetchProducts = async () => {
-      setIsProductsLoading(true);
-
-      try {
-        const nextLookup = await fetchCartProductsLookup(uniqueProductIds);
-        if (!isActive) {
-          return;
-        }
-        setCartLookup(nextLookup);
-      } catch {
-        if (!isActive) {
-          return;
-        }
-        setCartLookup({
-          productsById: {},
-          activeOfferRulesByProductId: {},
-        });
-      } finally {
-        if (isActive) {
-          setIsProductsLoading(false);
-        }
-      }
-    };
-
-    void fetchProducts();
-
-    return () => {
-      isActive = false;
-    };
-  }, [items]);
-
-  useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setCustomerAccessToken(null);
@@ -366,53 +325,6 @@ export default function PanierPage() {
     window.localStorage.setItem(CHECKOUT_DRAFT_STORAGE_KEY, JSON.stringify(checkoutForm));
   }, [checkoutForm]);
 
-  const detailedItems = useMemo(
-    () => buildDetailedCartItems(items, cartLookup),
-    [items, cartLookup],
-  );
-
-  useEffect(() => {
-    if (isProductsLoading || detailedItems.length === 0) {
-      return;
-    }
-
-    const itemsAboveStock = detailedItems.filter(
-      (item) => {
-        const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
-          minQuantity: 1,
-          allowZeroWhenOutOfStock: true,
-        });
-        return clampedQuantity !== item.quantity;
-      },
-    );
-
-    if (itemsAboveStock.length === 0) {
-      return;
-    }
-
-    for (const item of itemsAboveStock) {
-      const clampedQuantity = clampQuantityToStock(item.quantity, item.maxAvailableQuantity, {
-        minQuantity: 1,
-        allowZeroWhenOutOfStock: true,
-      });
-
-      updateQuantity(
-        item.productId,
-        clampedQuantity,
-        item.variantId,
-        item.maxAvailableQuantity ?? undefined,
-      );
-    }
-
-    showToast(
-      itemsAboveStock.length === 1
-        ? "La quantité a été ajustée selon le stock disponible"
-        : `${itemsAboveStock.length} quantités ont été ajustées selon le stock disponible`,
-      { variant: "info", durationMs: 3200 },
-    );
-  }, [detailedItems, isProductsLoading, showToast, updateQuantity]);
-
-  const missingProductsCount = items.length - detailedItems.length;
   const subtotal = roundDhAmount(detailedItems.reduce((sum, item) => sum + item.lineTotal, 0));
   const deliveryOptions = useMemo(() => getCheckoutDeliveryOptions(subtotal), [subtotal]);
   const selectedDeliveryDetails = useMemo(
@@ -724,7 +636,8 @@ export default function PanierPage() {
   };
 
   const isCheckoutActionDisabled = isSubmitting || isProductsLoading || detailedItems.length === 0;
-  const isWhatsAppActionDisabled = isProductsLoading || detailedItems.length === 0;
+  const isWhatsAppActionDisabled =
+    isSubmitting || isProductsLoading || detailedItems.length === 0;
   const primaryCheckoutCtaLabel = isSubmitting
     ? "Enregistrement de votre commande..."
     : "Confirmer la commande";
@@ -972,7 +885,7 @@ export default function PanierPage() {
               </div>
 
               <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-brand-blue">Recapitulatif</p>
+                <p className="text-sm font-semibold text-brand-blue">Recapitulatif final</p>
                 <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
                   {detailedItems.map((item) => (
                     <li key={`summary-${item.lineKey}`} className="flex justify-between gap-2">
@@ -983,7 +896,7 @@ export default function PanierPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-700">
+                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-sm text-slate-700">
                   <div className="flex items-center justify-between">
                     <span>Total produits</span>
                     <span className="font-semibold">{formatDh(subtotal)}</span>
@@ -994,16 +907,19 @@ export default function PanierPage() {
                       {deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}
                     </span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-lg font-extrabold text-brand-blue">
-                    <span>Total final</span>
-                    <span>{formatDh(total)}</span>
+                  <div className="mt-2 flex items-center justify-between rounded-xl bg-brand-blue px-3 py-2.5 text-base font-extrabold text-white">
+                    <span>Total a payer</span>
+                    <span className="text-lg">{formatDh(total)}</span>
                   </div>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Paiement a la livraison apres confirmation.
+                  </p>
                 </div>
               </section>
 
-              {missingProductsCount > 0 ? (
+              {missingProductsMessage ? (
                 <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-700">
-                  {missingProductsCount} produit(s) indisponible(s) ont ete ignores.
+                  {missingProductsMessage}
                 </p>
               ) : null}
 
@@ -1020,23 +936,41 @@ export default function PanierPage() {
               ) : null}
 
               <div className="mt-4 hidden gap-2 md:grid">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-brand-blue/80">
+                  Action recommandee
+                </p>
                 <button
                   type="button"
                   onClick={handleConfirmOrder}
                   disabled={isCheckoutActionDisabled}
-                  className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {primaryCheckoutCtaLabel}
                 </button>
 
-                <a
-                  href={directWhatsAppLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700"
+                <button
+                  type="button"
+                  onClick={handleConfirmWhatsApp}
+                  disabled={isWhatsAppActionDisabled}
+                  className="block w-full rounded-xl border border-emerald-400 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Confirmer sur WhatsApp
-                </a>
+                </button>
+
+                <div className="mt-1 grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                    Paiement a la livraison
+                  </p>
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                    Confirmation rapide
+                  </p>
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                    Support WhatsApp
+                  </p>
+                  <p className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-center">
+                    Retrait en magasin
+                  </p>
+                </div>
               </div>
 
               {hasBulkEligibleItems ? (
@@ -1068,7 +1002,7 @@ export default function PanierPage() {
       {items.length > 0 ? (
         <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 pb-[env(safe-area-inset-bottom)] md:hidden">
           <div className="rounded-2xl border border-emerald-300 bg-white p-2 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
-            <div className="mb-2 space-y-1 rounded-xl bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
+            <div className="mb-2 space-y-1.5 rounded-xl bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
               <div className="flex items-center justify-between">
                 <span>Total produits</span>
                 <span>{formatDh(subtotal)}</span>
@@ -1077,8 +1011,8 @@ export default function PanierPage() {
                 <span>Livraison</span>
                 <span>{deliveryCost === 0 ? "Gratuit" : formatDh(deliveryCost)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm font-extrabold text-brand-blue">
-                <span>Total final</span>
+              <div className="flex items-center justify-between rounded-lg bg-brand-blue px-2.5 py-1.5 text-sm font-extrabold text-white">
+                <span>Total a payer</span>
                 <span>{formatDh(total)}</span>
               </div>
             </div>
@@ -1087,7 +1021,7 @@ export default function PanierPage() {
                 type="button"
                 onClick={handleConfirmOrder}
                 disabled={isCheckoutActionDisabled}
-                className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+                className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,42,77,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {primaryCheckoutCtaLabel}
               </button>
@@ -1096,9 +1030,23 @@ export default function PanierPage() {
                 onClick={handleConfirmWhatsApp}
                 disabled={isWhatsAppActionDisabled}
                 className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                Confirmer sur WhatsApp
-              </button>
+                >
+                  Confirmer sur WhatsApp
+                </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-semibold text-slate-600">
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+                Paiement livraison
+              </p>
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+                Confirmation rapide
+              </p>
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+                Support WhatsApp
+              </p>
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+                Retrait magasin
+              </p>
             </div>
           </div>
         </div>

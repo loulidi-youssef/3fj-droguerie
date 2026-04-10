@@ -14,6 +14,8 @@ const homeTitle = "Droguerie materiaux de construction a Fes | Prix Maroc";
 const homeDescription =
   "3FJ Droguerie a Fes: materiaux de construction, peinture, outillage et quincaillerie avec livraison rapide et paiement a la livraison.";
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: homeTitle,
   description: homeDescription,

@@ -31,7 +31,7 @@ Vercel steps:
 5. Verify `/admin/login` with the original plaintext password used to generate the hash.
 
 ## 2. Supabase production checks
-1. Run latest SQL schema/migrations.
+1. Apply canonical migrations (`supabase/migrations/*`) to production; do not rely on stale manual SQL snippets.
 2. Confirm tables exist: `products`, `offers`, `orders`, `order_items`, `blog_posts`, `reviews`.
 3. Confirm RLS is enabled on all public tables.
 4. Confirm public read policies exist only for active/published content.

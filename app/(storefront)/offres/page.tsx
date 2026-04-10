@@ -6,6 +6,8 @@ const offersTitle = "Offres materiaux de construction a Fes";
 const offersDescription =
   "Offres speciales sur les produits de droguerie et materiaux de construction a Fes.";
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: offersTitle,
   description: offersDescription,

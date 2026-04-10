@@ -51,6 +51,7 @@ const MAX_UNITS_PER_LINE = 20_000;
 const MAX_TOTAL_UNITS = 80_000;
 const QUOTE_REQUEST_RATE_LIMIT_WINDOW_MS = 60_000;
 const QUOTE_REQUEST_RATE_LIMIT_MAX_REQUESTS = 12;
+const QUOTE_REQUEST_FINGERPRINT_RATE_LIMIT_MAX_REQUESTS = 20;
 
 const toNullableString = (value: unknown): string | null => {
   if (typeof value !== "string") {
@@ -203,9 +204,10 @@ export async function POST(request: NextRequest) {
 
   const source = normalizeQuoteSource(body.source);
   const fulfillmentMethod = normalizeFulfillmentMethod(body.fulfillmentMethod);
+  const requestFingerprintHash = getRequestFingerprintHash(request);
   const anonymousId =
     normalizeQuoteRequestAnonymousId(body.anonymousId) ??
-    `fp_${getRequestFingerprintHash(request).slice(0, 24)}`;
+    `fp_${requestFingerprintHash.slice(0, 24)}`;
 
   const rawItems = Array.isArray(body.items) ? body.items : [];
   const parsedItems = parseQuoteItems(rawItems);
@@ -223,14 +225,41 @@ export async function POST(request: NextRequest) {
     identifier: rateLimitIdentity,
     limit: QUOTE_REQUEST_RATE_LIMIT_MAX_REQUESTS,
     windowMs: QUOTE_REQUEST_RATE_LIMIT_WINDOW_MS,
-    denyOnError: false,
+    denyOnError: true,
   });
 
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Trop de demandes de devis. Merci de patienter." },
-      { status: 429 },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+      },
     );
+  }
+
+  if (!optionalUserId) {
+    const fingerprintRateLimit = await consumeSharedRateLimit({
+      scope: "quote-requests:create:fingerprint",
+      identifier: `fp:${requestFingerprintHash}`,
+      limit: QUOTE_REQUEST_FINGERPRINT_RATE_LIMIT_MAX_REQUESTS,
+      windowMs: QUOTE_REQUEST_RATE_LIMIT_WINDOW_MS,
+      denyOnError: true,
+    });
+
+    if (!fingerprintRateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Trop de demandes de devis. Merci de patienter." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(fingerprintRateLimit.retryAfterSeconds),
+          },
+        },
+      );
+    }
   }
 
   const productIds = parsedItems.items.map((item) => item.productId);
@@ -298,7 +327,7 @@ export async function POST(request: NextRequest) {
         estimatedSubtotal: payloadItems.reduce((sum, item) => sum + item.estimatedTotal, 0),
       },
       context: {
-        requestFingerprintHash: getRequestFingerprintHash(request),
+        requestFingerprintHash,
         userAgent: request.headers.get("user-agent")?.trim().slice(0, 240) ?? null,
       },
     } as const;
