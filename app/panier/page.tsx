@@ -66,17 +66,23 @@ const initialTouchedFields: Record<CheckoutField, boolean> = {
   note: false,
 };
 
-const baseRequiredFields: CheckoutField[] = ["name", "phone", "location"];
+const baseRequiredFields: CheckoutField[] = ["phone", "location"];
 const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
-const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 const BULK_STEPS = [10, 50, 100];
 
 const getRequiredFieldsForDeliveryOption = (
   deliveryOption: DeliveryOption,
+  options?: { requireName?: boolean },
 ): CheckoutField[] => {
-  return requiresAddressForDeliveryOption(deliveryOption)
+  const requiredFields: CheckoutField[] = requiresAddressForDeliveryOption(deliveryOption)
     ? [...baseRequiredFields, "address"]
     : [...baseRequiredFields];
+
+  if (options?.requireName) {
+    requiredFields.unshift("name");
+  }
+
+  return requiredFields;
 };
 
 const DeliveryModeIcon = ({
@@ -250,9 +256,7 @@ export default function PanierPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitInfo, setSubmitInfo] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [customerAccessToken, setCustomerAccessToken] = useState<string | null>(null);
-  const [authRequiredPrompt, setAuthRequiredPrompt] = useState(false);
   const [selectedDeliveryOption, setSelectedDeliveryOption] = useState<DeliveryOption>(
     getDefaultDeliveryOption(),
   );
@@ -329,7 +333,6 @@ export default function PanierPage() {
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setIsCustomerAuthenticated(false);
       setCustomerAccessToken(null);
       return;
     }
@@ -342,7 +345,6 @@ export default function PanierPage() {
         return;
       }
 
-      setIsCustomerAuthenticated(Boolean(data.session));
       setCustomerAccessToken(data.session?.access_token ?? null);
     };
 
@@ -351,7 +353,6 @@ export default function PanierPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsCustomerAuthenticated(Boolean(session));
       setCustomerAccessToken(session?.access_token ?? null);
     });
 
@@ -364,23 +365,6 @@ export default function PanierPage() {
   useEffect(() => {
     window.localStorage.setItem(CHECKOUT_DRAFT_STORAGE_KEY, JSON.stringify(checkoutForm));
   }, [checkoutForm]);
-
-  useEffect(() => {
-    if (!isCustomerAuthenticated) {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("checkout") !== "1") {
-      return;
-    }
-
-    setSubmitInfo("Connexion reussie. Vous pouvez maintenant confirmer votre commande.");
-    params.delete("checkout");
-    const nextQueryString = params.toString();
-    const nextUrl = nextQueryString ? `/panier?${nextQueryString}` : "/panier";
-    window.history.replaceState({}, "", nextUrl);
-  }, [isCustomerAuthenticated]);
 
   const detailedItems = useMemo(
     () => buildDetailedCartItems(items, cartLookup),
@@ -441,6 +425,7 @@ export default function PanierPage() {
     selectedDeliveryOption,
   );
   const requiresAddress = requiresAddressForDeliveryOption(selectedDeliveryOption);
+  const isNameRequired = Boolean(customerAccessToken);
   const deliveryCost = roundDhAmount(selectedDeliveryDetails?.price ?? 0);
   const total = roundDhAmount(subtotal + deliveryCost);
   const selectedDeliveryTitle = selectedDeliveryDetails?.title ?? "Livraison Standard";
@@ -546,7 +531,7 @@ export default function PanierPage() {
   ) => {
     const validation = validateCheckoutCustomer(nextForm, {
       requireAddress: requiresAddressForDeliveryOption(deliveryOption),
-      requireName: true,
+      requireName: isNameRequired,
       requireLocation: true,
     });
     setFieldErrors(validation.errors);
@@ -557,7 +542,6 @@ export default function PanierPage() {
     setSelectedDeliveryOption(nextOption);
     setSubmitError(null);
     setSubmitInfo(null);
-    setAuthRequiredPrompt(false);
     validateAndSetErrors(checkoutForm, nextOption);
   };
 
@@ -575,9 +559,6 @@ export default function PanierPage() {
     if (submitInfo) {
       setSubmitInfo(null);
     }
-    if (authRequiredPrompt) {
-      setAuthRequiredPrompt(false);
-    }
   };
 
   const handleFieldBlur = (field: CheckoutField) => {
@@ -587,7 +568,9 @@ export default function PanierPage() {
   };
 
   const markAllRequiredFieldsTouched = () => {
-    const requiredFields = getRequiredFieldsForDeliveryOption(selectedDeliveryOption);
+    const requiredFields = getRequiredFieldsForDeliveryOption(selectedDeliveryOption, {
+      requireName: isNameRequired,
+    });
     setTouchedFields((current) => {
       const next = { ...current };
       for (const field of requiredFields) {
@@ -620,7 +603,6 @@ export default function PanierPage() {
   const handleConfirmOrder = async () => {
     setSubmitError(null);
     setSubmitInfo(null);
-    setAuthRequiredPrompt(false);
 
     if (isProductsLoading) {
       setSubmitError("Chargement des produits en cours. Merci de patienter.");
@@ -629,13 +611,6 @@ export default function PanierPage() {
 
     if (detailedItems.length === 0) {
       setSubmitError("Votre panier est vide.");
-      return;
-    }
-
-    if (!isCustomerAuthenticated || !customerAccessToken) {
-      setAuthRequiredPrompt(true);
-      setSubmitError("Connexion requise pour confirmer votre commande.");
-      setSubmitInfo("Connectez-vous ou creez un compte, puis revenez terminer votre commande.");
       return;
     }
 
@@ -704,7 +679,6 @@ export default function PanierPage() {
       setCheckoutForm(initialCheckoutForm);
       setFieldErrors({});
       setTouchedFields(initialTouchedFields);
-      setAuthRequiredPrompt(false);
       showToast("Commande enregistree avec succes.");
       setSubmitInfo(`Commande enregistree (ref: ${payload.orderId}). Redirection...`);
       router.push(`/commande/success?orderId=${encodeURIComponent(payload.orderId)}`);
@@ -917,7 +891,7 @@ export default function PanierPage() {
 
                   <label className="block">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Nom complet *
+                      {isNameRequired ? "Nom complet *" : "Nom complet (optionnel)"}
                     </span>
                     <input
                       type="text"
@@ -1064,34 +1038,6 @@ export default function PanierPage() {
                   Confirmer sur WhatsApp
                 </a>
               </div>
-
-              {!isCustomerAuthenticated ? (
-                <div
-                  className={`mt-4 rounded-xl border p-3 ${
-                    authRequiredPrompt
-                      ? "border-rose-300 bg-rose-50"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <p className="text-sm font-semibold text-brand-blue">
-                    Connexion requise pour la confirmation interne
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={`/login?next=${encodeURIComponent(CHECKOUT_RETURN_PATH)}`}
-                      className="btn-primary px-3 py-2 text-xs sm:text-sm"
-                    >
-                      Se connecter
-                    </Link>
-                    <Link
-                      href={`/register?next=${encodeURIComponent(CHECKOUT_RETURN_PATH)}`}
-                      className="btn-outline-brand px-3 py-2 text-xs sm:text-sm"
-                    >
-                      Creer un compte
-                    </Link>
-                  </div>
-                </div>
-              ) : null}
 
               {hasBulkEligibleItems ? (
                 <a

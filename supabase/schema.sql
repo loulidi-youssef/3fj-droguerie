@@ -196,10 +196,6 @@ begin
     raise exception 'INVALID_ORDER_TOTALS';
   end if;
 
-  if p_user_id is null then
-    raise exception 'AUTH_REQUIRED';
-  end if;
-
   v_fulfillment_method := coalesce(nullif(btrim(p_fulfillment_method), ''), 'delivery');
   if v_fulfillment_method not in ('delivery', 'pickup') then
     raise exception 'INVALID_FULFILLMENT_METHOD';

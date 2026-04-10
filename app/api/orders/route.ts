@@ -15,10 +15,11 @@ import { getActiveOfferRulesByProductIdsStrict } from "@/lib/offers";
 import { calculateEffectiveUnitPricing } from "@/lib/offer-pricing";
 import { roundDhAmount } from "@/lib/currency";
 import { getProductsByIdsStrict } from "@/lib/products";
+import { getRequestFingerprintHash } from "@/lib/request-client-id";
 import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 import {
   RequestAuthError,
-  getAuthenticatedCustomerFromRequestStrict,
+  getAuthenticatedCustomerFromRequest,
 } from "@/lib/supabase/auth-user";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TransactionDataUnavailableError } from "@/lib/transaction-data";
@@ -77,6 +78,51 @@ const ORDER_RATE_LIMIT_WINDOW_MS = 60_000;
 const ORDER_RATE_LIMIT_MAX_REQUESTS = 10;
 const IDEMPOTENCY_DERIVED_WINDOW_MS = 10 * 60 * 1000;
 const MAX_IDEMPOTENCY_KEY_HEADER_LENGTH = 200;
+
+type RpcErrorLike = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+};
+
+const toRpcErrorLike = (value: unknown): RpcErrorLike => {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    message: typeof record.message === "string" ? record.message : undefined,
+    details: typeof record.details === "string" ? record.details : undefined,
+    hint: typeof record.hint === "string" ? record.hint : undefined,
+    code: typeof record.code === "string" ? record.code : undefined,
+  };
+};
+
+const isCreateOrderRpcSignatureMismatch = (error: unknown): boolean => {
+  const rpcError = toRpcErrorLike(error);
+  const normalizedMessage = [
+    rpcError.message,
+    rpcError.details,
+    rpcError.hint,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+  if (!normalizedMessage.includes("create_order_with_items_atomic")) {
+    return false;
+  }
+
+  return (
+    normalizedMessage.includes("could not find the function") ||
+    (normalizedMessage.includes("function") && normalizedMessage.includes("does not exist")) ||
+    normalizedMessage.includes("no function matches") ||
+    normalizedMessage.includes("p_customer_note") ||
+    normalizedMessage.includes("p_delivery_option")
+  );
+};
 
 const toPositiveInteger = (value: string | undefined): number | null => {
   if (typeof value !== "string") {
@@ -279,23 +325,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let authenticatedCustomer: { id: string; email: string | null };
+  let authenticatedCustomer: { id: string; email: string | null } | null = null;
   try {
-    authenticatedCustomer = await getAuthenticatedCustomerFromRequestStrict(request);
+    authenticatedCustomer = await getAuthenticatedCustomerFromRequest(request);
   } catch (error) {
-    const errorCode =
-      error instanceof RequestAuthError ? error.code : "unknown_auth_error";
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (error instanceof RequestAuthError && error.code === "invalid_bearer_token") {
+      return NextResponse.json<OrderErrorResponse>(
+        { error: "Session invalide. Merci de vous reconnecter ou de continuer en mode invite." },
+        { status: 401 },
+      );
+    }
 
-    console.warn("[api/orders] Auth validation failed.", {
+    const errorCode = error instanceof RequestAuthError ? error.code : "unknown_auth_error";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn("[api/orders] Optional auth lookup failed; continuing as guest.", {
       code: errorCode,
       message: errorMessage,
     });
-
-    return NextResponse.json<OrderErrorResponse>(
-      { error: "Connexion requise ou session invalide. Merci de vous reconnecter." },
-      { status: 401 },
-    );
   }
 
   let body: IncomingOrderBody;
@@ -336,7 +382,7 @@ export async function POST(request: NextRequest) {
     note: body.customer?.note ?? "",
   }, {
     requireAddress: requiresAddressForDeliveryOption(deliveryOption),
-    requireName: true,
+    requireName: Boolean(authenticatedCustomer),
     requireLocation: true,
   });
 
@@ -362,18 +408,16 @@ export async function POST(request: NextRequest) {
   const customerNote = customerValidation.customer.note;
   const orderAddress =
     fulfillmentMethod === "pickup" ? "Retrait en magasin" : address;
-  const orderUserId = authenticatedCustomer.id?.trim();
-  if (!orderUserId) {
-    console.error("[api/orders] Missing authenticated user id before order creation.");
-    return NextResponse.json<OrderErrorResponse>(
-      { error: "Impossible de lier la commande a votre compte. Merci de vous reconnecter." },
-      { status: 401 },
-    );
-  }
+  const orderUserId = authenticatedCustomer?.id?.trim() || null;
+  const requestFingerprintHash = getRequestFingerprintHash(request);
+  const orderActorKey = orderUserId ? `user:${orderUserId}` : `anon:${requestFingerprintHash}`;
+  const orderActorLogSuffix = orderUserId
+    ? `user:${orderUserId.slice(-6)}`
+    : `guest:${requestFingerprintHash.slice(0, 8)}`;
 
   const rateLimitResult = await consumeSharedRateLimit({
-    scope: "orders:create:user",
-    identifier: `user:${orderUserId}`,
+    scope: "orders:create:actor",
+    identifier: orderActorKey,
     limit: ORDER_RATE_LIMIT_MAX_REQUESTS,
     windowMs: ORDER_RATE_LIMIT_WINDOW_MS,
     denyOnError: true,
@@ -550,6 +594,7 @@ export async function POST(request: NextRequest) {
     })),
   );
   const requestFingerprintPayload = {
+    actorKey: orderActorKey,
     userId: orderUserId,
     fulfillmentMethod,
     deliveryOption,
@@ -568,11 +613,12 @@ export async function POST(request: NextRequest) {
     },
   };
   const requestFingerprint = sha256(JSON.stringify(requestFingerprintPayload));
+  const idempotencyActorHash = sha256(orderActorKey);
   const requestTimeBucket = Math.floor(Date.now() / IDEMPOTENCY_DERIVED_WINDOW_MS);
   const idempotencyKey =
     normalizedHeaderIdempotencyKey.length > 0
-      ? `hdr:${orderUserId}:${sha256(normalizedHeaderIdempotencyKey)}`
-      : `drv:${orderUserId}:${requestTimeBucket}:${sha256(requestFingerprint)}`;
+      ? `hdr:${idempotencyActorHash}:${sha256(normalizedHeaderIdempotencyKey)}`
+      : `drv:${idempotencyActorHash}:${requestTimeBucket}:${sha256(requestFingerprint)}`;
 
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
@@ -595,31 +641,90 @@ export async function POST(request: NextRequest) {
     unit_price: item.unitPrice,
     line_total: item.lineTotal,
   }));
+  const totalUnits = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+  console.info("[api/orders] Attempting direct order creation.", {
+    actor: orderActorLogSuffix,
+    itemCount: lineItems.length,
+    totalUnits,
+    fulfillmentMethod,
+    deliveryOption,
+    requiresAddress: requiresAddressForDeliveryOption(deliveryOption),
+    hasCustomerNote: customerNote.length > 0,
+    customerNoteLength: customerNote.length,
+    subtotal,
+    deliveryFee,
+    total,
+  });
 
-  const { data: createdOrderId, error: createOrderError } = await supabaseAdmin.rpc(
-    "create_order_with_items_atomic",
-    {
-      p_customer_name: name,
-      p_customer_phone: phone,
-      p_customer_address: orderAddress,
-      p_customer_location: location,
-      p_customer_note: customerNote || null,
-      p_subtotal: subtotal,
-      p_delivery_fee: deliveryFee,
-      p_total: total,
-      p_user_id: orderUserId,
-      p_fulfillment_method: fulfillmentMethod,
-      p_delivery_option: deliveryOption,
-      p_idempotency_key: idempotencyKey,
-      p_request_fingerprint: requestFingerprint,
-      p_items: orderItemsPayload,
-    },
-  );
+  const rpcPayloadBase = {
+    p_customer_name: name,
+    p_customer_phone: phone,
+    p_customer_address: orderAddress,
+    p_customer_location: location,
+    p_subtotal: subtotal,
+    p_delivery_fee: deliveryFee,
+    p_total: total,
+    p_user_id: orderUserId,
+    p_fulfillment_method: fulfillmentMethod,
+    p_idempotency_key: idempotencyKey,
+    p_request_fingerprint: requestFingerprint,
+    p_items: orderItemsPayload,
+  };
+
+  let usedLegacyRpcSignature = false;
+  let createOrderRpcResult = await supabaseAdmin.rpc("create_order_with_items_atomic", {
+    ...rpcPayloadBase,
+    p_customer_note: customerNote || null,
+    p_delivery_option: deliveryOption,
+  });
+
+  if (createOrderRpcResult.error && isCreateOrderRpcSignatureMismatch(createOrderRpcResult.error)) {
+    usedLegacyRpcSignature = true;
+    console.warn("[api/orders] Retrying order RPC with legacy signature.", {
+      actor: orderActorLogSuffix,
+      reason: toRpcErrorLike(createOrderRpcResult.error).message ?? "signature_mismatch",
+    });
+    createOrderRpcResult = await supabaseAdmin.rpc(
+      "create_order_with_items_atomic",
+      rpcPayloadBase,
+    );
+  }
+
+  const { data: createdOrderId, error: createOrderError } = createOrderRpcResult;
 
   if (createOrderError || !createdOrderId) {
+    const rpcErrorInfo = toRpcErrorLike(createOrderError);
+    console.error("[api/orders] Direct order creation failed.", {
+      actor: orderActorLogSuffix,
+      usedLegacyRpcSignature,
+      code: rpcErrorInfo.code ?? null,
+      message: rpcErrorInfo.message ?? null,
+      details: rpcErrorInfo.details ?? null,
+      hint: rpcErrorInfo.hint ?? null,
+    });
+
     const normalizedMessage = (createOrderError?.message ?? "").toUpperCase();
+    if (isCreateOrderRpcSignatureMismatch(createOrderError)) {
+      return NextResponse.json<OrderErrorResponse>(
+        {
+          error:
+            "Configuration commande en cours de synchronisation. Merci de reessayer dans quelques instants.",
+        },
+        { status: 503 },
+      );
+    }
+
     if (normalizedMessage.includes("AUTH_REQUIRED")) {
-      console.error("[api/orders] Database rejected order without linked user_id.");
+      if (!orderUserId) {
+        return NextResponse.json<OrderErrorResponse>(
+          {
+            error:
+              "Le mode invite est en cours d'activation cote serveur. Merci de reessayer dans quelques instants.",
+          },
+          { status: 503 },
+        );
+      }
+
       return NextResponse.json<OrderErrorResponse>(
         { error: "Connexion requise pour confirmer votre commande." },
         { status: 401 },
