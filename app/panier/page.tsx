@@ -749,8 +749,14 @@ export default function PanierPage() {
     window.open(directWhatsAppLink, "_blank", "noopener,noreferrer");
   };
 
+  const isCheckoutActionDisabled = isSubmitting || isProductsLoading || detailedItems.length === 0;
+  const isWhatsAppActionDisabled = isProductsLoading || detailedItems.length === 0;
+  const primaryCheckoutCtaLabel = isSubmitting
+    ? "Enregistrement de votre commande..."
+    : "Confirmer la commande";
+
   return (
-    <section className="bg-brand-light py-8 pb-36 md:py-12 md:pb-12">
+    <section className="bg-brand-light py-8 pb-56 md:py-12 md:pb-12">
       <div className="mx-auto max-w-7xl px-4">
         <h1 className="text-3xl font-extrabold text-brand-blue">Votre Panier</h1>
 
@@ -1043,14 +1049,10 @@ export default function PanierPage() {
                 <button
                   type="button"
                   onClick={handleConfirmOrder}
-                  disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
+                  disabled={isCheckoutActionDisabled}
                   className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSubmitting
-                    ? "Enregistrement de votre commande..."
-                    : isCustomerAuthenticated
-                      ? "Confirmer sur le site"
-                      : "Se connecter pour confirmer"}
+                  {primaryCheckoutCtaLabel}
                 </button>
 
                 <a
@@ -1118,7 +1120,7 @@ export default function PanierPage() {
       </div>
 
       {items.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 md:hidden">
+        <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 pb-[env(safe-area-inset-bottom)] md:hidden">
           <div className="rounded-2xl border border-emerald-300 bg-white p-2 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
             <div className="mb-2 space-y-1 rounded-xl bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
               <div className="flex items-center justify-between">
@@ -1138,22 +1140,18 @@ export default function PanierPage() {
               <button
                 type="button"
                 onClick={handleConfirmOrder}
-                disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
+                disabled={isCheckoutActionDisabled}
                 className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-bold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSubmitting
-                  ? "Enregistrement..."
-                  : isCustomerAuthenticated
-                    ? "Confirmer sur le site"
-                    : "Se connecter pour confirmer"}
+                {primaryCheckoutCtaLabel}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmWhatsApp}
-                disabled={isProductsLoading || detailedItems.length === 0}
+                disabled={isWhatsAppActionDisabled}
                 className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Continuer sur WhatsApp (optionnel)
+                Confirmer sur WhatsApp
               </button>
             </div>
           </div>
