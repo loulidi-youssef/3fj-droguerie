@@ -18,7 +18,7 @@ import {
   validateCheckoutCustomer,
 } from "@/lib/checkout-validation";
 import { formatDh, roundDhAmount } from "@/lib/currency";
-import { getAmountForFreeDelivery, getDeliveryCost } from "@/lib/delivery";
+import { getDeliveryCost } from "@/lib/delivery";
 import {
   clampQuantityToStock,
   getStockStatusClassName,
@@ -57,10 +57,18 @@ const initialTouchedFields: Record<CheckoutField, boolean> = {
   location: false,
 };
 
-const requiredFields: CheckoutField[] = ["name", "phone", "address"];
+const baseRequiredFields: CheckoutField[] = ["phone"];
 const CHECKOUT_DRAFT_STORAGE_KEY = "3fj-checkout-draft-v1";
 const CHECKOUT_RETURN_PATH = "/panier?checkout=1";
 const BULK_STEPS = [10, 50, 100];
+
+const getRequiredFieldsForMethod = (
+  method: FulfillmentMethod,
+): CheckoutField[] => {
+  return method === "delivery"
+    ? [...baseRequiredFields, "address"]
+    : [...baseRequiredFields];
+};
 
 type CartPageQuantityControlsProps = {
   productName: string;
@@ -350,13 +358,6 @@ export default function PanierPage() {
   const deliveryCost =
     fulfillmentMethod === "pickup" ? 0 : roundDhAmount(getDeliveryCost(subtotal));
   const total = roundDhAmount(subtotal + deliveryCost);
-  const amountForFreeDelivery =
-    fulfillmentMethod === "pickup" ? 0 : getAmountForFreeDelivery(subtotal);
-  const freeDeliveryTarget = subtotal + amountForFreeDelivery;
-  const freeDeliveryProgress =
-    fulfillmentMethod === "pickup" || freeDeliveryTarget <= 0
-      ? 0
-      : Math.min(100, Math.round((subtotal / freeDeliveryTarget) * 100));
   const checkoutName = checkoutForm.name.trim();
   const checkoutPhone = checkoutForm.phone.trim();
   const checkoutAddress = checkoutForm.address.trim();
@@ -493,6 +494,7 @@ export default function PanierPage() {
   };
 
   const markAllRequiredFieldsTouched = () => {
+    const requiredFields = getRequiredFieldsForMethod(fulfillmentMethod);
     setTouchedFields((current) => {
       const next = { ...current };
       for (const field of requiredFields) {
@@ -619,8 +621,38 @@ export default function PanierPage() {
     }
   };
 
+  const handleConfirmWhatsApp = () => {
+    setSubmitError(null);
+    setSubmitInfo(null);
+
+    if (isProductsLoading) {
+      setSubmitError("Chargement des produits en cours. Merci de patienter.");
+      return;
+    }
+
+    if (detailedItems.length === 0) {
+      setSubmitError("Votre panier est vide.");
+      return;
+    }
+
+    markAllRequiredFieldsTouched();
+    const validation = validateAndSetErrors(checkoutForm);
+    if (!validation.isValid) {
+      markTouchedFromFieldErrors(validation.errors);
+      const firstError =
+        validation.errors.phone ||
+        validation.errors.address ||
+        validation.errors.name ||
+        "Merci de verifier vos informations.";
+      setSubmitError(firstError);
+      return;
+    }
+
+    window.open(directWhatsAppLink, "_blank", "noopener,noreferrer");
+  };
+
   return (
-    <section className="bg-brand-light py-12">
+    <section className="bg-brand-light py-8 pb-36 md:py-12 md:pb-12">
       <div className="mx-auto max-w-7xl px-4">
         <h1 className="text-3xl font-extrabold text-brand-blue">Votre Panier</h1>
 
@@ -689,150 +721,196 @@ export default function PanierPage() {
               )}
             </div>
 
-            <aside className="rounded-2xl bg-white p-5 shadow-card">
-              <h2 className="text-xl font-extrabold text-brand-blue">Validation de commande</h2>
-              <p className="mt-1 text-xs text-slate-600">
-                Les champs avec * sont obligatoires.
+            <aside className="rounded-2xl bg-white p-4 shadow-card md:p-5">
+              <h2 className="text-xl font-extrabold text-brand-blue">Confirmation rapide</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                1) Renseignez votre telephone 2) Choisissez la reception 3) Confirmez sur WhatsApp.
               </p>
 
-              <div className="mt-4 space-y-3">
-                <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Mode de reception *
-                  </legend>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
-                      <input
-                        type="radio"
-                        name="fulfillmentMethod"
-                        checked={fulfillmentMethod === "delivery"}
-                        onChange={() => handleFulfillmentMethodChange("delivery")}
-                      />
-                      <span className="text-sm text-slate-700">
-                        <span className="block font-semibold text-brand-blue">Livraison</span>
-                        <span className="block text-xs text-slate-500">
-                          Livraison a votre adresse.
-                        </span>
+              <div className="mt-5 space-y-4">
+                <section>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Mode de reception
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFulfillmentMethodChange("delivery")}
+                      className={`rounded-xl border px-3 py-3 text-left transition ${
+                        fulfillmentMethod === "delivery"
+                          ? "border-brand-blue bg-brand-blue text-white"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange"
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">Livraison</span>
+                      <span
+                        className={`mt-0.5 block text-[11px] ${
+                          fulfillmentMethod === "delivery" ? "text-white/90" : "text-slate-500"
+                        }`}
+                      >
+                        A votre adresse
                       </span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
-                      <input
-                        type="radio"
-                        name="fulfillmentMethod"
-                        checked={fulfillmentMethod === "pickup"}
-                        onChange={() => handleFulfillmentMethodChange("pickup")}
-                      />
-                      <span className="text-sm text-slate-700">
-                        <span className="block font-semibold text-brand-blue">Retrait en magasin</span>
-                        <span className="block text-xs text-slate-500">
-                          Vous recupererez votre commande directement en magasin.
-                        </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleFulfillmentMethodChange("pickup")}
+                      className={`rounded-xl border px-3 py-3 text-left transition ${
+                        fulfillmentMethod === "pickup"
+                          ? "border-brand-blue bg-brand-blue text-white"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-brand-orange"
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">Retrait</span>
+                      <span
+                        className={`mt-0.5 block text-[11px] ${
+                          fulfillmentMethod === "pickup" ? "text-white/90" : "text-slate-500"
+                        }`}
+                      >
+                        En magasin
                       </span>
-                    </label>
+                    </button>
                   </div>
-                </fieldset>
+                </section>
 
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Nom complet *
-                  </span>
-                  <input
-                    type="text"
-                    value={checkoutForm.name}
-                    onChange={(event) => handleCheckoutFieldChange("name", event.target.value)}
-                    onBlur={() => handleFieldBlur("name")}
-                    className={getInputClassName("name")}
-                    placeholder="Votre nom complet"
-                    autoComplete="name"
-                    aria-invalid={touchedFields.name && Boolean(fieldErrors.name)}
-                  />
-                  {touchedFields.name && fieldErrors.name ? (
-                    <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.name}</p>
-                  ) : null}
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Telephone *
-                  </span>
-                  <input
-                    type="tel"
-                    value={checkoutForm.phone}
-                    onChange={(event) => handleCheckoutFieldChange("phone", event.target.value)}
-                    onBlur={() => handleFieldBlur("phone")}
-                    className={getInputClassName("phone")}
-                    placeholder="06XXXXXXXX ou +2126XXXXXXXX"
-                    autoComplete="tel"
-                    aria-invalid={touchedFields.phone && Boolean(fieldErrors.phone)}
-                  />
-                  {touchedFields.phone && fieldErrors.phone ? (
-                    <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.phone}</p>
-                  ) : null}
-                </label>
-
-                {fulfillmentMethod === "delivery" ? (
+                <section className="space-y-3">
                   <label className="block">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Adresse *
+                      Telephone *
+                    </span>
+                    <input
+                      type="tel"
+                      value={checkoutForm.phone}
+                      onChange={(event) => handleCheckoutFieldChange("phone", event.target.value)}
+                      onBlur={() => handleFieldBlur("phone")}
+                      className={getInputClassName("phone")}
+                      placeholder="06XXXXXXXX ou +2126XXXXXXXX"
+                      autoComplete="tel"
+                      aria-invalid={touchedFields.phone && Boolean(fieldErrors.phone)}
+                    />
+                    {touchedFields.phone && fieldErrors.phone ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.phone}</p>
+                    ) : null}
+                  </label>
+
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Nom (optionnel)
                     </span>
                     <input
                       type="text"
-                      value={checkoutForm.address}
-                      onChange={(event) => handleCheckoutFieldChange("address", event.target.value)}
-                      onBlur={() => handleFieldBlur("address")}
-                      className={getInputClassName("address")}
-                      placeholder="Quartier, rue, numero..."
-                      autoComplete="street-address"
-                      aria-invalid={touchedFields.address && Boolean(fieldErrors.address)}
+                      value={checkoutForm.name}
+                      onChange={(event) => handleCheckoutFieldChange("name", event.target.value)}
+                      onBlur={() => handleFieldBlur("name")}
+                      className={getInputClassName("name")}
+                      placeholder="Votre nom"
+                      autoComplete="name"
+                      aria-invalid={touchedFields.name && Boolean(fieldErrors.name)}
                     />
-                    {touchedFields.address && fieldErrors.address ? (
-                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.address}</p>
+                    {touchedFields.name && fieldErrors.name ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.name}</p>
                     ) : null}
                   </label>
-                ) : (
-                  <p className="rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
-                    Vous recupererez votre commande directement en magasin.
-                  </p>
-                )}
 
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Ville / localisation (optionnel)
-                  </span>
-                  <input
-                    type="text"
-                    value={checkoutForm.location}
-                    onChange={(event) => handleCheckoutFieldChange("location", event.target.value)}
-                    onBlur={() => handleFieldBlur("location")}
-                    className={getInputClassName("location")}
-                    placeholder="Fes"
-                    autoComplete="address-level2"
-                    aria-invalid={touchedFields.location && Boolean(fieldErrors.location)}
-                  />
-                  {touchedFields.location && fieldErrors.location ? (
-                    <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.location}</p>
+                  {fulfillmentMethod === "delivery" ? (
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Adresse *
+                      </span>
+                      <input
+                        type="text"
+                        value={checkoutForm.address}
+                        onChange={(event) => handleCheckoutFieldChange("address", event.target.value)}
+                        onBlur={() => handleFieldBlur("address")}
+                        className={getInputClassName("address")}
+                        placeholder="Quartier, rue, numero..."
+                        autoComplete="street-address"
+                        aria-invalid={touchedFields.address && Boolean(fieldErrors.address)}
+                      />
+                      {touchedFields.address && fieldErrors.address ? (
+                        <p className="mt-1 text-xs font-medium text-rose-700">{fieldErrors.address}</p>
+                      ) : null}
+                    </label>
                   ) : (
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Si vide, la localisation par defaut sera Fes.
+                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                      Retrait en magasin selectionne.
                     </p>
                   )}
-                </label>
+                </section>
+              </div>
+
+              <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-brand-blue">Recapitulatif</p>
+                <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+                  {detailedItems.map((item) => (
+                    <li key={`summary-${item.lineKey}`} className="flex justify-between gap-2">
+                      <span className="truncate">
+                        {item.product.name} x{item.quantity}
+                      </span>
+                      <span className="font-semibold">{formatDh(item.lineTotal)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between text-lg font-extrabold text-brand-blue">
+                    <span>Total</span>
+                    <span>{formatDh(total)}</span>
+                  </div>
+                </div>
+              </section>
+
+              {missingProductsCount > 0 ? (
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-700">
+                  {missingProductsCount} produit(s) indisponible(s) ont ete ignores.
+                </p>
+              ) : null}
+
+              {submitInfo ? (
+                <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
+                  {submitInfo}
+                </p>
+              ) : null}
+
+              {submitError ? (
+                <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700">
+                  {submitError}
+                </p>
+              ) : null}
+
+              <div className="mt-4 hidden gap-2 md:grid">
+                <button
+                  type="button"
+                  onClick={handleConfirmOrder}
+                  disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
+                  className="block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSubmitting
+                    ? "Enregistrement de votre commande..."
+                    : isCustomerAuthenticated
+                      ? "Confirmer la commande"
+                      : "Se connecter pour confirmer"}
+                </button>
+
+                <a
+                  href={directWhatsAppLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block w-full rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700"
+                >
+                  Confirmer sur WhatsApp
+                </a>
               </div>
 
               {!isCustomerAuthenticated ? (
                 <div
-                  className={`mt-4 rounded-xl border p-3 ${
+                  className={`mt-4 hidden rounded-xl border p-3 md:block ${
                     authRequiredPrompt
                       ? "border-rose-300 bg-rose-50"
                       : "border-slate-200 bg-slate-50"
                   }`}
                 >
                   <p className="text-sm font-semibold text-brand-blue">
-                    Connexion requise pour confirmer
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    Pour finaliser la commande, connectez-vous ou creez un compte.
-                    Apres authentification, vous revenez directement ici pour continuer.
+                    Connexion requise pour la confirmation interne
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
@@ -849,159 +927,26 @@ export default function PanierPage() {
                     </Link>
                   </div>
                 </div>
-              ) : (
-                <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
-                  Connecte. Vous pouvez confirmer votre commande.
-                </p>
-              )}
-
-              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-brand-blue">Recapitulatif de commande</p>
-                <div className="mt-2 space-y-2 text-sm text-slate-700">
-                  <div className="flex justify-between">
-                    <span>Articles</span>
-                    <span>{detailedItems.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Sous-total produits</span>
-                    <span>{formatDh(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Frais de livraison</span>
-                    <span>{formatDh(deliveryCost)}</span>
-                  </div>
-                  <div className="border-t border-slate-200 pt-2 text-base font-bold text-brand-blue">
-                    <div className="flex justify-between">
-                      <span>Total a confirmer</span>
-                      <span>{formatDh(total)}</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">
-                  Livraison gratuite a partir de 300 DH.
-                </p>
-              </div>
-
-              {fulfillmentMethod === "pickup" ? (
-                <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
-                  Retrait en magasin: aucun frais de livraison.
-                </p>
-              ) : amountForFreeDelivery > 0 ? (
-                <p className="mt-3 rounded-xl bg-orange-50 p-3 text-sm font-medium text-orange-700">
-                  Ajoutez encore {formatDh(amountForFreeDelivery)} pour beneficier de la livraison gratuite.
-                </p>
-              ) : (
-                <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
-                  Livraison gratuite activee.
-                </p>
-              )}
-              {fulfillmentMethod === "delivery" ? (
-                <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2.5">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className="h-full rounded-full bg-brand-orange transition-all"
-                      style={{ width: `${freeDeliveryProgress}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Progression livraison gratuite: {freeDeliveryProgress}%
-                  </p>
-                </div>
               ) : null}
-
-              {missingProductsCount > 0 ? (
-                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-700">
-                  {missingProductsCount} produit(s) indisponible(s) ont ete ignores.
-                </p>
-              ) : null}
-
-              <div className="mt-3 space-y-2">
-                <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-blue">
-                    Protection des donnees
-                  </h3>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-                    La protection de vos donnees est importante pour nous ! Soyez assure que
-                    vos informations seront conservees en toute securite et sans compromis. Nous
-                    ne vendons pas vos informations personnelles pour de l&apos;argent et nous
-                    n&apos;utiliserons vos informations que conformement a notre politique en
-                    matiere de confidentialite et de cookies afin de vous fournir nos services et
-                    de les ameliorer.
-                  </p>
-                </article>
-
-                <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-blue">
-                    Protection des achats sur 3FJ
-                  </h3>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-                    Faites vos achats sur 3FJ en toute confiance en sachant que si un probleme se
-                    produit avec une commande, nous sommes la pour vous aider.
-                  </p>
-                </article>
-              </div>
-
-              {submitInfo ? (
-                <p className="mt-3 rounded-xl bg-sky-50 p-3 text-xs font-medium text-sky-700">
-                  {submitInfo}
-                </p>
-              ) : null}
-
-              {submitError ? (
-                <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700">
-                  {submitError}
-                </p>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={handleConfirmOrder}
-                disabled={isSubmitting || isProductsLoading || detailedItems.length === 0}
-                className="mt-4 block w-full rounded-xl bg-brand-blue px-4 py-3 text-center text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSubmitting
-                  ? "Enregistrement de votre commande..."
-                  : isCustomerAuthenticated
-                    ? "Confirmer la commande"
-                    : "Se connecter pour confirmer"}
-              </button>
-
-              <p className="mt-2 text-center text-[11px] text-slate-500">
-                Aucun paiement en ligne maintenant. Apres confirmation, vous serez redirige vers le suivi de commande.
-              </p>
 
               {hasBulkEligibleItems ? (
-                <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
-                  <p className="text-xs font-semibold text-emerald-800">
-                    Pour les grandes quantites, demandez un devis personnalise.
-                  </p>
-                  <a
-                    href={globalBulkQuoteWhatsAppLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(event) => {
-                      void handleGlobalQuoteRequestClick(event);
-                    }}
-                    className="mt-2 block rounded-xl border border-emerald-500 bg-emerald-100 px-4 py-3 text-center text-sm font-bold text-emerald-900 transition hover:bg-emerald-200"
-                  >
-                    Demande globale de devis
-                  </a>
-                </div>
+                <a
+                  href={globalBulkQuoteWhatsAppLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => {
+                    void handleGlobalQuoteRequestClick(event);
+                  }}
+                  className="mt-3 hidden rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 md:block"
+                >
+                  Demande globale de devis
+                </a>
               ) : null}
-
-              <a
-                href={directWhatsAppLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 block rounded-xl border border-brand-blue px-4 py-3 text-center text-sm font-semibold text-brand-blue"
-              >
-                Commander via WhatsApp (message pre-rempli)
-              </a>
 
               <button
                 type="button"
                 onClick={clearCart}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700"
+                className="mt-3 hidden w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 md:block"
               >
                 Vider le panier
               </button>
@@ -1009,6 +954,25 @@ export default function PanierPage() {
           </div>
         )}
       </div>
+
+      {items.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-[118] px-3 md:hidden">
+          <div className="rounded-2xl border border-emerald-300 bg-white p-2 shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
+            <div className="mb-2 flex items-center justify-between px-1 text-xs font-semibold text-slate-600">
+              <span>Total</span>
+              <span className="text-base font-extrabold text-brand-blue">{formatDh(total)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleConfirmWhatsApp}
+              disabled={isProductsLoading || detailedItems.length === 0}
+              className="block w-full rounded-xl bg-[#16a34a] px-4 py-3.5 text-center text-base font-bold text-white transition hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Confirmer sur WhatsApp
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

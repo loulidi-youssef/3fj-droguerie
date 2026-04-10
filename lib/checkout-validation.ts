@@ -58,12 +58,12 @@ export const validateCheckoutCustomer = (
 
   const errors: CheckoutFieldErrors = {};
 
-  if (!normalizedName) {
-    errors.name = "Le nom complet est obligatoire.";
-  } else if (normalizedName.length < 4) {
-    errors.name = "Le nom complet doit contenir au moins 4 caracteres.";
-  } else if (normalizedName.length > MAX_NAME_LENGTH) {
-    errors.name = `Le nom complet ne doit pas depasser ${MAX_NAME_LENGTH} caracteres.`;
+  if (normalizedName) {
+    if (normalizedName.length < 2) {
+      errors.name = "Le nom complet doit contenir au moins 2 caracteres.";
+    } else if (normalizedName.length > MAX_NAME_LENGTH) {
+      errors.name = `Le nom complet ne doit pas depasser ${MAX_NAME_LENGTH} caracteres.`;
+    }
   }
 
   if (!normalizedPhone) {
@@ -97,7 +97,7 @@ export const validateCheckoutCustomer = (
     isValid: Object.keys(errors).length === 0,
     errors,
     customer: {
-      name: normalizedName,
+      name: normalizedName || "Client",
       phone: normalizedPhone,
       address: normalizedAddress,
       location: normalizedLocation || businessInfo.city,
