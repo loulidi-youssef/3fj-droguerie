@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { downloadOrderReceiptPdf } from "@/app/(storefront)/commande/success/receipt-pdf";
 import { formatDh } from "@/lib/currency";
+import {
+  buildReceiptPdfOrderPayload,
+  normalizeOrderForReceipt,
+  RECEIPT_COMPANY,
+} from "@/lib/order-receipt";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type CustomerOrderItem = {
@@ -45,6 +51,11 @@ const deliveryOptionLabel: Record<CustomerOrder["deliveryOption"], string> = {
 
 type OrdersApiResponse = {
   orders?: CustomerOrder[];
+  error?: string;
+};
+
+type OrderDetailsApiResponse = {
+  order?: unknown;
   error?: string;
 };
 
@@ -121,6 +132,9 @@ export default function CompteCommandesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [downloadingPdfByOrderId, setDownloadingPdfByOrderId] = useState<Record<string, boolean>>(
+    {},
+  );
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -257,6 +271,59 @@ export default function CompteCommandesPage() {
     }
   };
 
+  const downloadReceipt = async (orderId: string) => {
+    if (!supabase || downloadingPdfByOrderId[orderId]) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setActionMessage(null);
+    setDownloadingPdfByOrderId((current) => ({ ...current, [orderId]: true }));
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token ?? "";
+      if (!accessToken) {
+        router.replace("/login?next=/compte/commandes");
+        return;
+      }
+
+      const response = await fetch(`/api/account/orders/${encodeURIComponent(orderId)}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
+      });
+
+      let payload: OrderDetailsApiResponse = {};
+      try {
+        payload = (await response.json()) as OrderDetailsApiResponse;
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok || !payload.order) {
+        const fallbackMessage =
+          response.status === 404 ? "Commande introuvable." : payload.error ?? "Commande introuvable.";
+        throw new Error(fallbackMessage);
+      }
+
+      const normalizedOrder = normalizeOrderForReceipt(payload.order, orderId);
+      if (!normalizedOrder) {
+        throw new Error("Commande introuvable.");
+      }
+
+      await downloadOrderReceiptPdf({
+        company: RECEIPT_COMPANY,
+        order: buildReceiptPdfOrderPayload(normalizedOrder),
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Impossible de generer le recu PDF.");
+    } finally {
+      setDownloadingPdfByOrderId((current) => ({ ...current, [orderId]: false }));
+    }
+  };
+
   if (isLoading) {
     return (
       <section className="section-padding bg-brand-light">
@@ -381,6 +448,16 @@ export default function CompteCommandesPage() {
                     >
                       Voir le detail de la commande
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => void downloadReceipt(order.id)}
+                      disabled={Boolean(downloadingPdfByOrderId[order.id])}
+                      className="mt-2 inline-flex rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-blue hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingPdfByOrderId[order.id]
+                        ? "Generation..."
+                        : "Telecharger le recu PDF"}
+                    </button>
                   </div>
 
                   <div className="text-right">

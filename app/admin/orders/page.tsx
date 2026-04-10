@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDh } from "@/lib/currency";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import AdminOrderReceiptPdfButton from "./order-receipt-pdf-button";
 import {
   clearAdminSession,
   hasValidAdminSession,
@@ -455,6 +456,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                                 </form>
                               ))
                             )}
+                            <AdminOrderReceiptPdfButton orderId={order.id} />
                           </div>
                         </td>
                         <td className="px-3 py-2">

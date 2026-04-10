@@ -5,228 +5,38 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 import { formatDh } from "@/lib/currency";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
-  downloadOrderReceiptPdf,
-  type ReceiptCompanyInfo,
-  type ReceiptOrder,
-} from "./receipt-pdf";
-
-type RawOrderItem = {
-  id?: unknown;
-  product_name?: unknown;
-  quantity?: unknown;
-  unit_price?: unknown;
-  line_total?: unknown;
-};
-
-type RawOrder = {
-  id?: unknown;
-  created_at?: unknown;
-  status?: unknown;
-  fulfillmentMethod?: unknown;
-  deliveryOption?: unknown;
-  customer_name?: unknown;
-  customer_phone?: unknown;
-  customer_address?: unknown;
-  customer_location?: unknown;
-  customer_note?: unknown;
-  subtotal?: unknown;
-  delivery_fee?: unknown;
-  total?: unknown;
-  order_items?: unknown;
-};
+  buildReceiptPdfOrderPayload,
+  DELIVERY_OPTION_LABELS,
+  normalizeOrderForReceipt,
+  PAYMENT_LABEL,
+  RECEIPT_COMPANY,
+  STATUS_LABELS,
+  type NormalizedReceiptOrder,
+} from "@/lib/order-receipt";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { downloadOrderReceiptPdf } from "./receipt-pdf";
 
 type OrderDetailsApiResponse = {
-  order?: RawOrder;
+  order?: unknown;
   error?: string;
-};
-
-type NormalizedReceiptOrderItem = {
-  id: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-};
-
-type NormalizedReceiptOrder = {
-  id: string;
-  createdAt: string;
-  status:
-    | "new"
-    | "confirmed"
-    | "preparing"
-    | "ready"
-    | "shipped"
-    | "collected"
-    | "delivered"
-    | "cancelled";
-  fulfillmentMethod: "delivery" | "pickup";
-  deliveryOption: "standard" | "express" | "pickup";
-  customerName: string;
-  customerPhone: string;
-  customerAddress: string;
-  customerLocation: string;
-  customerNote: string;
-  subtotal: number;
-  deliveryFee: number;
-  total: number;
-  items: NormalizedReceiptOrderItem[];
 };
 
 type SuccessContentProps = {
   companyLogoPath?: string | null;
 };
 
-const RECEIPT_COMPANY: ReceiptCompanyInfo = {
-  name: "3FJ Droguerie",
-  activity: "Materiaux de construction et droguerie",
-  city: "Fes",
-  phone: "06XXXXXXXX",
-  whatsapp: "06XXXXXXXX",
-};
-
-const PAYMENT_LABEL = "Paiement a la livraison";
-
-const DELIVERY_OPTION_LABELS: Record<NormalizedReceiptOrder["deliveryOption"], string> = {
-  standard: "Livraison Standard",
-  express: "Livraison Express",
-  pickup: "Retrait magasin",
-};
-
-const STATUS_LABELS: Record<NormalizedReceiptOrder["status"], string> = {
-  new: "Nouvelle",
-  confirmed: "Confirmee",
-  preparing: "En preparation",
-  ready: "Prete",
-  shipped: "Expediee",
-  collected: "Recuperee",
-  delivered: "Livree",
-  cancelled: "Annulee",
-};
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-};
-
-const toStringOrDefault = (value: unknown, fallback = ""): string => {
+const toNonEmptyStringOrDefault = (value: unknown, fallback = ""): string => {
   if (typeof value !== "string") {
     return fallback;
   }
-  return value;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 };
 
-const toNonEmptyStringOrDefault = (value: unknown, fallback = ""): string => {
-  const candidate = toStringOrDefault(value, "").trim();
-  return candidate.length > 0 ? candidate : fallback;
-};
-
-const toFiniteNumberOrDefault = (value: unknown, fallback = 0): number => {
-  const candidate = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(candidate)) {
-    return fallback;
-  }
-  return candidate;
-};
-
-const normalizeDeliveryOption = (value: unknown): NormalizedReceiptOrder["deliveryOption"] => {
-  const normalized = toNonEmptyStringOrDefault(value, "standard").toLowerCase();
-  if (normalized === "express") {
-    return "express";
-  }
-  if (normalized === "pickup") {
-    return "pickup";
-  }
-  return "standard";
-};
-
-const normalizeFulfillmentMethod = (
-  value: unknown,
-  deliveryOption: NormalizedReceiptOrder["deliveryOption"],
-): NormalizedReceiptOrder["fulfillmentMethod"] => {
-  const normalized = toNonEmptyStringOrDefault(value, "").toLowerCase();
-  if (normalized === "pickup") {
-    return "pickup";
-  }
-  if (normalized === "delivery") {
-    return "delivery";
-  }
-  return deliveryOption === "pickup" ? "pickup" : "delivery";
-};
-
-const normalizeStatus = (value: unknown): NormalizedReceiptOrder["status"] => {
-  const normalized = toNonEmptyStringOrDefault(value, "new").toLowerCase();
-  if (
-    normalized === "new" ||
-    normalized === "confirmed" ||
-    normalized === "preparing" ||
-    normalized === "ready" ||
-    normalized === "shipped" ||
-    normalized === "collected" ||
-    normalized === "delivered" ||
-    normalized === "cancelled"
-  ) {
-    return normalized;
-  }
-  return "new";
-};
-
-const normalizeOrderItems = (value: unknown): NormalizedReceiptOrderItem[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.map((entry, index) => {
-    const item = asRecord(entry) as RawOrderItem | null;
-    const quantity = Math.max(0, Math.floor(toFiniteNumberOrDefault(item?.quantity, 0)));
-    const unitPrice = toFiniteNumberOrDefault(item?.unit_price, 0);
-    const lineTotalFromApi = toFiniteNumberOrDefault(item?.line_total, Number.NaN);
-    const lineTotal = Number.isFinite(lineTotalFromApi)
-      ? lineTotalFromApi
-      : unitPrice * quantity;
-
-    return {
-      id: toNonEmptyStringOrDefault(item?.id, `line-${index + 1}`),
-      productName: toNonEmptyStringOrDefault(item?.product_name, "Produit"),
-      quantity,
-      unitPrice,
-      lineTotal,
-    };
-  });
-};
-
-const normalizeOrder = (value: unknown, fallbackOrderId: string): NormalizedReceiptOrder | null => {
-  const rawOrder = asRecord(value) as RawOrder | null;
-  if (!rawOrder) {
-    return null;
-  }
-
-  const deliveryOption = normalizeDeliveryOption(rawOrder.deliveryOption);
-  const normalizedId = toNonEmptyStringOrDefault(rawOrder.id, fallbackOrderId);
-  if (!normalizedId) {
-    return null;
-  }
-
-  return {
-    id: normalizedId,
-    createdAt: toNonEmptyStringOrDefault(rawOrder.created_at, ""),
-    status: normalizeStatus(rawOrder.status),
-    deliveryOption,
-    fulfillmentMethod: normalizeFulfillmentMethod(rawOrder.fulfillmentMethod, deliveryOption),
-    customerName: toStringOrDefault(rawOrder.customer_name, "").trim(),
-    customerPhone: toStringOrDefault(rawOrder.customer_phone, "").trim(),
-    customerAddress: toStringOrDefault(rawOrder.customer_address, "").trim(),
-    customerLocation: toStringOrDefault(rawOrder.customer_location, "").trim(),
-    customerNote: toStringOrDefault(rawOrder.customer_note, "").trim(),
-    subtotal: toFiniteNumberOrDefault(rawOrder.subtotal, 0),
-    deliveryFee: toFiniteNumberOrDefault(rawOrder.delivery_fee, 0),
-    total: toFiniteNumberOrDefault(rawOrder.total, 0),
-    items: normalizeOrderItems(rawOrder.order_items),
-  };
+const toStringOrDefault = (value: unknown, fallback = ""): string => {
+  return typeof value === "string" ? value : fallback;
 };
 
 const formatOrderDate = (value: string): string => {
@@ -305,7 +115,7 @@ export default function SuccessContent({ companyLogoPath }: SuccessContentProps)
           throw new Error(fallbackMessage);
         }
 
-        const normalizedOrder = normalizeOrder(payload.order, orderId);
+        const normalizedOrder = normalizeOrderForReceipt(payload.order, orderId);
         if (!normalizedOrder) {
           throw new Error("Commande introuvable.");
         }
@@ -364,29 +174,9 @@ export default function SuccessContent({ companyLogoPath }: SuccessContentProps)
 
     setIsGeneratingPdf(true);
     try {
-      const pdfOrder: ReceiptOrder = {
-        id: order.id,
-        createdAt: order.createdAt,
-        deliveryOptionLabel: DELIVERY_OPTION_LABELS[order.deliveryOption],
-        paymentLabel: PAYMENT_LABEL,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerAddress: order.fulfillmentMethod === "pickup" ? "" : order.customerAddress,
-        customerNote: order.customerNote,
-        subtotal: order.subtotal,
-        deliveryFee: order.deliveryFee,
-        total: order.total,
-        items: order.items.map((item) => ({
-          productName: item.productName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          lineTotal: item.lineTotal,
-        })),
-      };
-
       await downloadOrderReceiptPdf({
         company: RECEIPT_COMPANY,
-        order: pdfOrder,
+        order: buildReceiptPdfOrderPayload(order),
       });
     } catch (error) {
       setErrorMessage(
