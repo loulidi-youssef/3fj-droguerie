@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnalyticsGrid } from "./components/analytics-grid";
+import { AnalyticsSectionHeader } from "./components/analytics-section-header";
 import { ChartCard } from "./components/chart-card";
+import { EmptyAnalyticsState } from "./components/empty-analytics-state";
+import { QuoteTrendChart } from "./components/quote-trend-chart";
 import { StatCard } from "./components/stat-card";
-import { StatusBadge, type DashboardStatus } from "./components/status-badge";
+import {
+  StatusDistributionChart,
+  type StatusDistributionDatum,
+} from "./components/status-distribution-chart";
+import { StatusBadge } from "./components/status-badge";
 import {
   getAdminQuoteAnalytics,
   resolveQuoteAnalyticsRange,
@@ -14,17 +21,39 @@ import { formatDh } from "@/lib/currency";
 import { type QuoteRequestStatus } from "@/lib/quote-requests";
 
 type AdminQuoteAnalyticsPageProps = {
-  searchParams: {
+  searchParams?: {
     range?: string | string[];
     from?: string | string[];
     to?: string | string[];
   };
 };
 
-type DonutSegment = {
-  label: string;
-  value: number;
-  color: string;
+const RANGE_OPTIONS: Array<{ value: QuoteAnalyticsRangeKey; label: string }> = [
+  { value: "today", label: "Aujourd'hui" },
+  { value: "7d", label: "7 jours" },
+  { value: "30d", label: "30 jours" },
+];
+
+const STATUS_COLOR: Record<QuoteRequestStatus, string> = {
+  new: "#f59e0b",
+  contacted: "#2563eb",
+  converted: "#10b981",
+  closed: "#ef4444",
+};
+
+const STATUS_LABEL: Record<QuoteRequestStatus, string> = {
+  new: "Nouveau",
+  contacted: "Contacte",
+  converted: "Converti",
+  closed: "Cloture",
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  cart: "Panier",
+  product: "Produit",
+  checkout: "Checkout",
+  quote: "Devis",
+  unknown: "Inconnu",
 };
 
 const toSingleValue = (value: string | string[] | undefined): string => {
@@ -37,13 +66,6 @@ const toSingleValue = (value: string | string[] | undefined): string => {
   return "";
 };
 
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-};
-
 const toStringOrDefault = (value: unknown, fallback = ""): string => {
   if (typeof value !== "string") {
     return fallback;
@@ -52,92 +74,34 @@ const toStringOrDefault = (value: unknown, fallback = ""): string => {
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const toSourceLabel = (source: unknown): string => {
+  const normalized = toStringOrDefault(source, "unknown").toLowerCase();
+  return SOURCE_LABEL[normalized] ?? normalized;
+};
+
 const formatDateTime = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-
   return new Intl.DateTimeFormat("fr-MA", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(date);
+  }).format(parsed);
 };
 
-const mapStatus = (status: QuoteRequestStatus): DashboardStatus => {
-  if (status === "converted") {
-    return "confirmed";
+const getTrendNote = (part: number): string => {
+  if (part >= 75) {
+    return "Volume eleve sur la periode";
   }
-  if (status === "closed") {
-    return "cancelled";
+  if (part >= 40) {
+    return "Volume stable";
   }
-  if (status === "contacted") {
-    return "processing";
+  if (part > 0) {
+    return "Volume faible";
   }
-  return "pending";
+  return "Aucune activite";
 };
-
-const getStatusLabel = (status: DashboardStatus): string => {
-  if (status === "confirmed") {
-    return "Confirmed";
-  }
-  if (status === "cancelled") {
-    return "Cancelled";
-  }
-  if (status === "processing") {
-    return "Processing";
-  }
-  return "Pending";
-};
-
-const buildDonutBackground = (segments: DonutSegment[]): string => {
-  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-  if (total <= 0) {
-    return "conic-gradient(#e2e8f0 0deg 360deg)";
-  }
-
-  let cursor = 0;
-  const slices: string[] = [];
-  for (const segment of segments) {
-    if (segment.value <= 0) {
-      continue;
-    }
-
-    const sweep = (segment.value / total) * 360;
-    const nextCursor = cursor + sweep;
-    slices.push(`${segment.color} ${cursor}deg ${nextCursor}deg`);
-    cursor = nextCursor;
-  }
-
-  return `conic-gradient(${slices.join(", ")})`;
-};
-
-const buildLinePath = (
-  points: Array<{ date: string; count: number }>,
-  width: number,
-  height: number,
-): string => {
-  if (points.length === 0) {
-    return "";
-  }
-
-  const maxCount = Math.max(1, ...points.map((point) => point.count));
-  const stepX = points.length > 1 ? width / (points.length - 1) : 0;
-
-  return points
-    .map((point, index) => {
-      const x = stepX * index;
-      const y = height - (point.count / maxCount) * height;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-};
-
-const rangeOptions: Array<{ value: QuoteAnalyticsRangeKey; label: string }> = [
-  { value: "today", label: "Today" },
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-];
 
 const TotalIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5 text-sky-700" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -159,7 +123,7 @@ const PendingIcon = () => (
   </svg>
 );
 
-const RejectedIcon = () => (
+const ClosedIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5 text-rose-700" fill="none" stroke="currentColor" strokeWidth="1.8">
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
@@ -189,9 +153,9 @@ export default async function AdminQuoteAnalyticsPage({
     redirect("/admin/login");
   }
 
-  const selectedRange = toSingleValue(searchParams.range).trim().toLowerCase();
-  const fromInput = toSingleValue(searchParams.from).trim();
-  const toInput = toSingleValue(searchParams.to).trim();
+  const selectedRange = toSingleValue(searchParams?.range).trim().toLowerCase();
+  const fromInput = toSingleValue(searchParams?.from).trim();
+  const toInput = toSingleValue(searchParams?.to).trim();
 
   const range = resolveQuoteAnalyticsRange({
     range: selectedRange,
@@ -201,71 +165,90 @@ export default async function AdminQuoteAnalyticsPage({
 
   const analytics = await getAdminQuoteAnalytics(range);
 
-  const pendingCount = analytics.filteredStatusBreakdown.new;
-  const processingCount = analytics.filteredStatusBreakdown.contacted;
+  const totalQuotes = analytics.filteredTotalQuotes;
   const confirmedCount = analytics.filteredStatusBreakdown.converted;
-  const cancelledCount = analytics.filteredStatusBreakdown.closed;
+  const pendingCount =
+    analytics.filteredStatusBreakdown.new + analytics.filteredStatusBreakdown.contacted;
+  const closedCount = analytics.filteredStatusBreakdown.closed;
+  const conversionRate = analytics.filteredConversionRate;
+  const trendShare = totalQuotes > 0 ? Math.round((totalQuotes / Math.max(1, analytics.metrics.totalQuotesAllTime)) * 100) : 0;
 
-  const donutSegments: DonutSegment[] = [
-    { label: "Pending", value: pendingCount, color: "#f59e0b" },
-    { label: "Processing", value: processingCount, color: "#0ea5e9" },
-    { label: "Confirmed", value: confirmedCount, color: "#10b981" },
-    { label: "Cancelled", value: cancelledCount, color: "#ef4444" },
+  const statusData: StatusDistributionDatum[] = [
+    {
+      key: "new",
+      label: STATUS_LABEL.new,
+      value: analytics.filteredStatusBreakdown.new,
+      color: STATUS_COLOR.new,
+    },
+    {
+      key: "contacted",
+      label: STATUS_LABEL.contacted,
+      value: analytics.filteredStatusBreakdown.contacted,
+      color: STATUS_COLOR.contacted,
+    },
+    {
+      key: "converted",
+      label: STATUS_LABEL.converted,
+      value: analytics.filteredStatusBreakdown.converted,
+      color: STATUS_COLOR.converted,
+    },
+    {
+      key: "closed",
+      label: STATUS_LABEL.closed,
+      value: analytics.filteredStatusBreakdown.closed,
+      color: STATUS_COLOR.closed,
+    },
   ];
 
-  const totalForDonut = donutSegments.reduce((sum, segment) => sum + segment.value, 0);
-  const donutBackground = buildDonutBackground(donutSegments);
-
-  const chartWidth = 920;
-  const chartHeight = 220;
-  const linePath = buildLinePath(analytics.dailyActivity, chartWidth, chartHeight);
-
   return (
-    <section className="bg-brand-light py-12">
+    <section className="min-h-screen bg-gradient-to-b from-brand-light via-sky-50/40 to-brand-light py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold text-brand-blue">Quote Analytics</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Dashboard CRM moderne pour suivre les demandes de devis et leur evolution.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/admin/quotes"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
-            >
-              Liste devis
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
-            >
-              Dashboard
-            </Link>
-          </div>
-        </div>
+        <AnalyticsSectionHeader
+          title="Devis / Quote Analytics"
+          description="Vue CRM moderne pour suivre les demandes, la conversion et les tendances commerciales."
+          actions={
+            <>
+              <Link
+                href="/admin/quotes"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+              >
+                Liste des devis
+              </Link>
+              <Link
+                href="/admin"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-orange hover:text-brand-orange"
+              >
+                Dashboard admin
+              </Link>
+            </>
+          }
+        />
 
-        <form method="get" action="/admin/quotes/analytics" className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form
+          method="get"
+          action="/admin/quotes/analytics"
+          className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+        >
           <div className="grid gap-3 md:grid-cols-4">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Time range
+                Periode
               </span>
               <select
                 name="range"
                 defaultValue={range.key}
                 className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
               >
-                {rangeOptions.map((option) => (
+                {RANGE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
+                <option value="custom">Personnalise</option>
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">From</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Du</span>
               <input
                 type="date"
                 name="from"
@@ -274,7 +257,7 @@ export default async function AdminQuoteAnalyticsPage({
               />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">To</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Au</span>
               <input
                 type="date"
                 name="to"
@@ -287,7 +270,7 @@ export default async function AdminQuoteAnalyticsPage({
                 type="submit"
                 className="w-full rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95"
               >
-                Apply filters
+                Appliquer
               </button>
             </div>
           </div>
@@ -296,190 +279,157 @@ export default async function AdminQuoteAnalyticsPage({
         <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Total Devis"
-            value={analytics.filteredTotalQuotes}
+            value={totalQuotes}
             subtitle="Total des demandes"
+            note={getTrendNote(trendShare)}
             tone="blue"
             icon={<TotalIcon />}
           />
           <StatCard
-            title="Confirmed Devis"
+            title="Devis Confirmes"
             value={confirmedCount}
-            subtitle="Status: confirmed"
+            subtitle="Opportunites validees"
+            note={`${conversionRate}% de conversion`}
             tone="green"
             icon={<ConfirmedIcon />}
           />
           <StatCard
-            title="Pending Devis"
+            title="Devis En attente"
             value={pendingCount}
-            subtitle="Status: pending"
+            subtitle="A traiter"
+            note={`${analytics.filteredStatusBreakdown.new} nouveaux + ${analytics.filteredStatusBreakdown.contacted} contactes`}
             tone="orange"
             icon={<PendingIcon />}
           />
           <StatCard
-            title="Rejected / Cancelled"
-            value={cancelledCount}
-            subtitle="Status: rejected / cancelled"
+            title="Devis Clotures"
+            value={closedCount}
+            subtitle="Non retenus"
+            note="Annules / fermes"
             tone="red"
-            icon={<RejectedIcon />}
+            icon={<ClosedIcon />}
           />
         </div>
 
-        <AnalyticsGrid>
-          <div className="xl:col-span-1">
-            <ChartCard
-              title="Status Distribution"
-              subtitle="Pending, processing, confirmed, cancelled"
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className="relative h-40 w-40 shrink-0 rounded-full"
-                  style={{ background: donutBackground }}
-                  aria-label="Quote status donut chart"
-                >
-                  <div className="absolute inset-[22%] rounded-full bg-white" />
-                </div>
-                <div className="space-y-2 text-sm">
-                  {donutSegments.map((segment) => {
-                    const percent = totalForDonut > 0 ? Math.round((segment.value / totalForDonut) * 1000) / 10 : 0;
-                    return (
-                      <div key={segment.label} className="flex items-center gap-2">
-                        <span
-                          className="inline-block h-3 w-3 rounded-full"
-                          style={{ backgroundColor: segment.color }}
-                        />
-                        <span className="font-medium text-slate-700">{segment.label}</span>
-                        <span className="text-slate-500">
-                          {segment.value} ({percent}%)
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </ChartCard>
+        {analytics.isRangeDatasetTruncated ? (
+          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Le volume de la periode est eleve. Les graphiques utilisent un echantillon limite pour rester rapides.
           </div>
+        ) : null}
 
-          <div className="xl:col-span-2">
-            <ChartCard
-              title="Devis over time"
-              subtitle={`Quotes per day (${analytics.range.label})`}
-              actions={
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                  {analytics.dailyActivity.length} days
-                </span>
-              }
-            >
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <svg
-                  viewBox={`0 0 ${chartWidth} ${chartHeight + 40}`}
-                  className="h-[280px] w-full"
-                  role="img"
-                  aria-label="Quote activity line chart"
-                >
-                  <defs>
-                    <linearGradient id="quoteLineFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#2563eb" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="#cbd5e1" strokeWidth="1.5" />
-                  {linePath ? (
-                    <>
-                      <path
-                        d={`${linePath} L ${chartWidth},${chartHeight} L 0,${chartHeight} Z`}
-                        fill="url(#quoteLineFill)"
-                      />
-                      <path d={linePath} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
-                    </>
-                  ) : null}
-                  {analytics.dailyActivity.map((point, index) => {
-                    if (index % Math.max(1, Math.floor(analytics.dailyActivity.length / 8)) !== 0) {
-                      return null;
-                    }
+        {totalQuotes === 0 ? (
+          <EmptyAnalyticsState
+            title="Aucune demande de devis sur cette periode"
+            description="Essayez une autre plage de dates ou revenez plus tard. Les cartes et graphiques se rempliront automatiquement des que des demandes arrivent."
+          />
+        ) : (
+          <>
+            <AnalyticsGrid className="mb-5 xl:grid-cols-5">
+              <ChartCard
+                className="xl:col-span-2"
+                title="Repartition des statuts"
+                subtitle="Nouveau, Contacte, Converti, Cloture"
+              >
+                <StatusDistributionChart data={statusData} />
+              </ChartCard>
 
-                    const x =
-                      analytics.dailyActivity.length > 1
-                        ? (chartWidth / (analytics.dailyActivity.length - 1)) * index
-                        : chartWidth / 2;
-                    return (
-                      <text key={point.date} x={x} y={chartHeight + 18} textAnchor="middle" className="fill-slate-500 text-[11px]">
-                        {point.date.slice(5)}
-                      </text>
-                    );
-                  })}
-                </svg>
-              </div>
-            </ChartCard>
-          </div>
-        </AnalyticsGrid>
+              <ChartCard
+                className="xl:col-span-3"
+                title="Evolution des devis"
+                subtitle={`Activite journaliere (${analytics.range.label})`}
+                actions={
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                    {analytics.dailyActivity.length} jours
+                  </span>
+                }
+              >
+                <QuoteTrendChart data={analytics.dailyActivity} />
+              </ChartCard>
+            </AnalyticsGrid>
 
-        <div className="mt-5">
-          <ChartCard
-            title="Quote Requests Summary"
-            subtitle="Dernieres demandes avec statut et montant estime"
-          >
-            {analytics.recentQuoteRequests.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                Aucune demande sur cette periode.
-              </p>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50">
-                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      <th className="px-3 py-2">Nom client</th>
-                      <th className="px-3 py-2">Telephone</th>
-                      <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Statut</th>
-                      <th className="px-3 py-2">Montant estime</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analytics.recentQuoteRequests.map((request) => {
-                      const payloadRecord = asRecord(request.payload);
-                      const customerRecord = asRecord(payloadRecord?.customer);
+            <div className="grid gap-5 xl:grid-cols-5">
+              <ChartCard
+                className="xl:col-span-4"
+                title="Devis recents"
+                subtitle="Suivi client, statut et estimation"
+              >
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2">Client</th>
+                        <th className="px-3 py-2">Telephone</th>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Statut</th>
+                        <th className="px-3 py-2">Montant estime</th>
+                        <th className="px-3 py-2">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.recentQuoteRequests.map((request) => {
+                        const customerName = "Client anonyme";
+                        const customerPhone = "-";
+                        const estimatedSubtotal = request.payload.summary.estimatedSubtotal ?? 0;
+                        const sourceLabel = toSourceLabel(request.payload.source);
 
-                      const customerName =
-                        toStringOrDefault(customerRecord?.name) ||
-                        toStringOrDefault(payloadRecord?.customerName) ||
-                        toStringOrDefault(payloadRecord?.customer_name) ||
-                        "Client anonyme";
-                      const customerPhone =
-                        toStringOrDefault(customerRecord?.phone) ||
-                        toStringOrDefault(payloadRecord?.customerPhone) ||
-                        toStringOrDefault(payloadRecord?.customer_phone) ||
-                        "-";
+                        return (
+                          <tr
+                            key={request.id}
+                            className="border-b border-slate-100 text-slate-700 transition hover:bg-sky-50/40"
+                          >
+                            <td className="px-3 py-3 font-medium">{customerName}</td>
+                            <td className="px-3 py-3">{customerPhone}</td>
+                            <td className="px-3 py-3">{formatDateTime(request.createdAt)}</td>
+                            <td className="px-3 py-3">
+                              <StatusBadge status={request.status} />
+                            </td>
+                            <td className="px-3 py-3 font-semibold text-slate-900">
+                              {formatDh(estimatedSubtotal)}
+                            </td>
+                            <td className="px-3 py-3 text-slate-600">{sourceLabel}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </ChartCard>
 
-                      const dashboardStatus = mapStatus(request.status);
-
-                      return (
-                        <tr
-                          key={request.id}
-                          className="border-b border-slate-100 text-slate-700 transition hover:bg-slate-50/80"
-                        >
-                          <td className="px-3 py-3 font-medium">{customerName}</td>
-                          <td className="px-3 py-3">{customerPhone}</td>
-                          <td className="px-3 py-3">{formatDateTime(request.createdAt)}</td>
-                          <td className="px-3 py-3">
-                            <StatusBadge
-                              status={dashboardStatus}
-                              label={getStatusLabel(dashboardStatus)}
-                            />
-                          </td>
-                          <td className="px-3 py-3 font-semibold text-slate-900">
-                            {formatDh(request.payload.summary.estimatedSubtotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </ChartCard>
-        </div>
+              <ChartCard
+                className="xl:col-span-1"
+                title="Insights rapides"
+                subtitle="Synthese operationnelle"
+              >
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-sky-700">Taux conversion</p>
+                    <p className="mt-1 text-2xl font-extrabold text-sky-900">{conversionRate}%</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Semaine</p>
+                    <p className="mt-1 text-2xl font-extrabold text-emerald-900">{analytics.metrics.quotesThisWeek}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-600">Top produits demandes</p>
+                    {analytics.topProducts.length === 0 ? (
+                      <p className="mt-2 text-xs text-slate-500">Aucun produit dominant.</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1.5">
+                        {analytics.topProducts.slice(0, 3).map((item) => (
+                          <li key={`${item.productId}-${item.productName}`} className="text-xs text-slate-700">
+                            <span className="font-semibold">{item.productName}</span>
+                            <span className="text-slate-500"> ({item.quoteRequestCount} devis)</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </ChartCard>
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
 }
-

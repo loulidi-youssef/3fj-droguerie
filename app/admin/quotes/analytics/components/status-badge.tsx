@@ -1,22 +1,22 @@
-type DashboardStatus = "pending" | "processing" | "confirmed" | "cancelled";
+import { type QuoteRequestStatus } from "@/lib/quote-requests";
 
 type StatusBadgeProps = {
-  status: DashboardStatus;
+  status: QuoteRequestStatus;
   label?: string;
 };
 
-const BADGE_CLASSNAME: Record<DashboardStatus, string> = {
-  pending: "bg-amber-100 text-amber-700 border-amber-200",
-  processing: "bg-sky-100 text-sky-700 border-sky-200",
-  confirmed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  cancelled: "bg-rose-100 text-rose-700 border-rose-200",
+const BADGE_CLASSNAME: Record<QuoteRequestStatus, string> = {
+  new: "bg-amber-100 text-amber-700 border-amber-200",
+  contacted: "bg-sky-100 text-sky-700 border-sky-200",
+  converted: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  closed: "bg-rose-100 text-rose-700 border-rose-200",
 };
 
-const STATUS_LABEL: Record<DashboardStatus, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  confirmed: "Confirmed",
-  cancelled: "Cancelled",
+const STATUS_LABEL: Record<QuoteRequestStatus, string> = {
+  new: "Nouveau",
+  contacted: "Contacte",
+  converted: "Converti",
+  closed: "Cloture",
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {
@@ -28,6 +28,3 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
     </span>
   );
 }
-
-export type { DashboardStatus };
-
